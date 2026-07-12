@@ -55,13 +55,12 @@ jobs:
       - name: Build
         run: npm run tauri build
 
-      # Bundle targets are pinned to deb/nsis in tauri.conf.json — no AppImage.
+      # bundle.active=false en tauri.conf.json — sin instaladores, solo el
+      # binario crudo que compila cargo.
       - name: Collect binaries
         shell: bash
         run: |
           mkdir -p final-binaries
-          find src-tauri/target/release/bundle -name "*.exe" -path "*nsis*" -exec cp {} final-binaries/ \;
-          find src-tauri/target/release/bundle -name "*.deb" -exec cp {} final-binaries/ \;
 
           if [ "${{ matrix.platform }}" == "windows-latest" ]; then
             cp src-tauri/target/release/convoyrun.exe final-binaries/ConvoyRun-windows-x64.exe

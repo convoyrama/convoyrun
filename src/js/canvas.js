@@ -269,19 +269,55 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
     // en Grande/Extra Grande no estire un bitmap fijo de 240x240 (quedaba
     // borroso).
     const circleDiameter = 240; const circleX = logicalWidth - circleDiameter - 10; const topY = 10; const bottomY = logicalHeight - circleDiameter - 10;
-    const circleCanvasTop = dom.circleCanvasTop, circleCanvasBottom = dom.circleCanvasBottom;
-    const circleCtxTop = circleCanvasTop.getContext("2d"), circleCtxBottom = circleCanvasBottom.getContext("2d");
-    circleCanvasTop.width = circleDiameter * scale; circleCanvasTop.height = circleDiameter * scale; circleCanvasBottom.width = circleDiameter * scale; circleCanvasBottom.height = circleDiameter * scale;
-    circleCtxTop.setTransform(scale, 0, 0, scale, 0, 0);
-    circleCtxBottom.setTransform(scale, 0, 0, scale, 0, 0);
-    circleCtxTop.imageSmoothingEnabled = true; circleCtxTop.imageSmoothingQuality = smoothingQuality;
-    circleCtxBottom.imageSmoothingEnabled = true; circleCtxBottom.imageSmoothingQuality = smoothingQuality;
-    circleCtxTop.clearRect(0, 0, circleDiameter, circleDiameter);
-    if (state.circleImageTop) { circleCtxTop.save(); circleCtxTop.beginPath(); circleCtxTop.arc(circleDiameter / 2, circleDiameter / 2, circleDiameter / 2, 0, Math.PI * 2); circleCtxTop.clip(); circleCtxTop.drawImage(state.circleImageTop, state.circleImageXTop, state.circleImageYTop, state.circleImageTop.width * state.circleImageScaleTop, state.circleImageTop.height * state.circleImageScaleTop); circleCtxTop.restore(); }
-    circleCtxBottom.clearRect(0, 0, circleDiameter, circleDiameter);
-    if (state.circleImageBottom) { circleCtxBottom.save(); circleCtxBottom.beginPath(); circleCtxBottom.arc(circleDiameter / 2, circleDiameter / 2, circleDiameter / 2, 0, Math.PI * 2); circleCtxBottom.clip(); circleCtxBottom.drawImage(state.circleImageBottom, state.circleImageXBottom, state.circleImageYBottom, state.circleImageBottom.width * state.circleImageScaleBottom, state.circleImageBottom.height * state.circleImageScaleBottom); circleCtxBottom.restore(); }
-    ctx.drawImage(circleCanvasTop, circleX, topY, circleDiameter, circleDiameter);
-    ctx.drawImage(circleCanvasBottom, circleX, bottomY, circleDiameter, circleDiameter);
+    const circleCenterX = circleX + circleDiameter / 2;
+
+    if (state.isDepartureVisible) {
+        const circleCanvasTop = dom.circleCanvasTop;
+        const circleCtxTop = circleCanvasTop.getContext("2d");
+        circleCanvasTop.width = circleDiameter * scale; circleCanvasTop.height = circleDiameter * scale;
+        circleCtxTop.setTransform(scale, 0, 0, scale, 0, 0);
+        circleCtxTop.imageSmoothingEnabled = true; circleCtxTop.imageSmoothingQuality = smoothingQuality;
+        circleCtxTop.clearRect(0, 0, circleDiameter, circleDiameter);
+        if (state.circleImageTop) { circleCtxTop.save(); circleCtxTop.beginPath(); circleCtxTop.arc(circleDiameter / 2, circleDiameter / 2, circleDiameter / 2, 0, Math.PI * 2); circleCtxTop.clip(); circleCtxTop.drawImage(state.circleImageTop, state.circleImageXTop, state.circleImageYTop, state.circleImageTop.width * state.circleImageScaleTop, state.circleImageTop.height * state.circleImageScaleTop); circleCtxTop.restore(); }
+        ctx.drawImage(circleCanvasTop, circleX, topY, circleDiameter, circleDiameter);
+
+        ctx.beginPath();
+        ctx.arc(circleCenterX, topY + circleDiameter / 2, circleDiameter / 2, 0, Math.PI * 2);
+        ctx.strokeStyle = borderColor; ctx.lineWidth = 8; ctx.stroke();
+
+        ctx.font = `bold ${textSize + 8}px Arial`;
+        ctx.textAlign = "center";
+        const departureText = state.currentLangData.canvas_label_departure || "Partida";
+        const departureTextMetrics = ctx.measureText(departureText); const departureTextWidth = departureTextMetrics.width + 30; const departureTextHeight = textSize + 15; const departureTextY = topY + circleDiameter + 30;
+        ctx.fillStyle = `rgba(0, 0, 0, ${textBackgroundOpacity})`;
+        ctx.fillRect(circleCenterX - departureTextWidth / 2, departureTextY - departureTextHeight + 10, departureTextWidth, departureTextHeight);
+        ctx.fillStyle = textFill;
+        ctx.fillText(departureText, circleCenterX, departureTextY);
+    }
+
+    if (state.isDestinationVisible) {
+        const circleCanvasBottom = dom.circleCanvasBottom;
+        const circleCtxBottom = circleCanvasBottom.getContext("2d");
+        circleCanvasBottom.width = circleDiameter * scale; circleCanvasBottom.height = circleDiameter * scale;
+        circleCtxBottom.setTransform(scale, 0, 0, scale, 0, 0);
+        circleCtxBottom.imageSmoothingEnabled = true; circleCtxBottom.imageSmoothingQuality = smoothingQuality;
+        circleCtxBottom.clearRect(0, 0, circleDiameter, circleDiameter);
+        if (state.circleImageBottom) { circleCtxBottom.save(); circleCtxBottom.beginPath(); circleCtxBottom.arc(circleDiameter / 2, circleDiameter / 2, circleDiameter / 2, 0, Math.PI * 2); circleCtxBottom.clip(); circleCtxBottom.drawImage(state.circleImageBottom, state.circleImageXBottom, state.circleImageYBottom, state.circleImageBottom.width * state.circleImageScaleBottom, state.circleImageBottom.height * state.circleImageScaleBottom); circleCtxBottom.restore(); }
+        ctx.drawImage(circleCanvasBottom, circleX, bottomY, circleDiameter, circleDiameter);
+
+        ctx.beginPath();
+        ctx.arc(circleCenterX, bottomY + circleDiameter / 2, circleDiameter / 2, 0, Math.PI * 2);
+        ctx.strokeStyle = borderColor; ctx.lineWidth = 8; ctx.stroke();
+
+        ctx.font = `bold ${textSize + 8}px Arial`;
+        ctx.textAlign = "center";
+        const destinationText = state.currentLangData.canvas_label_destination || "Destino";
+        const destinationTextMetrics = ctx.measureText(destinationText); const destinationTextWidth = destinationTextMetrics.width + 30; const destinationTextHeight = textSize + 15; const destinationTextY = bottomY - 15;
+        ctx.fillStyle = `rgba(0, 0, 0, ${textBackgroundOpacity})`;
+        ctx.fillRect(circleCenterX - destinationTextWidth / 2, destinationTextY - destinationTextHeight + 10, destinationTextWidth, destinationTextHeight);
+        ctx.fillStyle = textFill;
+        ctx.fillText(destinationText, circleCenterX, destinationTextY);
+    }
 
     if (state.isWaypointVisible) {
 
@@ -318,34 +354,6 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
         ctx.fillStyle = textFill;
         ctx.fillText(waypointText, waypointCircleCenterX, waypointTextY);
     }
-    
-    
-    ctx.beginPath();
-    ctx.arc(circleX + circleDiameter / 2, topY + circleDiameter / 2, circleDiameter / 2, 0, Math.PI * 2);
-    ctx.strokeStyle = borderColor; ctx.lineWidth = 8; ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(circleX + circleDiameter / 2, bottomY + circleDiameter / 2, circleDiameter / 2, 0, Math.PI * 2);
-    ctx.strokeStyle = borderColor; ctx.lineWidth = 8; ctx.stroke();
-
-    ctx.font = `bold ${textSize + 8}px Arial`;
-    ctx.textAlign = "center";
-    
-    const departureText = state.currentLangData.canvas_label_departure || "Partida";
-    const destinationText = state.currentLangData.canvas_label_destination || "Destino";
-
-    const circleCenterX = circleX + circleDiameter / 2;
-    
-    const departureTextMetrics = ctx.measureText(departureText); const departureTextWidth = departureTextMetrics.width + 30; const departureTextHeight = textSize + 15; const departureTextY = topY + circleDiameter + 30;
-    ctx.fillStyle = `rgba(0, 0, 0, ${textBackgroundOpacity})`;
-    ctx.fillRect(circleCenterX - departureTextWidth / 2, departureTextY - departureTextHeight + 10, departureTextWidth, departureTextHeight);
-    ctx.fillStyle = textFill;
-    ctx.fillText(departureText, circleCenterX, departureTextY);
-
-    const destinationTextMetrics = ctx.measureText(destinationText); const destinationTextWidth = destinationTextMetrics.width + 30; const destinationTextHeight = textSize + 15; const destinationTextY = bottomY - 15;
-    ctx.fillStyle = `rgba(0, 0, 0, ${textBackgroundOpacity})`;
-    ctx.fillRect(circleCenterX - destinationTextWidth / 2, destinationTextY - destinationTextHeight + 10, destinationTextWidth, destinationTextHeight);
-    ctx.fillStyle = textFill;
-    ctx.fillText(destinationText, circleCenterX, destinationTextY);
 
     if (state.detailImage) { ctx.drawImage(state.detailImage, state.detailImageX, state.detailImageY, state.detailImage.width * state.detailImageScale, state.detailImage.height * state.detailImageScale); }
 

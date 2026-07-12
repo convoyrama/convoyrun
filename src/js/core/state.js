@@ -11,6 +11,7 @@ export let detailImageX = 0, detailImageY = 0, detailImageScale = 1;
 export let isDragging = false, isDraggingTop = false, isDraggingBottom = false, isDraggingDetail = false, isDraggingWaypoint = false;
 export let isDraggingSpeed = [false, false, false];
 export let isWaypointVisible = false;
+export let isDepartureVisible = true, isDestinationVisible = true;
 export let speedIndicators = [
     { visible: false, value: '80', unit: 'km/h', x: 330, y: 330 },
     { visible: false, value: '60', unit: 'km/h', x: 400, y: 400 },
@@ -99,4 +100,6 @@ export function setStartY(val) { startY = val; }
 
 export function setCurrentLangData(data) { currentLangData = data; }
 export function setIsWaypointVisible(val) { isWaypointVisible = val; }
+export function setIsDepartureVisible(val) { isDepartureVisible = val; }
+export function setIsDestinationVisible(val) { isDestinationVisible = val; }
 

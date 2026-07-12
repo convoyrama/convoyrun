@@ -36,7 +36,7 @@
             <div class="about-links">
                 <a href="https://discord.gg/hjJcyREthH" target="_blank" data-i18n="about_link_discord">Discord de CONVOYRAMA</a>
                 <a href="https://convoyrama.github.io" target="_blank" data-i18n="about_link_web">Sitio web</a>
-                <a href="https://github.com/convoyrama" target="_blank" data-i18n="about_link_github">GitHub</a>
+                <a href="https://github.com/convoyrama/convoyrun" target="_blank" data-i18n="about_link_github">GitHub</a>
             </div>
         </div>
     </div>
@@ -168,7 +168,13 @@
                     </div>
                 </div>
                 <div class="input-group">
-                    <label for="circle-upload-top" data-i18n="label_departure_map">Partida:</label>
+                    <div class="label-container">
+                        <label for="circle-upload-top" data-i18n="label_departure_map">Partida:</label>
+                        <label class="switch">
+                            <input type="checkbox" id="departure-toggle" checked>
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
                     <input type="file" id="circle-upload-top" accept="image/*">
                     <div class="zoom-buttons">
                         <button id="zoom-in-top">+</button>
@@ -176,7 +182,13 @@
                     </div>
                 </div>
                 <div class="input-group">
-                    <label for="circle-upload-bottom" data-i18n="label_destination_map">Destino:</label>
+                    <div class="label-container">
+                        <label for="circle-upload-bottom" data-i18n="label_destination_map">Destino:</label>
+                        <label class="switch">
+                            <input type="checkbox" id="destination-toggle" checked>
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
                     <input type="file" id="circle-upload-bottom" accept="image/*">
                     <div class="zoom-buttons">
                         <button id="zoom-in-bottom">+</button>
@@ -260,7 +272,6 @@
                     <input type="file" id="logo-upload" accept="image/*">
                 </div>
             </div>
-            <div id="preview-note" data-i18n="canvas_preview_warning">Nota: Los círculos de mapa pueden verse desplazados en la vista previa, pero aparecerán correctamente en la imagen descargada.</div>
             <div class="canvas-container">
                 <canvas id="map-canvas"></canvas>
                 <canvas id="circle-canvas-top" class="circle-canvas"></canvas>

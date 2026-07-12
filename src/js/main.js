@@ -157,6 +157,8 @@ async function init() {
     dom.downloadCanvas = document.getElementById("download-canvas");
     dom.canvasSize = document.getElementById("canvas-size");
     dom.waypointToggle = document.getElementById("waypoint-toggle");
+    dom.departureToggle = document.getElementById("departure-toggle");
+    dom.destinationToggle = document.getElementById("destination-toggle");
     dom.textSize = document.getElementById("text-size");
     dom.textStyle = document.getElementById("text-style");
     dom.textBackgroundOpacity = document.getElementById("text-background-opacity");
@@ -361,6 +363,8 @@ async function init() {
 
     initCanvasEventListeners();
     dom.waypointToggle.addEventListener('change', (e) => { state.setIsWaypointVisible(e.target.checked); drawCanvas(); });
+    dom.departureToggle.addEventListener('change', (e) => { state.setIsDepartureVisible(e.target.checked); drawCanvas(); });
+    dom.destinationToggle.addEventListener('change', (e) => { state.setIsDestinationVisible(e.target.checked); drawCanvas(); });
     // drawCanvas ahora toma (targetCanvas, scale) — pasarla directo como
     // callback le mandaría el Event como targetCanvas y rompe todo en
     // silencio. Siempre envuelta en función así se llama sin argumentos.
