@@ -8,9 +8,7 @@
 
 ---
 
-Armar un flyer de convoy a mano es siempre lo mismo: mapa recortado, círculos de partida y destino alineados a ojo, horarios convertidos a mano para cada país, y después retipear todo para Discord y para TMP. **ConvoyRun** hace esa parte por vos.
-
-Cargás el mapa, marcás partida y destino, elegís los estilos, y la app arma el flyer y te da el texto ya formateado — timestamps de Discord que cada quien ve en su propia hora, y el resumen para TruckersMP agrupado por zona horaria. Todo corre en tu máquina, sin subir nada a ningún lado.
+**ConvoyRun** arma el flyer de tu convoy y te da el texto listo para Discord y TMP, todo desde tu escritorio.
 
 ## Qué incluye
 
@@ -45,3 +43,7 @@ npm run tauri build    # build de release (binario único, sin instalador)
 ```
 
 Requiere Rust (stable) y Node.js. En Linux hacen falta los paquetes de desarrollo de WebKitGTK/GTK — ver `.github/workflows/release.yml` para la lista exacta de `apt` que usa CI.
+
+## Licencia
+
+[AGPL-3.0](https://github.com/convoyrama/convoyrun#AGPL-3.0-1-ov-file)
