@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title data-i18n="page_title">ConvoyRun</title>
+    <link rel="stylesheet" href="./css/style.css" />
+    <link rel="stylesheet" href="./css/app-shell.css" />
+</head>
+<body>
+    <header class="app-header">
+        <div class="app-brand">
+            <img src="./images/branding/logotext.png" alt="ConvoyRun" class="app-logo">
+        </div>
+        <div class="header-right">
+            <div class="time-sync-indicator" id="time-sync-indicator" data-i18n-title="time_sync_tooltip" title="Verificación de hora / conexión">
+                <span class="time-sync-dot" data-status="failed"></span>
+                <span class="time-sync-dot" data-status="syncing"></span>
+                <span class="time-sync-dot" data-status="verified"></span>
+            </div>
+            <button type="button" id="about-open" class="about-btn" data-i18n-title="about_button_tooltip" title="Acerca de ConvoyRun">i</button>
+            <div class="lang-selector">
+                <button class="lang-btn" data-lang="en">EN</button>
+                <button class="lang-btn" data-lang="es">ES</button>
+                <button class="lang-btn" data-lang="pt">PT</button>
+            </div>
+        </div>
+    </header>
+
+    <div id="about-overlay" class="about-overlay">
+        <div class="about-modal">
+            <button type="button" id="about-close" class="about-close">×</button>
+            <img src="./images/branding/logotext.png" alt="ConvoyRun" class="about-logo">
+            <div class="about-version">v<span id="about-version">0.1.0</span></div>
+            <p class="about-credit">Developed by <span class="architect">dr.will</span> for <strong>CONVOYRAMA</strong></p>
+            <div class="about-links">
+                <a href="https://discord.gg/hjJcyREthH" target="_blank" data-i18n="about_link_discord">Discord de CONVOYRAMA</a>
+                <a href="https://convoyrama.github.io" target="_blank" data-i18n="about_link_web">Sitio web</a>
+                <a href="https://github.com/convoyrama" target="_blank" data-i18n="about_link_github">GitHub</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="contenedor">
+        <div id="controls-bar">
+            <div id="live-clocks">
+                <span data-i18n="local_time">Hora Local:</span> <span id="local-time-display">--:--:--</span> |
+                <span data-i18n="ingame_time">Hora In-Game:</span> <span id="game-time-display">--:--:--</span> <span id="game-time-emoji"></span>
+            </div>
+
+            <button type="button" id="zone-settings-open" class="zone-settings-btn">
+                ⚙ <span data-i18n="zone_settings_button">Husos Horarios</span>
+            </button>
+        </div>
+
+        <div id="zone-settings-overlay" class="about-overlay">
+            <div class="about-modal zone-settings-modal">
+                <button type="button" id="zone-settings-close" class="about-close">×</button>
+                <h3 data-i18n="zone_settings_title">Configurar Husos Horarios</h3>
+
+                <div id="detected-timezone-row">
+                    <span data-i18n="detected_timezone_label">Tu huso horario detectado:</span>
+                    <span id="detected-timezone-info"></span>
+                </div>
+
+                <div id="manual-offset-container">
+                    <label for="manual-offset-select" data-i18n="manual_offset_title">Ajuste Manual UTC:</label>
+                    <select id="manual-offset-select">
+                        <option value="auto" selected>Auto</option>
+                        <option value="-12">UTC-12</option>
+                        <option value="-11">UTC-11</option>
+                        <option value="-10">UTC-10</option>
+                        <option value="-9">UTC-9</option>
+                        <option value="-8">UTC-8</option>
+                        <option value="-7">UTC-7</option>
+                        <option value="-6">UTC-6</option>
+                        <option value="-5">UTC-5</option>
+                        <option value="-4">UTC-4</option>
+                        <option value="-3">UTC-3</option>
+                        <option value="-2">UTC-2</option>
+                        <option value="-1">UTC-1</option>
+                        <option value="0">UTC+0</option>
+                        <option value="1">UTC+1</option>
+                        <option value="2">UTC+2</option>
+                        <option value="3">UTC+3</option>
+                        <option value="4">UTC+4</option>
+                        <option value="5">UTC+5</option>
+                        <option value="6">UTC+6</option>
+                        <option value="7">UTC+7</option>
+                        <option value="8">UTC+8</option>
+                        <option value="9">UTC+9</option>
+                        <option value="10">UTC+10</option>
+                        <option value="11">UTC+11</option>
+                        <option value="12">UTC+12</option>
+                        <option value="13">UTC+13</option>
+                        <option value="14">UTC+14</option>
+                    </select>
+                </div>
+
+                <div id="zone-settings-section">
+                    <label data-i18n="zone_settings_active_label">Husos horarios en el flyer</label>
+                    <div id="zone-list"></div>
+
+                    <label data-i18n="zone_settings_presets_label">Zonas disponibles por región</label>
+                    <div id="preset-buttons"></div>
+
+                    <label for="zone-search" data-i18n="custom_zone_label">Agregar país o zona horaria</label>
+                    <div id="custom-zone-input-row">
+                        <input type="text" id="zone-search" list="zone-datalist" data-i18n-placeholder="custom_zone_placeholder" placeholder="Buscar ciudad o país (ej: Tokyo)" autocomplete="off">
+                        <datalist id="zone-datalist"></datalist>
+                        <button id="zone-search-add" type="button">+</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="custom-event">
+            <h3 data-i18n="header_title">Crear Flyer de Evento</h3>
+            <div class="input-row">
+                <div class="input-col" id="load-flyer-group">
+                    <label for="load-flyer-input" data-i18n="load_flyer_label">Cargar flyer existente:</label>
+                    <input type="file" id="load-flyer-input" accept="image/png">
+                </div>
+            </div>
+            <div id="load-flyer-hint" data-i18n="load_flyer_hint">Recupera los datos de un flyer que ya generaste (nombre, fecha, lugares) para editarlos o rehacer la ruta con mapas nuevos.</div>
+            <div class="input-row">
+                <div class="input-col">
+                    <label for="custom-date" data-i18n="label_date">Fecha:</label>
+                    <input type="date" id="custom-date">
+                </div>
+                <div class="input-col">
+                    <label for="custom-time" data-i18n="label_meeting_time">Hora de reunión:</label>
+                    <input type="time" id="custom-time">
+                </div>
+                <div class="input-col">
+                    <label for="departure-time-offset" data-i18n="label_departure_time_offset">Hora de salida:</label>
+                    <select id="departure-time-offset">
+                        <option value="10">10 min</option>
+                        <option value="15" selected>15 min</option>
+                        <option value="30">30 min</option>
+                        <option value="45">45 min</option>
+                    </select>
+                </div>
+                <div id="ingame-emoji-display"></div>
+                <div id="custom-date-display"></div>
+            </div>
+            <div class="input-row">
+                <input type="text" id="custom-event-name" data-i18n-placeholder="placeholder_event_name" placeholder="Nombre del evento" style="flex: 2;">
+                <input type="text" id="custom-server" data-i18n-placeholder="placeholder_server" placeholder="Servidor" style="flex: 1;">
+            </div>
+            <div class="input-row">
+                <input type="text" id="custom-start-place" data-i18n-placeholder="placeholder_start_place" placeholder="Lugar de partida">
+                <div style="color: #00aaff; font-weight: 900;">➔</div>
+                <input type="text" id="custom-destination" data-i18n-placeholder="placeholder_destination" placeholder="Lugar de destino">
+            </div>
+            <div class="input-row">
+                <input type="text" id="custom-event-link" data-i18n-placeholder="placeholder_event_link" placeholder="Enlace del evento">
+            </div>
+            <label for="custom-event-description" data-i18n="label_description">Descripción:</label>
+            <textarea id="custom-event-description" data-i18n-placeholder="placeholder_event_description" placeholder="Descripción del evento" rows="6"></textarea>
+            <div class="input-row">
+                <div class="input-group">
+                    <label for="map-upload" data-i18n="label_map">Mapa:</label>
+                    <input type="file" id="map-upload" accept="image/*">
+                    <div class="zoom-buttons">
+                        <button id="zoom-in">+</button>
+                        <button id="zoom-out">-</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="circle-upload-top" data-i18n="label_departure_map">Partida:</label>
+                    <input type="file" id="circle-upload-top" accept="image/*">
+                    <div class="zoom-buttons">
+                        <button id="zoom-in-top">+</button>
+                        <button id="zoom-out-top">-</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="circle-upload-bottom" data-i18n="label_destination_map">Destino:</label>
+                    <input type="file" id="circle-upload-bottom" accept="image/*">
+                    <div class="zoom-buttons">
+                        <button id="zoom-in-bottom">+</button>
+                        <button id="zoom-out-bottom">-</button>
+                    </div>
+                </div>
+                <div class="input-group" id="waypoint-group">
+                    <div class="label-container">
+                        <label for="waypoint-upload" data-i18n="label_waypoint">Waypoint:</label>
+                        <label class="switch">
+                            <input type="checkbox" id="waypoint-toggle">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <input type="file" id="waypoint-upload" accept="image/*">
+                    <div class="zoom-buttons">
+                        <button id="zoom-in-waypoint">+</button>
+                        <button id="zoom-out-waypoint">-</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="detail-upload" data-i18n="label_detail">Detalle:</label>
+                    <input type="file" id="detail-upload" accept="image/*">
+                    <div class="zoom-buttons">
+                        <button id="zoom-in-detail">+</button>
+                        <button id="zoom-out-detail">-</button>
+                    </div>
+                </div>
+            </div>
+            <div class="input-row last-row">
+                <!-- Limit 1 -->
+                <div class="input-group">
+                    <div class="label-container">
+                        <label data-i18n="label_speed_limit_1">Límite 1</label>
+                        <label class="switch">
+                            <input type="checkbox" id="speed-toggle-0">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <input type="number" id="speed-value-0" value="80">
+                    <select id="speed-unit-0">
+                        <option value="km/h">km/h</option>
+                        <option value="mph">mph</option>
+                    </select>
+                </div>
+                <!-- Limit 2 -->
+                <div class="input-group">
+                    <div class="label-container">
+                        <label data-i18n="label_speed_limit_2">Límite 2</label>
+                        <label class="switch">
+                            <input type="checkbox" id="speed-toggle-1">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <input type="number" id="speed-value-1" value="60">
+                    <select id="speed-unit-1">
+                        <option value="km/h">km/h</option>
+                        <option value="mph">mph</option>
+                    </select>
+                </div>
+                <!-- Free Text / Fuga (Reused Toggle 3) -->
+                <div class="input-group">
+                    <div class="label-container">
+                        <label data-i18n="label_custom_text">Libre / Texto</label>
+                        <label class="switch">
+                            <input type="checkbox" id="speed-toggle-3">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <input type="text" id="speed-value-3" value="FUGA" maxlength="12">
+                    <div style="font-size: 0.6rem; color: #666; margin-top: 4px; text-align: center;" data-i18n="hint_custom_text">Texto libre (máx. 12 car.)</div>
+                </div>
+                <!-- Background -->
+                <div class="input-group">
+                    <label for="background-upload" data-i18n="label_background">Fondo:</label>
+                    <input type="file" id="background-upload" accept="image/*">
+                </div>
+                <!-- Logo VTC -->
+                <div class="input-group">
+                    <label for="logo-upload" data-i18n="label_vtc_logo">Logo VTC:</label>
+                    <input type="file" id="logo-upload" accept="image/*">
+                </div>
+            </div>
+            <div id="preview-note" data-i18n="canvas_preview_warning">Nota: Los círculos de mapa pueden verse desplazados en la vista previa, pero aparecerán correctamente en la imagen descargada.</div>
+            <div class="canvas-container">
+                <canvas id="map-canvas"></canvas>
+                <canvas id="circle-canvas-top" class="circle-canvas"></canvas>
+                <canvas id="circle-canvas-bottom" class="circle-canvas"></canvas>
+                <canvas id="circle-canvas-waypoint" class="circle-canvas"></canvas>
+            </div>
+            <div class="canvas-controls">
+                <button id="download-canvas" data-i18n="btn_download_image">Descargar Imagen</button>
+                <button id="copy-custom-info" data-i18n="btn_copy_discord">Discord</button>
+                <button id="copy-tmp-btn" data-i18n="btn_copy_tmp">TMP</button>
+                <div title="" data-i18n-title="tmp_images_tooltip" class="text-control-item">
+                    <label class="switch">
+                        <input type="checkbox" id="tmp-images-toggle" checked>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+
+                <div class="text-control-item">
+                    <label for="canvas-size" data-i18n="label_canvas_size">Resolución:</label>
+                    <select id="canvas-size">
+                        <option value="1" selected data-i18n="canvas_size_standard">Estándar (1280x720)</option>
+                        <option value="1.25" data-i18n="canvas_size_large">Grande (1600x900)</option>
+                        <option value="1.5" data-i18n="canvas_size_xlarge">Extra Grande (1920x1080)</option>
+                    </select>
+                </div>
+
+                <div class="text-control-item">
+                    <label for="text-size" data-i18n="label_text_size">Tamaño:</label>
+                    <select id="text-size">
+                        <option value="10" data-i18n="size_small">10px</option>
+                        <option value="15" selected data-i18n="size_medium">15px</option>
+                        <option value="20" data-i18n="size_large">20px</option>
+                    </select>
+                </div>
+
+                <div class="text-control-item">
+                    <label for="style-picker-toggle" data-i18n="label_text_style">Estilo:</label>
+                    <div class="style-picker">
+                        <button type="button" id="style-picker-toggle" class="style-picker-toggle" data-i18n="style_classic">Clásico</button>
+                        <div id="style-picker-panel" class="style-picker-panel"></div>
+                    </div>
+                    <select id="text-style" hidden>
+                        <option value="classic" selected data-i18n="style_classic">Clásico</option>
+                        <option value="mint" data-i18n="style_mint">Menta</option>
+                        <option value="sky" data-i18n="style_sky">Cielo</option>
+                        <option value="bubblegum" data-i18n="style_bubblegum">Chicle</option>
+                        <option value="alert" data-i18n="style_alert">Alerta</option>
+                        <option value="inverse" data-i18n="style_inverse">Inverso</option>
+                        <option value="fire" data-i18n="style_fire">Fuego</option>
+                        <option value="ice" data-i18n="style_ice">Hielo</option>
+                        <option value="retro" data-i18n="style_retro">Retro</option>
+                        <option value="womens_day" data-i18n="style_womens_day">Día mujer</option>
+                        <option value="gold" data-i18n="style_gold">Dorado</option>
+                        <option value="rainbow" data-i18n="style_rainbow">Arcoíris</option>
+                        <option value="hacker" data-i18n="style_hacker">Hacker</option>
+                        <option value="love" data-i18n="style_love">Amor</option>
+                        <option value="galaxy" data-i18n="style_galaxy">Galaxia</option>
+                        <option value="sunset" data-i18n="style_sunset">Atardecer</option>
+                        <option value="neon" data-i18n="style_neon">Neón</option>
+                        <option value="jungle" data-i18n="style_jungle">Selva</option>
+                        <option value="volcano" data-i18n="style_volcano">Volcán</option>
+                        <option value="electric" data-i18n="style_electric">Eléctrico</option>
+                        <option value="oceanic" data-i18n="style_oceanic">Oceánico</option>
+                        <option value="sunrise" data-i18n="style_sunrise">Amanecer</option>
+                        <option value="shadow" data-i18n="style_shadow">Sombra</option>
+                        <option value="metallic" data-i18n="style_metallic">Metálico</option>
+                        <option value="toxic" data-i18n="style_toxic">Tóxico</option>
+                        <option value="cosmic" data-i18n="style_cosmic">Cósmico</option>
+                        <option value="sunburst" data-i18n="style_sunburst">Solar</option>
+                    </select>
+                </div>
+
+                <div class="text-control-item">
+                    <label for="text-background-opacity" data-i18n="label_text_background_opacity">Opacidad:</label>
+                    <select id="text-background-opacity">
+                        <option value="0">0%</option>
+                        <option value="0.05">5%</option>
+                        <option value="0.15" selected>15%</option>
+                        <option value="0.3">30%</option>
+                        <option value="0.5">50%</option>
+                        <option value="0.7">70%</option>
+                    </select>
+                </div>
+
+                <button id="reset-canvas" data-i18n="btn_reset_canvas">Reset</button>
+            </div>
+
+        </div>
+        <div id="copy-message" data-i18n="copy_message_text">¡Información copiada al portapapeles!</div>
+    </div>
+
+    <script src="./js/lib/luxon.min.js"></script>
+    <script type="module" src="./js/main.js"></script>
+</body>
+</html>
