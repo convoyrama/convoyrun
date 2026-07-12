@@ -12,10 +12,10 @@
 
 ## Qué incluye
 
-- **Canvas editable** de 1280x720: mapa arrastrable y con zoom, círculos de partida/destino y waypoint opcional, imagen de detalle, logo de tu VTC, fondo propio, watermark de CONVOYRAMA.
+- **Canvas editable** de 1280x720: mapa arrastrable y con zoom, círculos de partida/destino y waypoint opcional, imagen de detalle, logo de tu VTC.
 - **27 estilos de texto** — fuego, hielo, arcoíris, neón y más — con degradés y sombras.
 - **Indicadores de velocidad** arrastrables, incluido uno de texto libre (para carteles tipo "FUGA").
-- **Horarios multi-zona** con las 418 zonas horarias reales del sistema (no una lista fija), corregidos país por país, y un semáforo que confirma que tu hora local está sincronizada antes de generar los timestamps.
+- **Horarios multi-zona** con las 418 zonas horarias reales del sistema (no una lista fija), corregidos país por país.
 - **Exportación en tres resoluciones** (1280x720 hasta 1920x1080), con el PNG recomprimido sin pérdida antes de guardarlo.
 - **Copiar para Discord y para TMP** con un clic — nada de retipear horarios a mano.
 - **Recargar un flyer viejo** para reutilizar los datos si cambia la ruta o el mapa.
