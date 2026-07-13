@@ -409,9 +409,7 @@ async function init() {
     drawCanvas();
     updateInGameTimeEmojis();
 
-    // Canvas 2D no re-dibuja solo cuando un @font-face termina de cargar (a diferencia
-    // del texto normal del DOM) -- si el primer render cae antes de que la fuente esté
-    // lista, queda con la tipografía de fallback del sistema para siempre.
+    // Canvas 2D no re-dibuja solo cuando carga un @font-face.
     document.fonts.ready.then(() => drawCanvas());
 }
 

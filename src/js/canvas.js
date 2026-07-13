@@ -205,18 +205,14 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
             break;
     }
 
-    // Marco del mapa, mismo color/glow que el estilo de texto elegido. Va sobre el
-    // viewport del canvas (0,0,logicalWidth,logicalHeight), NO sobre los bordes propios
-    // de la imagen subida: el mapa se sube grande y se hace zoom/drag para encuadrar un
-    // recorte, así que sus bordes reales casi siempre quedan bien afuera del área visible
-    // -- un marco ahí nunca se vería. Grosor bajo (4px, la mitad que el de los círculos)
-    // a propósito: es un borde de flyer, no un marco de foto decorativo pesado.
+    // Marco del flyer (no de la imagen subida, sus bordes reales quedan fuera de cuadro).
+    // Corrido 3px hacia adentro para que no se recorte la mitad del trazo.
     if (state.mapImage) {
         ctx.save();
         ctx.shadowColor = shadowColor;
         ctx.strokeStyle = borderColor;
-        ctx.lineWidth = 4;
-        ctx.strokeRect(0, 0, logicalWidth, logicalHeight);
+        ctx.lineWidth = 6;
+        ctx.strokeRect(3, 3, logicalWidth - 6, logicalHeight - 6);
         ctx.restore();
     }
 
