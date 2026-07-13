@@ -1,8 +1,4 @@
-// Panel de configuración de husos horarios/países — arma la lista exacta de
-// zonas del flyer (un solo país si es lo único que hace falta, una región
-// entera, o cualquier mezcla), en vez de quedar atado a un preset fijo. Se
-// abre desde un botón chico para no ensuciar la barra de controles. Aislado
-// de main.js igual que los demás módulos de feature (time-sync.js, about.js).
+// Arma la lista de zonas del flyer libremente, sin atarla a un preset fijo.
 import { dom } from './dom.js';
 import * as state from './core/state.js';
 import { timezoneRegions } from './core/config.js';
@@ -63,9 +59,7 @@ function renderActiveZoneList(onChange) {
     });
 }
 
-// Cada zona de preset queda siempre visible acá, prendida/apagada — sacarla
-// de la lista activa de arriba solo la destilda, no la hace desaparecer,
-// para poder volver a prenderla fácil.
+// Sacarla de la lista activa solo la destilda acá, no la hace desaparecer.
 function renderPresetZoneToggles(onChange) {
     dom.presetButtons.innerHTML = '';
     Object.keys(timezoneRegions).forEach(regionKey => {

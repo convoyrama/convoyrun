@@ -1,12 +1,5 @@
-// Semáforo de confianza (mismo patrón que usa LAG-ID para su estado de
-// verificación de hora): 3 puntos, uno solo prendido a la vez. Acá solo
-// confirma que hay red y se puede leer un reloj de servidor real — importa
-// porque los timestamps de Discord salen del reloj local, y si está mal
-// queda mal para todos sin que nadie se entere.
-//
-// Usa el plugin http de Tauri (el pedido sale desde Rust) en vez del fetch()
-// nativo del webview: un fetch() común a un host externo desde el origen
-// custom de la app choca con CORS y falla en silencio.
+// Confirma que el reloj local (fuente de los timestamps de Discord) anda bien.
+// Usa el plugin http de Tauri, no fetch() nativo: choca con CORS y falla en silencio.
 import { dom } from './dom.js';
 
 const TIME_SOURCES = ['https://convoyrama.github.io/', 'https://github.com/'];

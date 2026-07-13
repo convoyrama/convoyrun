@@ -1,5 +1,4 @@
-// Modal "Acerca de": logo, versión leída en vivo de tauri.conf.json vía la
-// API de Tauri, no hardcodeada acá, para que no se desactualice.
+// Versión leída en vivo vía la API de Tauri, no hardcodeada.
 export function initAbout() {
     const overlay = document.getElementById('about-overlay');
     const openBtn = document.getElementById('about-open');

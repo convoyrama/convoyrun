@@ -5,8 +5,7 @@ import { currentLangData } from './state.js';
 const { DateTime } = luxon;
 
 export function getGameTime(utcDateTime) {
-    // Ancla fija calibrada a mano contra el juego real. Ver docs/03_GAME_TIME_VERIFICATION.md
-    // antes de tocar esto — la API de TMP no sirvió para calibrar, quedó pendiente de chequeo in-game.
+    // Ancla sin verificar contra el juego real, ver docs/03_GAME_TIME_VERIFICATION.md.
     const GAME_TIME_ANCHOR_UTC_MINUTES = 20 * 60 + 40;
     const TIME_SCALE = 6;
     const totalMinutesUTC = utcDateTime.hour * 60 + utcDateTime.minute;
@@ -19,11 +18,7 @@ export function getGameTime(utcDateTime) {
     return { hours: gameHours, minutes: remainingMinutes };
 }
 
-// "Auto" siempre es la hora real del sistema del creador — nunca la zona de
-// un preset. Centralizado acá porque main.js/canvas.js lo necesitan los
-// cinco (updateInGameTimeEmojis, performDownload, copyCustomInfo, copyTmpBtn,
-// drawCanvas) y tenerlo repetido fue justo lo que causó la inconsistencia
-// que hubo que arreglar antes.
+// Centralizado: repetido en cada caller causaba inconsistencias antes.
 export function resolveMeetingDateTime(dateValue, timeValue, manualOffset) {
     if (manualOffset === 'auto') {
         return DateTime.fromISO(`${dateValue}T${timeValue}:00`);

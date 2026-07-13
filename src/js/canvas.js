@@ -5,17 +5,12 @@ import { getGameTime, getDetailedDayNightIcon, formatDateForDisplayShort, format
 const { DateTime } = luxon;
 import { wrapText, getZoneLabel } from './core/utils.js';
 
-// targetCanvas/scale existen para que performDownload() pueda renderizar a
-// una resolución más grande en un canvas aparte, sin tocar el canvas visible
-// (siempre 1280x720) — así el arrastre/zoom interactivo no se rompe.
+// targetCanvas/scale: performDownload() renderiza más grande en un canvas aparte.
 export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
     const canvas = targetCanvas;
     const ctx = canvas.getContext("2d");
     const logicalWidth = 1280, logicalHeight = 720;
-    // 'high' es lento con mapas grandes — se nota en cada tecla de la vista
-    // previa en vivo. Solo vale la pena pagar ese costo en el canvas de
-    // exportación (targetCanvas != dom.mapCanvas), que se dibuja una sola
-    // vez al descargar.
+    // 'high' es lento con mapas grandes; solo vale la pena en el export.
     const smoothingQuality = (canvas === dom.mapCanvas) ? 'low' : 'high';
     const textSize = parseInt(dom.textSize.value), textStyle = dom.textStyle.value, textBackgroundOpacity = parseFloat(dom.textBackgroundOpacity.value);
     const customDateValue = dom.customDate.value, customTimeValue = dom.customTime.value, customEventNameValue = dom.customEventName.value || (state.currentLangData.canvas_default_event_name || "Evento Personalizado");
@@ -205,16 +200,13 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
             break;
     }
 
-    // Marco del flyer (no de la imagen subida, sus bordes reales quedan fuera de cuadro).
-    // Corrido 3px hacia adentro para que no se recorte la mitad del trazo.
-    if (state.mapImage) {
-        ctx.save();
-        ctx.shadowColor = shadowColor;
-        ctx.strokeStyle = borderColor;
-        ctx.lineWidth = 6;
-        ctx.strokeRect(3, 3, logicalWidth - 6, logicalHeight - 6);
-        ctx.restore();
-    }
+    // Marco del flyer, corrido hacia adentro para que no se recorte el trazo.
+    ctx.save();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 6;
+    ctx.strokeRect(3, 3, logicalWidth - 6, logicalHeight - 6);
+    ctx.restore();
 
     ctx.shadowColor = shadowColor;
     ctx.shadowOffsetX = 0;
@@ -275,10 +267,7 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
     const maxTextWidth = logicalWidth - textX - 20;
     textLines.forEach((line, index) => { let currentTextX = textX; let currentLineHeight = lineHeight; if (line.startsWith('  ')) { currentTextX += 15; } const wrappedLines = wrapText(ctx, line, maxTextWidth - (currentTextX - textX)); wrappedLines.forEach((wrappedLine, wrappedIndex) => { ctx.fillText(wrappedLine, currentTextX, textY + (index * lineHeight) + (wrappedIndex * currentLineHeight)); }); });
 
-    // circleDiameter queda como tamaño lógico de dibujo; la resolución
-    // propia de cada sub-canvas se multiplica por `scale` para que exportar
-    // en Grande/Extra Grande no estire un bitmap fijo de 240x240 (quedaba
-    // borroso).
+    // Tamaño lógico; cada sub-canvas se escala aparte para no exportar borroso.
     const circleDiameter = 240; const circleX = logicalWidth - circleDiameter - 10; const topY = 10; const bottomY = logicalHeight - circleDiameter - 10;
     const circleCenterX = circleX + circleDiameter / 2;
 
@@ -389,10 +378,7 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
         }
     });
 
-    // Va al final para quedar por encima de todas las demás capas. Si no
-    // hay indicadores de velocidad visibles, shadowBlur queda con el valor
-    // del estilo de texto activo (drawImage también respeta la sombra) —
-    // sin este reset el logo se contamina con el efecto del estilo.
+    // Reset del shadowBlur: sin esto el logo hereda la sombra del estilo activo.
     if (state.watermarkImage.complete && state.watermarkImage.naturalWidth !== 0) {
         ctx.shadowBlur = 0;
         ctx.globalAlpha = 0.6;

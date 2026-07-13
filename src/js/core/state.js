@@ -21,10 +21,7 @@ export let startX, startY;
 
 export let currentLangData = {};
 
-// Lista libre de husos horarios que se muestran en el flyer, no atada a un
-// solo preset. Arranca con "hispano" para que no quede vacía la primera vez;
-// después el usuario hace lo que quiera (hasta un solo país si es lo único
-// que necesita). Persiste entre sesiones.
+// Arranca en "hispano" para no quedar vacía la primera vez; persiste entre sesiones.
 const ACTIVE_ZONES_STORAGE_KEY = 'convoyrun-active-zones';
 const DEFAULT_PRESET = 'hispano';
 

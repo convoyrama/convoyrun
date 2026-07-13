@@ -1,6 +1,4 @@
-// Bootstrap de idioma autocontenido. En convoyrama.github.io esto lo hacía
-// el main-i18n.js del sitio; acá va standalone, busca sus propios locales y
-// dispara el mismo evento 'languageChanged' que ya escucha main.js.
+// Standalone (el sitio usa main-i18n.js aparte); dispara 'languageChanged'.
 async function loadLanguage(lang) {
     const response = await fetch(`./locales/${lang}.json`);
     const translations = await response.json();

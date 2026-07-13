@@ -366,9 +366,7 @@ async function init() {
     dom.waypointToggle.addEventListener('change', (e) => { state.setIsWaypointVisible(e.target.checked); drawCanvas(); });
     dom.departureToggle.addEventListener('change', (e) => { state.setIsDepartureVisible(e.target.checked); drawCanvas(); });
     dom.destinationToggle.addEventListener('change', (e) => { state.setIsDestinationVisible(e.target.checked); drawCanvas(); });
-    // drawCanvas ahora toma (targetCanvas, scale) — pasarla directo como
-    // callback le mandaría el Event como targetCanvas y rompe todo en
-    // silencio. Siempre envuelta en función así se llama sin argumentos.
+    // Envuelta en función: pasar drawCanvas directo mandaría el Event como targetCanvas.
     dom.textSize.addEventListener("change", () => drawCanvas());
     dom.textStyle.addEventListener("change", () => drawCanvas());
     dom.textFont.addEventListener("change", () => drawCanvas());
@@ -386,8 +384,7 @@ async function init() {
         drawCanvas();
     });
 
-    // El picker nativo de WebKitGTK no cierra con Escape solo — hay que
-    // sacarle el foco al input a mano para que se cierre.
+    // WebKitGTK no cierra el picker con Escape solo, hace falta el blur.
     dom.customDate.addEventListener("keydown", (e) => { if (e.key === "Escape") dom.customDate.blur(); });
     dom.customTime.addEventListener("keydown", (e) => { if (e.key === "Escape") dom.customTime.blur(); });
 

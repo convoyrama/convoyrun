@@ -1,8 +1,5 @@
-// El <select> nativo de 27 estilos no mostraba todas las opciones en
-// WebKitGTK (el popup queda más alto que la ventana y no scrollea). Este
-// panel propio reemplaza solo la interacción visual — el <select> oculto
-// sigue siendo la fuente de verdad que lee canvas.js, así que no hay que
-// tocar nada del dibujo del canvas.
+// WebKitGTK no scrollea el popup nativo de 27 opciones; el <select> oculto
+// sigue siendo la fuente de verdad, este panel solo reemplaza la interacción.
 import { dom } from './dom.js';
 
 function closePanel() {

@@ -1,9 +1,7 @@
-// Helper to write a 32-bit unsigned integer to a DataView
 function writeUint32(view, offset, value) {
-    view.setUint32(offset, value, false); // PNG uses big-endian
+    view.setUint32(offset, value, false); // PNG usa big-endian
 }
 
-// CRC32 checksum calculation
 const crc32 = (function() {
     const table = new Uint32Array(256);
     for (let i = 0; i < 256; i++) {
@@ -22,20 +20,12 @@ const crc32 = (function() {
     };
 })();
 
-/**
- * Injects an iTXt chunk with custom metadata into a PNG ArrayBuffer.
- * iTXt supports UTF-8 and is the standard for international text in PNGs.
- * @param {ArrayBuffer} pngBuffer The original PNG data.
- * @param {string} key The metadata key (e.g., "convoyrama-event-data").
- * @param {string} value The metadata value (e.g., a JSON string).
- * @returns {ArrayBuffer} A new ArrayBuffer with the injected chunk.
- */
+// Inyecta un chunk iTXt (metadata custom en UTF-8) en un PNG.
 export function injectMetadataIntoPNG(pngBuffer, key, value) {
     const IEND_CHUNK_TYPE = 'IEND';
     const ITXT_CHUNK_TYPE = 'iTXt';
 
     const dataView = new DataView(pngBuffer);
-    // PNG signature
     if (dataView.getUint32(0) !== 0x89504E47 || dataView.getUint32(4) !== 0x0D0A1A0A) {
         console.error("[PNG] Invalid signature.");
         return pngBuffer;
@@ -51,30 +41,17 @@ export function injectMetadataIntoPNG(pngBuffer, key, value) {
             dataView.getUint8(offset + 7)
         );
         
-        // Find the IEND chunk, which must be the last one.
         if (type === IEND_CHUNK_TYPE) {
             const iendChunk = pngBuffer.slice(offset);
             const pngWithoutIend = pngBuffer.slice(0, offset);
 
-            // iTXt structure:
-            // Keyword: 1-79 bytes (character string)
-            // Null separator: 1 byte
-            // Compression flag: 1 byte (0 = uncompressed, 1 = compressed)
-            // Compression method: 1 byte (0 = deflate)
-            // Language tag: 0 or more bytes (character string)
-            // Null separator: 1 byte
-            // Translated keyword: 0 or more bytes
-            // Null separator: 1 byte
-            // Text: 0 or more bytes (UTF-8)
-
+            // iTXt: keyword\0 flag method lang\0 transkey\0 text (spec PNG 11.3.4.4)
             const encoder = new TextEncoder();
             const keywordBytes = encoder.encode(key);
             const valueBytes = encoder.encode(value);
             const langTagBytes = encoder.encode(""); // Empty language tag
             const transKeyBytes = encoder.encode(""); // Empty translated keyword
             
-            // Calculate total chunk data length
-            // keyword (len) + null (1) + flag (1) + method (1) + lang (len) + null (1) + trans (len) + null (1) + value (len)
             const chunkDataLength = keywordBytes.length + 1 + 1 + 1 + langTagBytes.length + 1 + transKeyBytes.length + 1 + valueBytes.length;
             
             const newChunkBuffer = new ArrayBuffer(12 + chunkDataLength);
@@ -109,7 +86,6 @@ export function injectMetadataIntoPNG(pngBuffer, key, value) {
             const crc = crc32(newChunkBytes, 4, chunkDataLength + 4);
             writeUint32(newChunkView, 8 + chunkDataLength, crc);
 
-            // Combine the parts: original PNG (without IEND) + new chunk + IEND chunk
             const finalPngBuffer = new ArrayBuffer(pngWithoutIend.byteLength + newChunkBuffer.byteLength + iendChunk.byteLength);
             const finalPngBytes = new Uint8Array(finalPngBuffer);
             
@@ -126,14 +102,7 @@ export function injectMetadataIntoPNG(pngBuffer, key, value) {
     return pngBuffer;
 }
 
-/**
- * Reads back the iTXt chunk written by injectMetadataIntoPNG — lets the app
- * load a flyer PNG it generated earlier and recover the original event data
- * (to regenerate Discord/TMP text without retyping everything).
- * @param {ArrayBuffer} pngBuffer The PNG data to read.
- * @param {string} key The metadata keyword to look for (e.g. "convoyrama-event-data").
- * @returns {string|null} The raw text stored in the chunk, or null if not found/invalid.
- */
+// Lee el chunk iTXt que escribe injectMetadataIntoPNG, para recargar un flyer viejo.
 export function readMetadataFromPNG(pngBuffer, key) {
     const dataView = new DataView(pngBuffer);
     if (dataView.getUint32(0) !== 0x89504E47 || dataView.getUint32(4) !== 0x0D0A1A0A) {

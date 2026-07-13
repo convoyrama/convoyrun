@@ -1,6 +1,4 @@
-// Aísla todo lo que toca la API de Tauri en funciones chicas — así el resto
-// de la app (main.js, canvas.js) no necesita saber que corre en un webview
-// de Tauri y no en un navegador cualquiera.
+// Aísla la API de Tauri: el resto de la app no sabe que corre en un webview.
 const tauri = () => window.__TAURI__;
 
 export async function saveFile(bytes, suggestedName, filters = [{ name: 'PNG Image', extensions: ['png'] }]) {
@@ -14,9 +12,7 @@ export async function copyToClipboard(text) {
     await tauri().clipboardManager.writeText(text);
 }
 
-// Reencodea el PNG con máxima compresión sin pérdida del lado de Rust.
-// Recibe/devuelve ArrayBuffer para que quien llame no tenga que pensar en
-// el array de números que usa el IPC por debajo.
+// Reencodea el PNG (máxima compresión, sin pérdida) del lado de Rust.
 export async function optimizePng(arrayBuffer) {
     const optimized = await tauri().core.invoke('optimize_png', { bytes: Array.from(new Uint8Array(arrayBuffer)) });
     return new Uint8Array(optimized).buffer;
