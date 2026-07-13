@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title data-i18n="page_title">ConvoyRun</title>
+    <link rel="stylesheet" href="./css/fonts.css" />
     <link rel="stylesheet" href="./css/style.css" />
     <link rel="stylesheet" href="./css/app-shell.css" />
 </head>
@@ -308,6 +309,22 @@
                 </div>
 
                 <div class="text-control-item">
+                    <label for="text-font" data-i18n="label_text_font">Fuente:</label>
+                    <select id="text-font">
+                        <option value="Arial" selected data-i18n="font_arial">Arial</option>
+                        <option value="Oswald" data-i18n="font_oswald">Oswald</option>
+                        <option value="'Bebas Neue'" data-i18n="font_bebas_neue">Bebas Neue</option>
+                        <option value="Anton" data-i18n="font_anton">Anton</option>
+                        <option value="'Racing Sans One'" data-i18n="font_racing_sans_one">Racing Sans One</option>
+                        <option value="'Russo One'" data-i18n="font_russo_one">Russo One</option>
+                        <option value="Orbitron" data-i18n="font_orbitron">Orbitron</option>
+                        <option value="Bangers" data-i18n="font_bangers">Bangers</option>
+                        <option value="Pacifico" data-i18n="font_pacifico">Pacifico</option>
+                        <option value="Righteous" data-i18n="font_righteous">Righteous</option>
+                    </select>
+                </div>
+
+                <div class="text-control-item">
                     <label for="style-picker-toggle" data-i18n="label_text_style">Estilo:</label>
                     <div class="style-picker">
                         <button type="button" id="style-picker-toggle" class="style-picker-toggle" data-i18n="style_classic">Clásico</button>
@@ -353,6 +370,8 @@
                         <option value="0.3">30%</option>
                         <option value="0.5">50%</option>
                         <option value="0.7">70%</option>
+                        <option value="0.8">80%</option>
+                        <option value="0.9">90%</option>
                     </select>
                 </div>
 

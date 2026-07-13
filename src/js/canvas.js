@@ -205,11 +205,22 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
             break;
     }
 
+    // Marco del mapa, mismo color/glow que el estilo de texto elegido -- mismo patrón
+    // que el borde de los círculos (stroke centrado en el borde de la imagen).
+    if (state.mapImage) {
+        ctx.save();
+        ctx.shadowColor = shadowColor;
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 8;
+        ctx.strokeRect(state.imageX, state.imageY, state.mapImage.width * state.imageScale, state.mapImage.height * state.imageScale);
+        ctx.restore();
+    }
+
     ctx.shadowColor = shadowColor;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
     
-    ctx.font = `bold ${textSize + 8}px Arial`;
+    ctx.font = `bold ${textSize + 8}px ${dom.textFont.value}`;
     ctx.textAlign = "center";
     const eventName = customEventNameValue;
     const eventNameMetrics = ctx.measureText(eventName);
@@ -223,7 +234,7 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
     let topOffset = 45;
     if (state.logoImage) { const logoHeight = 80; const logoWidth = state.logoImage.width * (logoHeight / state.logoImage.height); const logoX = (logicalWidth - logoWidth) / 2; const logoY = 60; ctx.drawImage(state.logoImage, logoX, logoY, logoWidth, logoHeight); topOffset = logoY + logoHeight + 20; }
 
-    ctx.font = `bold ${textSize}px Arial`;
+    ctx.font = `bold ${textSize}px ${dom.textFont.value}`;
     ctx.textAlign = "left";
     const textLines = [ `${state.currentLangData.canvas_server || 'Servidor:'} ${customServerValue}`, `${state.currentLangData.canvas_departure || 'Partida:'} ${customStartPlaceValue}`, `${state.currentLangData.canvas_destination || 'Destino:'} ${customDestinationValue}`, "", state.currentLangData.canvas_meeting_time || 'Hora de reunión / Hora de partida:' ];
 
@@ -285,7 +296,7 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
         ctx.arc(circleCenterX, topY + circleDiameter / 2, circleDiameter / 2, 0, Math.PI * 2);
         ctx.strokeStyle = borderColor; ctx.lineWidth = 8; ctx.stroke();
 
-        ctx.font = `bold ${textSize + 8}px Arial`;
+        ctx.font = `bold ${textSize + 8}px ${dom.textFont.value}`;
         ctx.textAlign = "center";
         const departureText = state.currentLangData.canvas_label_departure || "Partida";
         const departureTextMetrics = ctx.measureText(departureText); const departureTextWidth = departureTextMetrics.width + 30; const departureTextHeight = textSize + 15; const departureTextY = topY + circleDiameter + 30;
@@ -309,7 +320,7 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
         ctx.arc(circleCenterX, bottomY + circleDiameter / 2, circleDiameter / 2, 0, Math.PI * 2);
         ctx.strokeStyle = borderColor; ctx.lineWidth = 8; ctx.stroke();
 
-        ctx.font = `bold ${textSize + 8}px Arial`;
+        ctx.font = `bold ${textSize + 8}px ${dom.textFont.value}`;
         ctx.textAlign = "center";
         const destinationText = state.currentLangData.canvas_label_destination || "Destino";
         const destinationTextMetrics = ctx.measureText(destinationText); const destinationTextWidth = destinationTextMetrics.width + 30; const destinationTextHeight = textSize + 15; const destinationTextY = bottomY - 15;
@@ -360,7 +371,7 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
     state.speedIndicators.forEach(indicator => {
         if (indicator.visible) {
             const speedText = `${indicator.value} ${indicator.unit}`;
-            ctx.font = `bold ${textSize + 8}px Arial`;
+            ctx.font = `bold ${textSize + 8}px ${dom.textFont.value}`;
             ctx.textAlign = "center";
             
             const metrics = ctx.measureText(speedText);
@@ -414,7 +425,7 @@ export function initCanvasEventListeners() {
             const ind = state.speedIndicators[i];
             if (ind.visible) {
                 const ctx = canvas.getContext("2d");
-                ctx.font = `bold ${textSize + 10}px Arial`;
+                ctx.font = `bold ${textSize + 10}px ${dom.textFont.value}`;
                 const metrics = ctx.measureText(`${ind.value} ${ind.unit}`);
                 const bgWidth = metrics.width + 30;
                 const bgHeight = textSize + 20;

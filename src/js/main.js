@@ -161,6 +161,7 @@ async function init() {
     dom.destinationToggle = document.getElementById("destination-toggle");
     dom.textSize = document.getElementById("text-size");
     dom.textStyle = document.getElementById("text-style");
+    dom.textFont = document.getElementById("text-font");
     dom.textBackgroundOpacity = document.getElementById("text-background-opacity");
     dom.resetCanvas = document.getElementById("reset-canvas");
     dom.mapUpload = document.getElementById("map-upload");
@@ -370,6 +371,7 @@ async function init() {
     // silencio. Siempre envuelta en función así se llama sin argumentos.
     dom.textSize.addEventListener("change", () => drawCanvas());
     dom.textStyle.addEventListener("change", () => drawCanvas());
+    dom.textFont.addEventListener("change", () => drawCanvas());
     dom.textBackgroundOpacity.addEventListener("change", () => drawCanvas());
     dom.downloadCanvas.addEventListener("click", performDownload);
     dom.customEventName.addEventListener("input", () => drawCanvas());
@@ -406,6 +408,11 @@ async function init() {
 
     drawCanvas();
     updateInGameTimeEmojis();
+
+    // Canvas 2D no re-dibuja solo cuando un @font-face termina de cargar (a diferencia
+    // del texto normal del DOM) -- si el primer render cae antes de que la fuente esté
+    // lista, queda con la tipografía de fallback del sistema para siempre.
+    document.fonts.ready.then(() => drawCanvas());
 }
 
 document.addEventListener('DOMContentLoaded', init);
