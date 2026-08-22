@@ -1,3 +1,6 @@
+// Reference timezone for slot definitions (slots are defined in this timezone)
+const SOURCE_TIMEZONE = 'America/Montevideo';
+
 const slots = [
     { inicio: { h: 0, m: 30 }, fin: { h: 2, m: 0 } },
     { inicio: { h: 2, m: 0 }, fin: { h: 3, m: 30 } },
@@ -79,7 +82,13 @@ function renderTimeline() {
     const current = getCurrentTime();
 
     currentTimeEl.textContent = formatTime(current.h, current.m);
-    currentSlotInfoEl.innerHTML = `Slot <strong>${currentSlotIndex + 1}</strong> · ${formatTime(slots[currentSlotIndex].inicio.h, slots[currentSlotIndex].inicio.m)} → ${formatTime(slots[currentSlotIndex].fin.h, slots[currentSlotIndex].fin.m)}`;
+    currentSlotInfoEl.textContent = '';
+    const infoStrong = document.createElement('strong');
+    infoStrong.textContent = String(currentSlotIndex + 1);
+    currentSlotInfoEl.appendChild(infoStrong);
+    currentSlotInfoEl.appendChild(document.createTextNode(
+        ` \u00B7 ${formatTime(slots[currentSlotIndex].inicio.h, slots[currentSlotIndex].inicio.m)} \u2192 ${formatTime(slots[currentSlotIndex].fin.h, slots[currentSlotIndex].fin.m)}`
+    ));
 
     const slotWidth = 180;
     const slotsExtended = [...slots, ...slots, ...slots];
@@ -102,16 +111,25 @@ function renderTimeline() {
             }
         }
 
-        const slotInicio = convertTime(s.inicio, 'America/Montevideo', tz);
-        const slotFin = convertTime(s.fin, 'America/Montevideo', tz);
+        const slotInicio = convertTime(s.inicio, SOURCE_TIMEZONE, tz);
+        const slotFin = convertTime(s.fin, SOURCE_TIMEZONE, tz);
 
-        slotEl.innerHTML = `
-            <div class="slot-content">
-                <span class="slot-start">${formatTime(slotInicio.h, slotInicio.m)}</span>
-                <span class="slot-end">→ ${formatTime(slotFin.h, slotFin.m)}</span>
-            </div>
-            <span class="slot-number">#${realIndex + 1}</span>
-        `;
+        slotEl.textContent = '';
+        const slotContent = document.createElement('div');
+        slotContent.className = 'slot-content';
+        const slotStart = document.createElement('span');
+        slotStart.className = 'slot-start';
+        slotStart.textContent = formatTime(slotInicio.h, slotInicio.m);
+        const slotEnd = document.createElement('span');
+        slotEnd.className = 'slot-end';
+        slotEnd.textContent = `\u2192 ${formatTime(slotFin.h, slotFin.m)}`;
+        slotContent.appendChild(slotStart);
+        slotContent.appendChild(slotEnd);
+        const slotNumber = document.createElement('span');
+        slotNumber.className = 'slot-number';
+        slotNumber.textContent = `#${realIndex + 1}`;
+        slotEl.appendChild(slotContent);
+        slotEl.appendChild(slotNumber);
 
         timeline.appendChild(slotEl);
     }
@@ -141,16 +159,24 @@ function renderGrid() {
             gridSlot.classList.add('current');
         }
 
-        const inicio = convertTime(s.inicio, 'America/Montevideo', tz);
-        const fin = convertTime(s.fin, 'America/Montevideo', tz);
+        const inicio = convertTime(s.inicio, SOURCE_TIMEZONE, tz);
+        const fin = convertTime(s.fin, SOURCE_TIMEZONE, tz);
 
-        gridSlot.innerHTML = `
-            <div class="grid-slot-number">SLOT ${i + 1}</div>
-            <div class="grid-slot-times">
-                <span class="grid-slot-start">${formatTime(inicio.h, inicio.m)}</span>
-                <span class="grid-slot-end">→ ${formatTime(fin.h, fin.m)}</span>
-            </div>
-        `;
+        const gridNumber = document.createElement('div');
+        gridNumber.className = 'grid-slot-number';
+        gridNumber.textContent = `SLOT ${i + 1}`;
+        const gridTimes = document.createElement('div');
+        gridTimes.className = 'grid-slot-times';
+        const gridStart = document.createElement('span');
+        gridStart.className = 'grid-slot-start';
+        gridStart.textContent = formatTime(inicio.h, inicio.m);
+        const gridEnd = document.createElement('span');
+        gridEnd.className = 'grid-slot-end';
+        gridEnd.textContent = `\u2192 ${formatTime(fin.h, fin.m)}`;
+        gridTimes.appendChild(gridStart);
+        gridTimes.appendChild(gridEnd);
+        gridSlot.appendChild(gridNumber);
+        gridSlot.appendChild(gridTimes);
 
         slotsGrid.appendChild(gridSlot);
     }

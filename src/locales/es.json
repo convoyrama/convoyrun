@@ -216,7 +216,7 @@
     "tab_swarm": "Eventos",
     "tab_flyer": "Flyer",
     "tab_about": "Acerca de",
-    "tab_slots": "Slots"
+    "tab_slots": "Slots",
     "swarm_title": "Calendario de Convoys",
     "swarm_publish_btn": "Publicar convoy",
     "swarm_empty_title": "Aún no hay convoys",
@@ -292,5 +292,14 @@
     "swarm_detail_when": "Cuándo",
     "swarm_detail_author": "Autor",
     "swarm_detail_route": "Ruta",
-    "swarm_detail_published": "Publicado"
+    "swarm_detail_published": "Publicado",
+    "slots_title": "Horario de Slots (sugerido)",
+    "slots_status_title": "Estado del nodo",
+    "slots_legend_current": "Actual",
+    "slots_legend_past": "Pasado",
+    "slots_legend_future": "Próximo",
+    "slots_grid_title": "Slots Sugeridos",
+    "slots_footer": "Slots de 1h 30min · Horas en tu zona horaria",
+    "slots_timezone": "Huso horario",
+    "about_credit": "Desarrollado por"
 }

@@ -216,6 +216,7 @@
     "tab_swarm": "Eventos",
     "tab_flyer": "Flyer",
     "tab_about": "Sobre",
+    "tab_slots": "Slots",
     "swarm_title": "Calendário de Comboios",
     "swarm_publish_btn": "Publicar comboio",
     "swarm_empty_title": "Ainda não há comboios",
@@ -291,5 +292,14 @@
     "swarm_detail_when": "Quando",
     "swarm_detail_author": "Autor",
     "swarm_detail_route": "Rota",
-    "swarm_detail_published": "Publicado"
+    "swarm_detail_published": "Publicado",
+    "slots_title": "Horário de Slots (sugerido)",
+    "slots_status_title": "Status do nó",
+    "slots_legend_current": "Atual",
+    "slots_legend_past": "Passado",
+    "slots_legend_future": "Próximo",
+    "slots_grid_title": "Slots Sugeridos",
+    "slots_footer": "Slots de 1h 30min · Horários no seu fuso horário",
+    "slots_timezone": "Fuso horário",
+    "about_credit": "Desenvolvido por"
 }

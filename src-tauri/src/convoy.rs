@@ -126,20 +126,22 @@ impl ConvoyRecord {
     }
 
     /// Serialización canónica para firma (claves ordenadas, sin el campo signature)
-    pub fn canonical_json(&self) -> String {
+    pub fn canonical_json(&self) -> Result<String> {
         // Crear copia sin signature
         let mut copy = self.clone();
         copy.signature = String::new();
 
         // Serializar con claves ordenadas
-        canonical_json(&serde_json::to_value(&copy).unwrap())
+        let value = serde_json::to_value(&copy)
+            .context("Failed to serialize ConvoyRecord for canonical JSON")?;
+        Ok(canonical_json(&value))
     }
 
     /// Firma el registro con la clave secreta
     pub fn sign(&mut self, secret_key: &SecretKey) -> Result<()> {
         use ed25519_dalek::{Signer, SigningKey};
 
-        let canonical = self.canonical_json();
+        let canonical = self.canonical_json()?;
         let message = canonical.as_bytes();
 
         // Convertir SecretKey de iroh a SigningKey de ed25519-dalek
@@ -194,7 +196,7 @@ impl ConvoyRecord {
         let signature = ed25519_dalek::Signature::from_bytes(&sig_array);
 
         // Verificar
-        let canonical = self.canonical_json();
+        let canonical = self.canonical_json()?;
         let message = canonical.as_bytes();
 
         Ok(verifying_key.verify(message, &signature).is_ok())
@@ -227,17 +229,19 @@ impl VoteRecord {
     }
 
     /// Serialización canónica para firma
-    pub fn canonical_json(&self) -> String {
+    pub fn canonical_json(&self) -> Result<String> {
         let mut copy = self.clone();
         copy.signature = String::new();
-        canonical_json(&serde_json::to_value(&copy).unwrap())
+        let value = serde_json::to_value(&copy)
+            .context("Failed to serialize VoteRecord for canonical JSON")?;
+        Ok(canonical_json(&value))
     }
 
     /// Firma el voto
     pub fn sign(&mut self, secret_key: &SecretKey) -> Result<()> {
         use ed25519_dalek::{Signer, SigningKey};
 
-        let canonical = self.canonical_json();
+        let canonical = self.canonical_json()?;
         let message = canonical.as_bytes();
 
         let key_bytes = secret_key.to_bytes();

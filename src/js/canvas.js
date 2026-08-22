@@ -5,6 +5,13 @@ import { getGameTime, getDetailedDayNightIcon, formatDateForDisplayShort, format
 const { DateTime } = luxon;
 import { wrapText, getZoneLabel } from './core/utils.js';
 
+// Track object URLs to revoke them on replacement (prevent memory leaks)
+const _objectUrls = {};
+function setObjectUrl(key, url) {
+    if (_objectUrls[key]) URL.revokeObjectURL(_objectUrls[key]);
+    _objectUrls[key] = url;
+}
+
 // targetCanvas/scale: performDownload() renderiza más grande en un canvas aparte.
 export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
     const canvas = targetCanvas;
@@ -28,176 +35,51 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
     let borderColor = "white";
     ctx.shadowBlur = 10;
 
-    switch (textStyle) {
-        case "classic":
-            break;
-        case "mint":
-            borderColor = "rgb(90,165,25)";
-            shadowColor = "rgb(90,165,25)";
-            break;
-        case "sky":
-            borderColor = "#00FFFF";
-            shadowColor = "#00FFFF";
-            break;
-        case "bubblegum":
-            borderColor = "#FF00FF";
-            shadowColor = "#FF00FF";
-            break;
-        case "alert":
-            borderColor = "#FF0000";
-            shadowColor = "#FF0000";
-            break;
-        case "inverse":
-            textFill = "rgb(0,0,0)";
-            borderColor = "rgb(240,240,240)";
-            shadowColor = "rgb(240,240,240)";
-            break;
-        case "fire":
-            const fireGradient = ctx.createLinearGradient(0, 0, 0, textSize + 10);
-            fireGradient.addColorStop(0, "yellow");
-            fireGradient.addColorStop(1, "red");
-            textFill = fireGradient;
-            borderColor = "yellow";
-            break;
-        case "ice":
-            const iceGradient = ctx.createLinearGradient(0, 0, 0, textSize + 10);
-            iceGradient.addColorStop(0, "#B0E0E6");
-            iceGradient.addColorStop(1, "#4682B4");
-            textFill = iceGradient;
-            borderColor = "#B0E0E6";
-            break;
-        case "retro":
-            textFill = "#FF69B4";
-            borderColor = "#FF69B4";
-            shadowColor = "#00FFFF";
-            break;
-        case "womens_day":
-            const womensDayGradient = ctx.createLinearGradient(0, 0, 0, textSize + 10);
-            womensDayGradient.addColorStop(0, "#FFC0CB");
-            womensDayGradient.addColorStop(1, "#800080");
-            textFill = womensDayGradient;
-            borderColor = "#FFC0CB";
-            break;
-        case "gold":
-            const goldGradient = ctx.createLinearGradient(0, 0, 0, textSize + 10);
-            goldGradient.addColorStop(0, "#FFD700");
-            goldGradient.addColorStop(1, "#B8860B");
-            textFill = goldGradient;
-            borderColor = "#FFD700";
-            break;
-        case "rainbow":
-            const rainbowGradient = ctx.createLinearGradient(0, 0, logicalWidth, 0);
-            rainbowGradient.addColorStop(0, "red");
-            rainbowGradient.addColorStop(0.15, "orange");
-            rainbowGradient.addColorStop(0.3, "yellow");
-            rainbowGradient.addColorStop(0.45, "green");
-            rainbowGradient.addColorStop(0.6, "blue");
-            rainbowGradient.addColorStop(0.75, "indigo");
-            rainbowGradient.addColorStop(0.9, "violet");
-            textFill = rainbowGradient;
-            borderColor = rainbowGradient;
-            break;
-        case "hacker":
-            textFill = "#00FF00";
-            borderColor = "#00FF00";
-            shadowColor = "rgba(0,0,0,0)";
-            break;
-        case "love":
-            const loveGradient = ctx.createLinearGradient(0, 0, 0, textSize + 10);
-            loveGradient.addColorStop(0, "#FFC0CB");
-            loveGradient.addColorStop(1, "#FF0000");
-            textFill = loveGradient;
-            borderColor = "#FFC0CB";
-            break;
-        case "galaxy":
-            const galaxyGradient = ctx.createLinearGradient(0, 0, 0, textSize + 10);
-            galaxyGradient.addColorStop(0, "#8A2BE2");
-            galaxyGradient.addColorStop(1, "#4169E1");
-            textFill = "white";
-            shadowColor = galaxyGradient;
-            borderColor = "#8A2BE2";
-            break;
-        case "sunset":
-            const sunsetGradient = ctx.createLinearGradient(0, 0, 0, textSize + 10);
-            sunsetGradient.addColorStop(0, "yellow");
-            sunsetGradient.addColorStop(1, "orange");
-            textFill = sunsetGradient;
-            shadowColor = "darkred";
-            borderColor = "orange";
-            break;
-        case "neon":
-            textFill = "#39FF14";
-            shadowColor = "#39FF14";
-            borderColor = "#39FF14";
-            ctx.shadowBlur = 20;
-            break;
-        case "jungle":
-            textFill = "lightgreen";
-            shadowColor = "darkgreen";
-            borderColor = "darkgreen";
-            break;
-        case "volcano":
-            textFill = "orange";
-            shadowColor = "red";
-            borderColor = "red";
-            break;
-        case "electric":
-            textFill = "white";
-            shadowColor = "yellow";
-            borderColor = "yellow";
-            break;
-        case "oceanic":
-            const oceanicGradient = ctx.createLinearGradient(0, 0, 0, textSize + 10);
-            oceanicGradient.addColorStop(0, "#00BFFF");
-            oceanicGradient.addColorStop(1, "#1E90FF");
-            textFill = oceanicGradient;
-            borderColor = "#1E90FF";
-            break;
-        case "sunrise":
-            const sunriseGradient = ctx.createLinearGradient(0, 0, 0, textSize + 10);
-            sunriseGradient.addColorStop(0, "#FFD700");
-            sunriseGradient.addColorStop(1, "#FFA500");
-            textFill = sunriseGradient;
-            borderColor = "#FFA500";
-            break;
-        case "shadow":
-            textFill = "white";
-            shadowColor = "black";
-            ctx.shadowBlur = 15;
-            ctx.shadowOffsetX = 5;
-            ctx.shadowOffsetY = 5;
-            break;
-        case "metallic":
-            const metallicGradient = ctx.createLinearGradient(0, 0, 0, textSize + 10);
-            metallicGradient.addColorStop(0, "#E5E4E2");
-            metallicGradient.addColorStop(0.5, "#C0C0C0");
-            metallicGradient.addColorStop(1, "#8C8C8C");
-            textFill = metallicGradient;
-            shadowColor = "black";
-            borderColor = "#C0C0C0";
-            break;
-        case "toxic":
-            textFill = "#7CFC00";
-            shadowColor = "#ADFF2F";
-            borderColor = "#7CFC00";
-            ctx.shadowBlur = 20;
-            break;
-        case "cosmic":
-            const cosmicGradient = ctx.createLinearGradient(0, 0, 0, textSize + 10);
-            cosmicGradient.addColorStop(0, "#483D8B");
-            cosmicGradient.addColorStop(1, "#191970");
-            textFill = "white";
-            shadowColor = cosmicGradient;
-            borderColor = "#483D8B";
-            break;
-        case "sunburst":
-            const sunburstGradient = ctx.createLinearGradient(0, 0, 0, textSize + 10);
-            sunburstGradient.addColorStop(0, "#FFD700");
-            sunburstGradient.addColorStop(1, "#FF4500");
-            textFill = sunburstGradient;
-            shadowColor = "darkred";
-            borderColor = "#FFD700";
-            break;
+    const STYLE_DEFS = {
+        classic: {},
+        mint:              { border: "rgb(90,165,25)", shadow: "rgb(90,165,25)" },
+        sky:               { border: "#00FFFF", shadow: "#00FFFF" },
+        bubblegum:         { border: "#FF00FF", shadow: "#FF00FF" },
+        alert:             { border: "#FF0000", shadow: "#FF0000" },
+        inverse:           { text: "rgb(0,0,0)", border: "rgb(240,240,240)", shadow: "rgb(240,240,240)" },
+        fire:              { gradient: [["yellow", 0], ["red", 1]], border: "yellow" },
+        ice:               { gradient: [["#B0E0E6", 0], ["#4682B4", 1]], border: "#B0E0E6" },
+        retro:             { text: "#FF69B4", border: "#FF69B4", shadow: "#00FFFF" },
+        womens_day:        { gradient: [["#FFC0CB", 0], ["#800080", 1]], border: "#FFC0CB" },
+        gold:              { gradient: [["#FFD700", 0], ["#B8860B", 1]], border: "#FFD700" },
+        rainbow:           { gradient: [["red", 0], ["orange", 0.15], ["yellow", 0.3], ["green", 0.45], ["blue", 0.6], ["indigo", 0.75], ["violet", 0.9]], borderGradient: true, horizontal: true },
+        hacker:            { text: "#00FF00", border: "#00FF00", shadow: "rgba(0,0,0,0)" },
+        love:              { gradient: [["#FFC0CB", 0], ["#FF0000", 1]], border: "#FFC0CB" },
+        galaxy:            { gradient: [["#8A2BE2", 0], ["#4169E1", 1]], text: "white", border: "#8A2BE2", gradientTarget: "shadow" },
+        sunset:            { gradient: [["yellow", 0], ["orange", 1]], shadow: "darkred", border: "orange" },
+        neon:              { text: "#39FF14", shadow: "#39FF14", border: "#39FF14", blur: 20 },
+        jungle:            { text: "lightgreen", shadow: "darkgreen", border: "darkgreen" },
+        volcano:           { text: "orange", shadow: "red", border: "red" },
+        electric:          { text: "white", shadow: "yellow", border: "yellow" },
+        oceanic:           { gradient: [["#00BFFF", 0], ["#1E90FF", 1]], border: "#1E90FF" },
+        sunrise:           { gradient: [["#FFD700", 0], ["#FFA500", 1]], border: "#FFA500" },
+        shadow:            { text: "white", shadow: "black", blur: 15, shadowOffsetX: 5, shadowOffsetY: 5 },
+        metallic:          { gradient: [["#E5E4E2", 0], ["#C0C0C0", 0.5], ["#8C8C8C", 1]], shadow: "black", border: "#C0C0C0" },
+        toxic:             { text: "#7CFC00", shadow: "#ADFF2F", border: "#7CFC00", blur: 20 },
+        cosmic:            { gradient: [["#483D8B", 0], ["#191970", 1]], text: "white", border: "#483D8B", gradientTarget: "shadow" },
+        sunburst:          { gradient: [["#FFD700", 0], ["#FF4500", 1]], shadow: "darkred", border: "#FFD700" },
+    };
+
+    const def = STYLE_DEFS[textStyle] || STYLE_DEFS.classic;
+    if (def.text) textFill = def.text;
+    if (def.border) borderColor = def.border;
+    if (def.shadow) shadowColor = def.shadow;
+    if (def.blur) ctx.shadowBlur = def.blur;
+    if (def.shadowOffsetX !== undefined) ctx.shadowOffsetX = def.shadowOffsetX;
+    if (def.shadowOffsetY !== undefined) ctx.shadowOffsetY = def.shadowOffsetY;
+    if (def.gradient) {
+        const grad = def.horizontal
+            ? ctx.createLinearGradient(0, 0, logicalWidth, 0)
+            : ctx.createLinearGradient(0, 0, 0, textSize + 10);
+        def.gradient.forEach(([color, stop]) => grad.addColorStop(stop, color));
+        if (def.gradientTarget === "shadow") { shadowColor = grad; }
+        else { textFill = grad; }
+        if (def.borderGradient) borderColor = grad;
     }
 
     // Marco del flyer, corrido hacia adentro para que no se recorte el trazo.
@@ -489,13 +371,13 @@ export function initCanvasEventListeners() {
     circleCanvasWaypoint.addEventListener("mouseup", () => { state.setIsDraggingWaypoint(false); });
     circleCanvasWaypoint.addEventListener("mouseleave", () => { state.setIsDraggingWaypoint(false); });
 
-    dom.mapUpload.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const img = new Image(); img.onload = () => { state.setMapImage(img); state.setImageX(0); state.setImageY(0); state.setImageScale(1); drawCanvas(); }; img.src = URL.createObjectURL(file); } else { state.setMapImage(null); drawCanvas(); } });
-    dom.circleUploadTop.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const img = new Image(); img.onload = () => { state.setCircleImageTop(img); state.setCircleImageXTop(0); state.setCircleImageYTop(0); state.setCircleImageScaleTop(1); drawCanvas(); }; img.src = URL.createObjectURL(file); } else { state.setCircleImageTop(null); drawCanvas(); } });
-    dom.circleUploadBottom.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const img = new Image(); img.onload = () => { state.setCircleImageBottom(img); state.setCircleImageXBottom(0); state.setCircleImageYBottom(0); state.setCircleImageScaleBottom(1); drawCanvas(); }; img.src = URL.createObjectURL(file); } else { state.setCircleImageBottom(null); drawCanvas(); } });
-    dom.logoUpload.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const img = new Image(); img.onload = () => { state.setLogoImage(img); drawCanvas(); }; img.src = URL.createObjectURL(file); } else { state.setLogoImage(null); drawCanvas(); } });
-    dom.backgroundUpload.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const img = new Image(); img.onload = () => { state.setBackgroundImage(img); drawCanvas(); }; img.src = URL.createObjectURL(file); } else { state.setBackgroundImage(null); drawCanvas(); } });
-    dom.detailUpload.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const img = new Image(); img.onload = () => { state.setDetailImage(img); state.setDetailImageX(0); state.setDetailImageY(0); state.setDetailImageScale(1); drawCanvas(); }; img.src = URL.createObjectURL(file); } else { state.setDetailImage(null); drawCanvas(); } });
-    dom.waypointUpload.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const img = new Image(); img.onload = () => { state.setCircleImageWaypoint(img); state.setCircleImageXWaypoint(0); state.setCircleImageYWaypoint(0); state.setCircleImageScaleWaypoint(1); drawCanvas(); }; img.src = URL.createObjectURL(file); } else { state.setCircleImageWaypoint(null); drawCanvas(); } });
+    dom.mapUpload.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const url = URL.createObjectURL(file); setObjectUrl('map', url); const img = new Image(); img.onload = () => { state.setMapImage(img); state.setImageX(0); state.setImageY(0); state.setImageScale(1); drawCanvas(); }; img.src = url; } else { state.setMapImage(null); drawCanvas(); } });
+    dom.circleUploadTop.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const url = URL.createObjectURL(file); setObjectUrl('circleTop', url); const img = new Image(); img.onload = () => { state.setCircleImageTop(img); state.setCircleImageXTop(0); state.setCircleImageYTop(0); state.setCircleImageScaleTop(1); drawCanvas(); }; img.src = url; } else { state.setCircleImageTop(null); drawCanvas(); } });
+    dom.circleUploadBottom.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const url = URL.createObjectURL(file); setObjectUrl('circleBottom', url); const img = new Image(); img.onload = () => { state.setCircleImageBottom(img); state.setCircleImageXBottom(0); state.setCircleImageYBottom(0); state.setCircleImageScaleBottom(1); drawCanvas(); }; img.src = url; } else { state.setCircleImageBottom(null); drawCanvas(); } });
+    dom.logoUpload.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const url = URL.createObjectURL(file); setObjectUrl('logo', url); const img = new Image(); img.onload = () => { state.setLogoImage(img); drawCanvas(); }; img.src = url; } else { state.setLogoImage(null); drawCanvas(); } });
+    dom.backgroundUpload.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const url = URL.createObjectURL(file); setObjectUrl('background', url); const img = new Image(); img.onload = () => { state.setBackgroundImage(img); drawCanvas(); }; img.src = url; } else { state.setBackgroundImage(null); drawCanvas(); } });
+    dom.detailUpload.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const url = URL.createObjectURL(file); setObjectUrl('detail', url); const img = new Image(); img.onload = () => { state.setDetailImage(img); state.setDetailImageX(0); state.setDetailImageY(0); state.setDetailImageScale(1); drawCanvas(); }; img.src = url; } else { state.setDetailImage(null); drawCanvas(); } });
+    dom.waypointUpload.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const url = URL.createObjectURL(file); setObjectUrl('waypoint', url); const img = new Image(); img.onload = () => { state.setCircleImageWaypoint(img); state.setCircleImageXWaypoint(0); state.setCircleImageYWaypoint(0); state.setCircleImageScaleWaypoint(1); drawCanvas(); }; img.src = url; } else { state.setCircleImageWaypoint(null); drawCanvas(); } });
 
     dom.zoomIn.addEventListener("click", () => { if (state.mapImage) { state.setImageScale(state.imageScale * 1.2); drawCanvas(); } });
     dom.zoomOut.addEventListener("click", () => { if (state.mapImage) { state.setImageScale(state.imageScale / 1.2); drawCanvas(); } });

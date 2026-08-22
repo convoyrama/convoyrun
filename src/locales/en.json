@@ -216,7 +216,7 @@
     "tab_swarm": "Events",
     "tab_flyer": "Flyer",
     "tab_about": "About",
-    "tab_slots": "Slots"
+    "tab_slots": "Slots",
     "swarm_title": "Convoy Calendar",
     "swarm_publish_btn": "Publish convoy",
     "swarm_empty_title": "No convoys yet",
@@ -292,5 +292,14 @@
     "swarm_detail_when": "When",
     "swarm_detail_author": "Author",
     "swarm_detail_route": "Route",
-    "swarm_detail_published": "Published"
+    "swarm_detail_published": "Published",
+    "slots_title": "Slot Schedule (suggested)",
+    "slots_status_title": "Node status",
+    "slots_legend_current": "Current",
+    "slots_legend_past": "Past",
+    "slots_legend_future": "Upcoming",
+    "slots_grid_title": "Suggested Slots",
+    "slots_footer": "1h 30min slots · Times in your timezone",
+    "slots_timezone": "Timezone",
+    "about_credit": "Developed by"
 }

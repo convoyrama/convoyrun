@@ -22,14 +22,14 @@ function updateInGameTimeEmojis() {
     const customTimeValue = dom.customTime.value;
 
     if (!customDateValue || !customTimeValue) {
-        dom.ingameEmojiDisplay.innerHTML = '';
+        dom.ingameEmojiDisplay.textContent = '';
         return;
     }
 
     const meetingDateTime = resolveMeetingDateTime(customDateValue, customTimeValue, dom.manualOffsetSelect.value);
 
     if (!meetingDateTime.isValid) {
-        dom.ingameEmojiDisplay.innerHTML = '';
+        dom.ingameEmojiDisplay.textContent = '';
         return;
     }
 
@@ -45,7 +45,7 @@ function updateInGameTimeEmojis() {
     const arrivalGameTime = getGameTime(arrivalDateTime.toUTC());
     const arrivalEmoji = getDetailedDayNightIcon(arrivalGameTime.hours);
 
-    dom.ingameEmojiDisplay.innerHTML = `${meetingEmoji} ${departureEmoji} ${arrivalEmoji}`;
+    dom.ingameEmojiDisplay.textContent = `${meetingEmoji} ${departureEmoji} ${arrivalEmoji}`;
 }
 
 async function performDownload() {
