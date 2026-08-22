@@ -7,11 +7,13 @@
     <link rel="stylesheet" href="./css/fonts.css" />
     <link rel="stylesheet" href="./css/style.css" />
     <link rel="stylesheet" href="./css/app-shell.css" />
+    <link rel="stylesheet" href="./css/slots.css" />
 </head>
 <body>
     <header class="app-header">
         <div class="app-brand">
             <img src="./images/branding/logotext.png" alt="ConvoyRun" class="app-logo">
+            <span class="app-tagline" data-i18n="app_tagline">Convoy &amp; Event Manager</span>
         </div>
         <div class="header-right">
             <div class="time-sync-indicator" id="time-sync-indicator" data-i18n-title="time_sync_tooltip" title="Verificación de hora / conexión">
@@ -19,7 +21,6 @@
                 <span class="time-sync-dot" data-status="syncing"></span>
                 <span class="time-sync-dot" data-status="verified"></span>
             </div>
-            <button type="button" id="about-open" class="about-btn" data-i18n-title="about_button_tooltip" title="Acerca de ConvoyRun">i</button>
             <div class="lang-selector">
                 <button class="lang-btn" data-lang="en">EN</button>
                 <button class="lang-btn" data-lang="es">ES</button>
@@ -28,21 +29,88 @@
         </div>
     </header>
 
-    <div id="about-overlay" class="about-overlay">
-        <div class="about-modal">
-            <button type="button" id="about-close" class="about-close">×</button>
-            <img src="./images/branding/logotext.png" alt="ConvoyRun" class="about-logo">
-            <div class="about-version">v<span id="about-version">0.2.0</span></div>
-            <p class="about-credit">Developed by <span class="architect">dr.will</span> for <strong>CONVOYRAMA</strong></p>
-            <div class="about-links">
-                <a href="https://discord.gg/hjJcyREthH" target="_blank" data-i18n="about_link_discord">Discord de CONVOYRAMA</a>
-                <a href="https://convoyrama.github.io" target="_blank" data-i18n="about_link_web">Sitio web</a>
-                <a href="https://github.com/convoyrama/convoyrun" target="_blank" data-i18n="about_link_github">GitHub</a>
-            </div>
-        </div>
-    </div>
-
     <div class="contenedor">
+        <nav class="app-tabs" id="app-tabs">
+            <button type="button" class="app-tab active" data-tab="swarm" data-i18n="tab_swarm">Eventos</button>
+            <button type="button" class="app-tab" data-tab="flyer" data-i18n="tab_flyer">Flyer</button>
+            <button type="button" class="app-tab" data-tab="slots" data-i18n="tab_slots">Slots</button>
+            <button type="button" class="app-tab" data-tab="about" data-i18n="tab_about">Acerca de</button>
+        </nav>
+
+        <section class="tab-panel active" id="panel-swarm">
+            <div class="swarm-shell">
+                <div class="swarm-topbar">
+                    <h3 data-i18n="swarm_title">Calendario de Convoys</h3>
+                    <div class="swarm-topbar-actions">
+                        <span class="node-status" id="swarm-node-status" data-mode="local" data-i18n-title="swarm_status_title" title="Estado del nodo">Demo local</span>
+                        <button type="button" id="swarm-publish-btn" class="swarm-publish-btn" data-i18n="swarm_publish_btn">Publicar convoy</button>
+                    </div>
+                </div>
+
+                <div class="swarm-filters" id="swarm-filters">
+                    <span class="swarm-filters-title" data-i18n="swarm_filter_label">Filtros</span>
+                    <div class="swarm-filter-group">
+                        <span class="swarm-filter-label" data-i18n="swarm_filter_game">Juego</span>
+                        <select id="filter-game">
+                            <option value="all" data-i18n="swarm_filter_all">Todos</option>
+                            <option value="ATS">ATS</option>
+                            <option value="ETS2">ETS2</option>
+                        </select>
+                    </div>
+                    <div class="swarm-filter-group">
+                        <span class="swarm-filter-label" data-i18n="swarm_filter_mode">Modo</span>
+                        <select id="filter-mode">
+                            <option value="all" data-i18n="swarm_filter_all">Todos</option>
+                            <option value="simulation" data-i18n="swarm_mode_simulation">Simulación</option>
+                            <option value="realistic" data-i18n="swarm_mode_realistic">Realista</option>
+                            <option value="arcade" data-i18n="swarm_mode_arcade">Libre</option>
+                        </select>
+                    </div>
+                    <div class="swarm-filter-group">
+                        <span class="swarm-filter-label" data-i18n="swarm_filter_author">Autor</span>
+                        <select id="filter-author">
+                            <option value="all" data-i18n="swarm_filter_all">Todos</option>
+                            <option value="trusted" data-i18n="swarm_filter_trusted">Solo confianza</option>
+                        </select>
+                    </div>
+                    <div class="swarm-filter-group">
+                        <span class="swarm-filter-label" data-i18n="swarm_filter_score">Calidad</span>
+                        <select id="filter-score">
+                            <option value="all" data-i18n="swarm_filter_all">Todos</option>
+                            <option value="positive" data-i18n="swarm_filter_positive">Ocultar negativos</option>
+                        </select>
+                    </div>
+                    <div class="swarm-filter-group">
+                        <span class="swarm-filter-label" data-i18n="swarm_filter_order">Orden</span>
+                        <select id="filter-order">
+                            <option value="time" data-i18n="swarm_filter_order_time">Por hora de reunión</option>
+                            <option value="reputation" data-i18n="swarm_filter_order_rep">Por reputación</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="swarm-daybar" id="swarm-daybar"></div>
+
+                <div class="swarm-range-bar">
+                    <button type="button" id="swarm-range-toggle" class="swarm-range-toggle" style="display:none">Ver próximos días</button>
+                    <p id="swarm-range-hint" class="swarm-range-hint" style="display:none" data-i18n="swarm_range_hint">No hay convoys para hoy o mañana. Tocá "Ver próximos días".</p>
+                </div>
+
+                <div class="swarm-list" id="swarm-list"></div>
+
+                <div class="swarm-empty" id="swarm-empty">
+                    <h4 data-i18n="swarm_empty_title">Aún no hay convoys</h4>
+                    <p data-i18n="swarm_empty_hint">Los convoys de la comunidad aparecerán acá. Publicá el tuyo para que otros lo vean.</p>
+                </div>
+
+                <div class="swarm-empty" id="swarm-empty-filtered" style="display:none">
+                    <h4 data-i18n="swarm_empty_filtered_title">Nada coincide con los filtros</h4>
+                    <p data-i18n="swarm_empty_filtered_hint">Probá con otro juego, modo o autor.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="tab-panel" id="panel-flyer">
         <div id="controls-bar">
             <div id="live-clocks">
                 <span data-i18n="local_time">Hora Local:</span> <span id="local-time-display">--:--:--</span> |
@@ -377,9 +445,172 @@
 
                 <button id="reset-canvas" data-i18n="btn_reset_canvas">Reset</button>
             </div>
-
         </div>
+        </section>
+
+<section class="tab-panel" id="panel-slots">
+            <div class="slots-shell">
+                <div class="slots-topbar">
+                    <h3 data-i18n="slots_title">Calendario de Slots</h3>
+                    <div class="slots-topbar-actions">
+                        <span class="node-status" id="slots-node-status" data-mode="local" data-i18n-title="slots_status_title" title="Estado del nodo">Demo local</span>
+                    </div>
+                </div>
+
+                <div class="timezone-selector">
+                    <label for="slots-timezone">Timezone</label>
+                    <select id="slots-timezone">
+                        <option value="America/Montevideo">GMT-3 (Uruguay)</option>
+                        <option value="America/Buenos_Aires">GMT-3 (Argentina)</option>
+                        <option value="America/Sao_Paulo">GMT-3 (Brazil)</option>
+                        <option value="America/Asuncion">GMT-3 (Paraguay)</option>
+                        <option value="America/Santiago">GMT-3/-4 (Chile)</option>
+                        <option value="America/Lima">GMT-5 (Peru)</option>
+                        <option value="America/Bogota">GMT-5 (Colombia)</option>
+                        <option value="America/Guayaquil">GMT-5 (Ecuador)</option>
+                        <option value="America/Caracas">GMT-4 (Venezuela)</option>
+                        <option value="America/Panama">GMT-5 (Panama)</option>
+                        <option value="America/Mexico_City">GMT-6 (Mexico)</option>
+                        <option value="America/Havana">GMT-5 (Cuba)</option>
+                        <option value="America/Santo_Domingo">GMT-4 (Dominican Republic)</option>
+                        <option value="America/Puerto_Rico">GMT-4 (Puerto Rico)</option>
+                        <option value="Europe/Madrid">GMT+1/+2 (Spain)</option>
+                        <option value="America/New_York">GMT-5/-4 (US East)</option>
+                        <option value="America/Chicago">GMT-6/-5 (US Central)</option>
+                        <option value="America/Denver">GMT-7/-6 (US Mountain)</option>
+                        <option value="America/Los_Angeles">GMT-8/-7 (US Pacific)</option>
+                    </select>
+                </div>
+
+                <div class="current-display">
+                    <div class="current-time" id="slots-current-time">--:--</div>
+                    <div class="current-slot-info" id="slots-current-slot-info"></div>
+                </div>
+
+                <div class="timeline-section">
+                    <button class="nav-btn prev" id="slots-btn-prev">‹</button>
+                    <div class="timeline-container">
+                        <div class="timeline" id="slots-timeline"></div>
+                    </div>
+                    <button class="nav-btn next" id="slots-btn-next">›</button>
+                </div>
+
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-dot current"></div>
+                        <span>Current</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot past"></div>
+                        <span>Past</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot future"></div>
+                        <span>Upcoming</span>
+                    </div>
+                </div>
+
+                <div class="slots-grid-section">
+                    <div class="slots-grid-title">All Available Slots</div>
+                    <div class="slots-grid" id="slots-grid"></div>
+                </div>
+
+                <div class="slots-footer">
+                    <p>1h 30min slots · Times in your timezone</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="tab-panel" id="panel-about">
+            <div class="about-panel">
+                <img src="./images/branding/logotext.png" alt="ConvoyRun" class="about-logo">
+                <div class="about-tagline" data-i18n="app_tagline">Convoy & Event Manager</div>
+                <div class="about-version">v<span id="about-version">0.2.0</span></div>
+                <p class="about-credit">Developed by <span class="architect">dr.will</span> for <strong>CONVOYRAMA</strong></p>
+                <div class="about-links">
+                    <a href="https://discord.gg/hjJcyREthH" target="_blank" data-i18n="about_link_discord">Discord de CONVOYRAMA</a>
+                    <a href="https://convoyrama.github.io" target="_blank" data-i18n="about_link_web">Sitio web</a>
+                    <a href="https://github.com/convoyrama/convoyrun" target="_blank" data-i18n="about_link_github">GitHub</a>
+                </div>
+            </div>
+        </section>
+
         <div id="copy-message" data-i18n="copy_message_text">¡Información copiada al portapapeles!</div>
+    </div>
+
+    <div class="swarm-wizard-overlay" id="swarm-wizard">
+        <div class="swarm-wizard" role="dialog" aria-modal="true" aria-labelledby="swarm-wizard-title">
+            <h3 id="swarm-wizard-title" data-i18n="swarm_wizard_title">Publicar convoy</h3>
+            <div class="swarm-wizard-grid">
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_wizard_event_name">Nombre del evento</span>
+                    <input type="text" id="swarm-w-name" maxlength="80" data-i18n-placeholder="swarm_wizard_event_name_ph" placeholder="Ej: Cumbre del Desierto">
+                </label>
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_wizard_image">Imagen del flyer (PNG, máx 2 MB)</span>
+                    <input type="file" id="swarm-w-flyer" accept="image/png">
+                    <span class="swarm-flyer-btn" data-i18n="swarm_wizard_image_btn">Seleccionar PNG</span>
+                </label>
+                <div class="swarm-flyer-preview-wrap">
+                    <img id="swarm-w-flyer-preview" class="swarm-flyer-preview" alt="" hidden>
+                    <p id="swarm-w-flyer-status" class="swarm-flyer-status"></p>
+                </div>
+                <div class="swarm-field-row">
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_game">Juego</span>
+                        <select id="swarm-w-game">
+                            <option value="ATS">ATS</option>
+                            <option value="ETS2">ETS2</option>
+                        </select>
+                    </label>
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_mode">Modo</span>
+                        <select id="swarm-w-mode">
+                            <option value="simulation" data-i18n="swarm_mode_simulation">Simulación</option>
+                            <option value="realistic" data-i18n="swarm_mode_realistic">Realista</option>
+                            <option value="arcade" data-i18n="swarm_mode_arcade">Libre</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="swarm-field-row">
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_date">Fecha</span>
+                        <input type="date" id="swarm-w-date">
+                    </label>
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_time">Hora</span>
+                        <input type="time" id="swarm-w-time">
+                    </label>
+                </div>
+                <p class="swarm-wizard-zone" id="swarm-w-zone"></p>
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_wizard_server">Servidor (opcional)</span>
+                    <input type="text" id="swarm-w-server" maxlength="40" data-i18n-placeholder="swarm_wizard_server_ph" placeholder="Ej: Simulation 1">
+                </label>
+                <div class="swarm-field-row">
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_start_place">Ciudad de inicio (opcional)</span>
+                        <input type="text" id="swarm-w-start" maxlength="60" data-i18n-placeholder="swarm_wizard_start_place_ph" placeholder="Ej: Las Vegas">
+                    </label>
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_destination">Destino (opcional)</span>
+                        <input type="text" id="swarm-w-dest" maxlength="60" data-i18n-placeholder="swarm_wizard_destination_ph" placeholder="Ej: Los Angeles">
+                    </label>
+                </div>
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_wizard_description">Descripción (opcional)</span>
+                    <textarea id="swarm-w-desc" rows="3" maxlength="400" data-i18n-placeholder="swarm_wizard_description_ph" placeholder="Ruta, normas, puntos..."></textarea>
+                </label>
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_wizard_nickname">Tu nickname</span>
+                    <input type="text" id="swarm-w-nickname" maxlength="32" data-i18n-placeholder="swarm_wizard_nickname_ph" placeholder="Cómo te llamarán (opcional)">
+                </label>
+            </div>
+            <div class="swarm-wizard-actions">
+                <button type="button" class="swarm-wizard-cancel" id="swarm-w-cancel" data-i18n="swarm_wizard_cancel">Cancelar</button>
+                <button type="button" class="swarm-publish-btn" id="swarm-w-submit" data-i18n="swarm_wizard_publish">Publicar</button>
+            </div>
+        </div>
     </div>
 
     <script src="./js/lib/luxon.min.js"></script>

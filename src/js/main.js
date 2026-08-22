@@ -10,6 +10,9 @@ import { initTimezoneSettings, refreshZoneSettingsUI } from './timezone-picker.j
 import { initTimeSync } from './time-sync.js';
 import { initAbout } from './about.js';
 import { initStylePicker } from './style-picker.js';
+import { initSwarm } from './swarm.js';
+import { initSwarmPublish } from './swarm-publish.js';
+import { initSlots } from './slots.js';
 
 const { DateTime } = luxon;
 
@@ -126,8 +129,21 @@ window.addEventListener('languageChanged', (e) => {
     updateInGameTimeEmojis();
 });
 
+// Navegación por pestañas (SWARM / FLYER / ABOUT). Los paneles se muestran por
+// data-tab del botón e id `panel-<tab>` de la sección.
+function initTabs() {
+    const tabs = Array.from(document.querySelectorAll('.app-tab'));
+    const panels = Array.from(document.querySelectorAll('.tab-panel'));
+    tabs.forEach(tab => tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.toggle('active', t === tab));
+        panels.forEach(p => p.classList.toggle('active', p.id === `panel-${tab.dataset.tab}`));
+    }));
+}
+
 async function init() {
     initI18n();
+
+    initTabs();
 
     dom.customDate = document.getElementById("custom-date");
     dom.customTime = document.getElementById("custom-time");
@@ -193,6 +209,9 @@ async function init() {
     initTimeSync();
     initAbout();
     initStylePicker();
+    const swarmRefresh = initSwarm();
+    initSwarmPublish(swarmRefresh);
+    initSlots();
 
     dom.loadFlyerInput.addEventListener("change", async (e) => {
         const file = e.target.files[0];

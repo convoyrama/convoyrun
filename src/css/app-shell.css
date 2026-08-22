@@ -59,13 +59,23 @@ select option {
     top: 50%;
     transform: translate(-50%, -50%);
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 2px;
 }
 
 .app-logo {
-    height: 34px;
+    height: 32px;
     width: auto;
+}
+
+.app-tagline {
+    font-size: 0.55rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: rgba(255, 255, 255, 0.35);
+    white-space: nowrap;
 }
 
 .header-right {
@@ -237,24 +247,6 @@ select option {
 @keyframes timeSyncBlink { from { opacity: 1; } to { opacity: 0.25; } }
 
 /* About */
-.about-btn {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: rgba(255, 255, 255, 0.6);
-    font-style: italic;
-    font-weight: 900;
-    font-size: 0.75rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-}
-.about-btn:hover { color: #fff; border-color: var(--accent); background: rgba(0, 170, 255, 0.1); }
-
 .about-overlay {
     display: none;
     position: fixed;
@@ -292,6 +284,14 @@ select option {
 .about-close:hover { color: #fff; }
 
 .about-logo { width: 220px; max-width: 100%; height: auto; margin-bottom: 10px; }
+.about-tagline {
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: rgba(255, 255, 255, 0.4);
+    margin: -4px 0 12px;
+}
 .about-version { color: var(--accent); font-weight: 800; font-size: 0.85rem; margin-bottom: 16px; }
 .about-credit { color: #aaa; font-size: 0.85rem; margin: 0 0 20px; }
 .about-credit strong { color: #fff; }
@@ -376,3 +376,575 @@ select option {
     margin: -10px 0 15px;
     text-align: center;
 }
+
+/* Navegación por pestañas (SWARM / FLYER / ABOUT) */
+.app-tabs {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin: 16px 0 10px;
+    padding: 6px;
+    background: #141414;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 50px;
+}
+
+.app-tab {
+    padding: 8px 30px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.5);
+    background: transparent;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.app-tab:hover { color: #fff; }
+.app-tab.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(0, 170, 255, 0.3);
+}
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Pestaña SWARM — shell */
+.swarm-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.swarm-topbar h3 {
+    font-size: 1.1rem;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 900;
+    margin: 0;
+}
+
+.swarm-publish-btn {
+    padding: 8px 16px;
+    font-size: 0.75rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 900;
+    text-transform: uppercase;
+    transition: background 0.2s;
+}
+.swarm-publish-btn:hover { background: #0088cc; }
+
+.swarm-empty {
+    text-align: center;
+    padding: 70px 30px;
+    background: #1a1a1a;
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+}
+.swarm-empty h4 {
+    color: #fff;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+.swarm-empty p {
+    color: #888;
+    font-size: 0.8rem;
+    max-width: 440px;
+    margin: 0 auto;
+    line-height: 1.5;
+}
+
+/* Pestaña ABOUT — el antiguo modal ahora como panel */
+.about-panel {
+    max-width: 380px;
+    margin: 40px auto;
+    background: #141414;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 36px 40px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+/* Pestaña SWARM — topbar y estado del nodo */
+.swarm-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.node-status {
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 5px 12px;
+    border-radius: 50px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #888;
+    white-space: nowrap;
+}
+.node-status[data-mode="online"]  { color: #4ade80; border-color: rgba(74, 222, 128, 0.4); }
+.node-status[data-mode="offline"] { color: #f87171; border-color: rgba(248, 113, 113, 0.4); }
+.node-status[data-mode="local"]   { color: #eab308; border-color: rgba(234, 179, 8, 0.4); }
+
+/* Pestaña SWARM — filtros */
+.swarm-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+    background: #1a1a1a;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 15px;
+}
+.swarm-filters-title {
+    font-size: 0.68rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+    margin-right: 4px;
+}
+.swarm-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.swarm-filter-label {
+    font-size: 0.6rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.45);
+}
+.swarm-filters select {
+    min-width: 140px;
+    padding: 6px 26px 6px 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #fff;
+    background-color: #252525;
+    border: 1px solid #333;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+/* Pestaña SWARM — selector de día (chips) */
+.swarm-daybar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 16px;
+}
+.swarm-day-chip {
+    padding: 7px 16px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.6);
+    background: #1a1a1a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.swarm-day-chip:hover { border-color: rgba(0, 170, 255, 0.4); color: #fff; }
+.swarm-day-chip.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(0, 170, 255, 0.25);
+}
+
+/* Pestaña SWARM — lista y días */
+.swarm-list { display: none; }
+.swarm-day {
+    margin: 18px 0 10px;
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+}
+.swarm-day:first-child { margin-top: 0; }
+
+/* Pestaña SWARM — fila colapsada de convoy (una línea por evento) */
+.swarm-event { margin-bottom: 4px; }
+
+.swarm-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    background: #1a1a1a;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+.swarm-row:hover { border-color: rgba(0, 170, 255, 0.35); background: rgba(0, 170, 255, 0.04); }
+.swarm-event.open .swarm-row {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom-color: transparent;
+    background: #181818;
+}
+.swarm-event.open .swarm-row:hover { background: rgba(0, 170, 255, 0.05); }
+.swarm-row-caret {
+    width: 14px;
+    flex-shrink: 0;
+    color: var(--accent);
+    font-size: 0.6rem;
+    text-align: center;
+    transition: transform 0.15s;
+}
+.swarm-event.open .swarm-row-caret { transform: rotate(90deg); }
+.swarm-row-time {
+    min-width: 46px;
+    font-size: 0.85rem;
+    font-weight: 900;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+.swarm-row-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #eee;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.swarm-row-author {
+    font-size: 0.72rem;
+    color: #888;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.swarm-row-details {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    margin: 0 0 10px;
+    background: linear-gradient(180deg, #181818 0%, #141414 100%);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-top: none;
+    border-left: 3px solid var(--accent);
+    border-radius: 0 0 10px 10px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    animation: swarmDetailsIn 0.18s ease;
+}
+@keyframes swarmDetailsIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: none; }
+}
+.swarm-row-details[hidden] { display: none; }
+.swarm-flyer-thumb {
+    width: 260px;
+    max-height: 160px;
+    object-fit: cover;
+    object-position: center;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    flex-shrink: 0;
+    align-self: flex-start;
+}
+.swarm-row-info { flex: 1; min-width: 0; }
+.swarm-detail-name {
+    font-size: 1rem;
+    font-weight: 900;
+    color: #fff;
+    margin-bottom: 10px;
+    letter-spacing: 0.2px;
+}
+.swarm-detail-kicker {
+    font-size: 0.58rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+    margin: 10px 0 3px;
+}
+.swarm-detail-kicker:first-of-type { margin-top: 0; }
+.swarm-detail-time { font-size: 0.9rem; font-weight: 800; color: #fff; }
+.swarm-detail-zone { font-size: 0.7rem; color: #888; margin-top: 2px; }
+.swarm-detail-author {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.72rem;
+    color: #999;
+    margin-top: 3px;
+    flex-wrap: wrap;
+}
+.swarm-detail-line { font-size: 0.78rem; color: #ccc; margin-top: 3px; }
+.swarm-detail-desc {
+    font-size: 0.78rem;
+    color: #999;
+    margin: 10px 0 0;
+    line-height: 1.5;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-left: 2px solid rgba(0, 170, 255, 0.35);
+    border-radius: 0 8px 8px 0;
+}
+.swarm-detail-published {
+    margin-top: 12px;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #555;
+}
+
+.swarm-badges { display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
+
+.swarm-badge {
+    padding: 3px 10px;
+    border-radius: 50px;
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
+}
+.swarm-badge-game { color: #7cc4ff; border-color: rgba(0, 170, 255, 0.4); }
+.swarm-mode-simulation { color: #4ade80; border-color: rgba(74, 222, 128, 0.4); }
+.swarm-mode-realistic { color: #fbbf24; border-color: rgba(251, 191, 36, 0.4); }
+.swarm-mode-arcade { color: #c084fc; border-color: rgba(192, 132, 252, 0.4); }
+
+.swarm-votes { display: flex; align-items: center; gap: 6px; }
+.swarm-vote-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.7rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    padding: 0;
+    transition: all 0.15s;
+}
+.swarm-vote-btn:hover { border-color: var(--accent); color: #fff; }
+.swarm-vote-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.swarm-score {
+    min-width: 30px;
+    text-align: center;
+    font-weight: 900;
+    font-size: 0.85rem;
+    color: #fff;
+}
+
+.rep-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+.rep-good { background: #4ade80; }
+.rep-neutral { background: #777; }
+.rep-bad { background: #f87171; }
+.swarm-card-nick { font-weight: 700; color: #ccc; }
+.swarm-trusted-badge {
+    padding: 2px 8px;
+    border-radius: 50px;
+    font-size: 0.6rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #7cc4ff;
+    border: 1px solid rgba(0, 170, 255, 0.4);
+}
+.swarm-trust-btn {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 0.68rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 2px 4px;
+    text-decoration: underline dotted;
+}
+.swarm-trust-btn:hover { color: #fff; }
+
+/* Pestaña SWARM — rango por defecto (hoy y mañana) */
+.swarm-range-bar { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 2px 0 14px; }
+.swarm-range-toggle {
+    background: none;
+    border: 1px solid rgba(0, 170, 255, 0.35);
+    color: var(--accent);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 6px 14px;
+    border-radius: 50px;
+    cursor: pointer;
+}
+.swarm-range-toggle:hover { background: rgba(0, 170, 255, 0.1); color: #fff; }
+.swarm-range-hint {
+    text-align: center;
+    font-size: 0.78rem;
+    color: #888;
+    padding: 10px 16px;
+    margin: 0;
+}
+
+/* Pestaña SWARM — wizard de publicación */
+.swarm-wizard-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+}
+.swarm-wizard-overlay.open { display: flex; }
+
+.swarm-wizard {
+    background: #141414;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 28px 30px;
+    max-width: 560px;
+    width: 100%;
+    max-height: 92vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+.swarm-wizard h3 {
+    margin: 0 0 18px;
+    font-size: 1.05rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+}
+.swarm-wizard-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.swarm-field-row {
+    display: flex;
+    gap: 12px;
+}
+.swarm-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+    min-width: 0;
+}
+.swarm-field-full { width: 100%; }
+.swarm-field > span {
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.55);
+}
+.swarm-field input,
+.swarm-field select,
+.swarm-field textarea {
+    padding: 9px 10px;
+    font-size: 0.8rem;
+    color: #fff;
+    background: #252525;
+    border: 1px solid #333;
+    border-radius: 6px;
+    font-family: inherit;
+    resize: vertical;
+}
+.swarm-field input:focus,
+.swarm-field select:focus,
+.swarm-field textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.swarm-field textarea { min-height: 60px; }
+
+.swarm-wizard-zone {
+    margin: -4px 0 0;
+    font-size: 0.72rem;
+    color: #eab308;
+    font-weight: 700;
+}
+
+/* Campo imagen del flyer en el wizard */
+.swarm-field input[type="file"] { display: none; }
+.swarm-flyer-btn {
+    display: block;
+    padding: 9px 14px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #fff;
+    background: rgba(0, 170, 255, 0.15);
+    border: 1px dashed rgba(0, 170, 255, 0.5);
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s;
+}
+.swarm-flyer-btn:hover { background: rgba(0, 170, 255, 0.25); }
+.swarm-flyer-preview-wrap { display: flex; flex-direction: column; gap: 6px; margin-top: -4px; }
+.swarm-flyer-preview {
+    width: 128px;
+    height: auto;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.swarm-flyer-preview[hidden] { display: none; }
+.swarm-flyer-status { font-size: 0.7rem; color: #888; margin: 0; }
+.swarm-flyer-status.ok { color: #4ade80; }
+
+.swarm-wizard-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+.swarm-wizard-cancel {
+    padding: 8px 16px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.6);
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    cursor: pointer;
+}
+.swarm-wizard-cancel:hover { color: #fff; border-color: rgba(255, 255, 255, 0.5); }
