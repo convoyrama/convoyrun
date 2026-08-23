@@ -77,6 +77,8 @@ pub struct ConvoyRecord {
     pub published_at: i64,
     pub event: EventData,
     pub schedule: Schedule,
+    #[serde(default)]
+    pub channel: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub flyer: Option<FlyerData>,
     /// Firma ed25519 del payload canónico (sin este campo)
@@ -96,6 +98,17 @@ pub struct VoteRecord {
     pub signature: String,
 }
 
+/// Registro de canal (propagado por gossip)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelRecord {
+    pub schema: String,
+    pub name: String,
+    pub creator_peer_id: String,
+    /// blake3 hash del password (None = público)
+    pub password_hash: Option<String>,
+    pub created_at: i64,
+}
+
 /// Estado local de convoys (caché)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ConvoyStore {
@@ -111,6 +124,7 @@ impl ConvoyRecord {
         event: EventData,
         schedule: Schedule,
         flyer: Option<FlyerData>,
+        channel: String,
     ) -> Self {
         Self {
             schema: SCHEMA_CONVOY.to_string(),
@@ -120,6 +134,7 @@ impl ConvoyRecord {
             published_at: chrono::Utc::now().timestamp(),
             event,
             schedule,
+            channel,
             flyer,
             signature: String::new(),
         }
@@ -291,6 +306,15 @@ impl ConvoyStore {
         convoy_votes.insert(vote.voter_peer_id.clone(), vote);
     }
 
+    /// Elimina un convoy y sus votos del store local
+    pub fn delete_convoy(&mut self, convoy_id: &str) -> bool {
+        let removed = self.convoys.remove(convoy_id).is_some();
+        if removed {
+            self.votes.remove(convoy_id);
+        }
+        removed
+    }
+
     /// Calcula el score de un convoy
     pub fn compute_score(&self, convoy_id: &str) -> i32 {
         self.votes
@@ -331,6 +355,81 @@ impl ConvoyStore {
         let now = chrono::Utc::now().timestamp();
         self.convoys.retain(|_, c| c.is_retained(now));
         self.votes.retain(|id, _| self.convoys.contains_key(id));
+    }
+}
+
+/// Estado local de canales
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ChannelStore {
+    pub channels: HashMap<String, ChannelRecord>,
+}
+
+impl ChannelStore {
+    /// Carga el store desde disco
+    pub fn load(data_dir: &Path) -> Result<Self> {
+        let store_path = data_dir.join("channel_store.json");
+        if store_path.exists() {
+            let store_str = std::fs::read_to_string(&store_path)
+                .context("Failed to read channel store")?;
+            let store: Self = serde_json::from_str(&store_str)
+                .context("Failed to parse channel store")?;
+            Ok(store)
+        } else {
+            Ok(Self::default())
+        }
+    }
+
+    /// Guarda el store a disco
+    pub fn save(&self, data_dir: &Path) -> Result<()> {
+        let store_path = data_dir.join("channel_store.json");
+        std::fs::write(&store_path, serde_json::to_string_pretty(self)?)
+            .context("Failed to write channel store")?;
+        Ok(())
+    }
+
+    /// Crea un canal nuevo (si no existe)
+    pub fn create_channel(&mut self, name: String, creator_peer_id: String, password: Option<String>) {
+        let normalized = name.trim().to_lowercase();
+        if self.channels.contains_key(&normalized) {
+            return;
+        }
+
+        let password_hash = password.map(|p| {
+            let hash = blake3::hash(p.as_bytes());
+            hash.to_hex().to_string()
+        });
+
+        self.channels.insert(normalized.clone(), ChannelRecord {
+            schema: "convoyrun/channel/v1".to_string(),
+            name: normalized,
+            creator_peer_id,
+            password_hash,
+            created_at: chrono::Utc::now().timestamp(),
+        });
+    }
+
+    /// Verifica si un usuario puede publicar en un canal
+    pub fn can_publish(&self, channel_name: &str, password: Option<&str>) -> bool {
+        let normalized = channel_name.trim().to_lowercase();
+        match self.channels.get(&normalized) {
+            None => true, // canal nuevo, cualquiera puede crear
+            Some(ch) => match &ch.password_hash {
+                None => true, // público
+                Some(hash) => {
+                    let provided = match password {
+                        Some(p) => blake3::hash(p.as_bytes()).to_hex().to_string(),
+                        None => return false,
+                    };
+                    &provided == hash
+                }
+            }
+        }
+    }
+
+    /// Obtiene un canal por nombre
+    pub fn get_channel(&self, name: &str) -> Option<&ChannelRecord> {
+        let normalized = name.trim().to_lowercase();
+        self.channels.get(&normalized)
     }
 }
 

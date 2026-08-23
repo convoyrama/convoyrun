@@ -50,4 +50,6 @@ uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
 bytes = "1"
 sha2 = "0.10"
+futures-lite = "2"
+blake3 = "1"
 

@@ -730,6 +730,7 @@ select option {
     background: rgba(255, 255, 255, 0.06);
 }
 .swarm-badge-game { color: #7cc4ff; border-color: rgba(0, 170, 255, 0.4); }
+.swarm-badge-channel { color: #00aaff; border-color: rgba(0, 170, 255, 0.4); background: rgba(0, 170, 255, 0.1); }
 .swarm-mode-simulation { color: #4ade80; border-color: rgba(74, 222, 128, 0.4); }
 .swarm-mode-realistic { color: #fbbf24; border-color: rgba(251, 191, 36, 0.4); }
 .swarm-mode-arcade { color: #c084fc; border-color: rgba(192, 132, 252, 0.4); }
@@ -793,6 +794,18 @@ select option {
     text-decoration: underline dotted;
 }
 .swarm-trust-btn:hover { color: #fff; }
+
+.swarm-delete-btn {
+    background: none;
+    border: none;
+    color: #ff4444;
+    font-size: 0.68rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 2px 4px;
+    text-decoration: underline dotted;
+}
+.swarm-delete-btn:hover { color: #ff6666; }
 
 /* Pestaña SWARM — rango por defecto (hoy y mañana) */
 .swarm-range-bar { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 2px 0 14px; }

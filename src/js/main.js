@@ -125,6 +125,14 @@ window.addEventListener('languageChanged', (e) => {
         if (dom.stylePickerToggle) dom.stylePickerToggle.textContent = dom.textStyle.selectedOptions[0].textContent;
     }
 
+    // Actualizar texto del botón de orientación
+    if (dom.orientationToggle) {
+        const v = state.getIsVertical();
+        dom.orientationToggle.textContent = v
+            ? (translations.orientation_vertical || 'Vertical')
+            : (translations.orientation_landscape || 'Horizontal');
+    }
+
     drawCanvas();
     updateInGameTimeEmojis();
 });
@@ -172,6 +180,8 @@ async function init() {
     dom.circleCanvasWaypoint = document.getElementById("circle-canvas-waypoint");
     dom.downloadCanvas = document.getElementById("download-canvas");
     dom.canvasSize = document.getElementById("canvas-size");
+    dom.canvasContainer = document.querySelector(".canvas-container");
+    dom.orientationToggle = document.getElementById("orientation-toggle");
     dom.waypointToggle = document.getElementById("waypoint-toggle");
     dom.departureToggle = document.getElementById("departure-toggle");
     dom.destinationToggle = document.getElementById("destination-toggle");
@@ -385,6 +395,21 @@ async function init() {
     dom.waypointToggle.addEventListener('change', (e) => { state.setIsWaypointVisible(e.target.checked); drawCanvas(); });
     dom.departureToggle.addEventListener('change', (e) => { state.setIsDepartureVisible(e.target.checked); drawCanvas(); });
     dom.destinationToggle.addEventListener('change', (e) => { state.setIsDestinationVisible(e.target.checked); drawCanvas(); });
+
+    // Toggle orientación horizontal/vertical
+    function updateOrientationUI() {
+        const v = state.getIsVertical();
+        dom.canvasContainer.classList.toggle('vertical', v);
+        dom.orientationToggle.textContent = v
+            ? (state.currentLangData.orientation_vertical || 'Vertical')
+            : (state.currentLangData.orientation_landscape || 'Horizontal');
+    }
+    updateOrientationUI();
+    dom.orientationToggle.addEventListener('click', () => {
+        state.setIsVertical(!state.getIsVertical());
+        updateOrientationUI();
+        drawCanvas();
+    });
     // Envuelta en función: pasar drawCanvas directo mandaría el Event como targetCanvas.
     dom.textSize.addEventListener("change", () => drawCanvas());
     dom.textStyle.addEventListener("change", () => drawCanvas());

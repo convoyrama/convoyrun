@@ -16,7 +16,8 @@ function setObjectUrl(key, url) {
 export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
     const canvas = targetCanvas;
     const ctx = canvas.getContext("2d");
-    const logicalWidth = 1280, logicalHeight = 720;
+    const isV = state.getIsVertical();
+    const logicalWidth = isV ? 720 : 1280, logicalHeight = isV ? 1280 : 720;
     // 'high' es lento con mapas grandes; solo vale la pena en el export.
     const smoothingQuality = (canvas === dom.mapCanvas) ? 'low' : 'high';
     const textSize = parseInt(dom.textSize.value), textStyle = dom.textStyle.value, textBackgroundOpacity = parseFloat(dom.textBackgroundOpacity.value);

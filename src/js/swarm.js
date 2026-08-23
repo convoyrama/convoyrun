@@ -12,6 +12,7 @@ import {
 import {
     swarmList, swarmGetVotes, swarmGetMyVotes, swarmVote,
     swarmGetConfig, swarmSetConfig, swarmStatus, swarmPublish,
+    swarmDelete,
 } from './native/tauri-bridge.js';
 
 const { DateTime } = luxon;
@@ -23,6 +24,7 @@ const FILTER_LABELS = {
     'filter-author': { all: 'swarm_filter_all', trusted: 'swarm_filter_trusted' },
     'filter-score':  { all: 'swarm_filter_all', positive: 'swarm_filter_positive' },
     'filter-order':  { time: 'swarm_filter_order_time', reputation: 'swarm_filter_order_rep' },
+    'filter-channel': { all: 'swarm_channel_filter_all' },
 };
 
 let convoys = [];
@@ -30,6 +32,7 @@ let votes = {};
 let myVotes = {};
 let config = {};
 let nodeMode = 'local';
+let myPeerId = '';
 let lang = 'en';
 let showAllDays = false;
 let selectedDayKey = null;
@@ -90,6 +93,7 @@ function applyFilters(list) {
     if (f.mode !== 'all') out = out.filter(c => c.event.mode === f.mode);
     if (f.trust === 'trusted') out = out.filter(c => (config.trustedPeers || []).includes(c.peerId));
     if (f.score === 'positive') out = out.filter(c => computeScore(votes[c.id]) >= 0);
+    if (f.channel !== 'all') out = out.filter(c => c.channel === f.channel);
     return out;
 }
 
@@ -201,6 +205,9 @@ function buildEvent(c) {
     const badges = el('div', 'swarm-badges');
     badges.appendChild(el('span', 'swarm-badge swarm-badge-game', c.event.game));
     badges.appendChild(el('span', `swarm-badge swarm-badge-mode swarm-mode-${c.event.mode}`, modeLabel(c.event.mode)));
+    if (c.channel) {
+        badges.appendChild(el('span', 'swarm-badge swarm-badge-channel', c.channel));
+    }
     row.appendChild(badges);
 
     row.appendChild(el('span', 'swarm-row-time', DateTime.fromSeconds(c.schedule.meetingTimestamp).toFormat('HH:mm')));
@@ -256,6 +263,19 @@ function buildEvent(c) {
         await renderAll();
     });
     author.appendChild(trustBtn);
+
+    if (c.peerId && c.peerId === myPeerId) {
+        const deleteBtn = el('button', 'swarm-delete-btn',
+            label('swarm_delete', 'Eliminar'));
+        deleteBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm(label('swarm_delete_confirm', '¿Eliminar este convoy? No se puede deshacer.'))) return;
+            await swarmDelete(c.id);
+            await renderAll();
+        });
+        author.appendChild(deleteBtn);
+    }
+
     info.appendChild(author);
 
     const line = [];
@@ -330,6 +350,23 @@ function renderList() {
     }
 }
 
+function updateChannelFilter() {
+    const sel = document.getElementById('filter-channel');
+    if (!sel) return;
+    const channels = [...new Set(convoys.map(c => c.channel).filter(Boolean))].sort();
+    const current = sel.value;
+    sel.innerHTML = '';
+    const allOpt = el('option', 'swarm_channel_filter_all', label('swarm_channel_filter_all', 'Todos los canales'));
+    allOpt.value = 'all';
+    sel.appendChild(allOpt);
+    for (const ch of channels) {
+        const opt = el('option', '', ch);
+        opt.value = ch;
+        sel.appendChild(opt);
+    }
+    sel.value = current || 'all';
+}
+
 async function renderAll() {
     const [c, v, my, cfg] = await Promise.all([
         swarmList(), swarmGetVotes(), swarmGetMyVotes(), swarmGetConfig(),
@@ -338,6 +375,7 @@ async function renderAll() {
     votes = v || {};
     myVotes = my || {};
     config = cfg || {};
+    updateChannelFilter();
     renderList();
 }
 
@@ -419,6 +457,7 @@ export function initSwarm() {
     (async () => {
         const s = await swarmStatus();
         nodeMode = s.mode;
+        myPeerId = s.peerId || '';
         setStatusLabel();
         if (s.mode === 'local') await seedDemoIfNeeded();
         await renderAll();

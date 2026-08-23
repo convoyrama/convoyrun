@@ -87,6 +87,12 @@
                             <option value="reputation" data-i18n="swarm_filter_order_rep">Por reputación</option>
                         </select>
                     </div>
+                    <div class="swarm-filter-group">
+                        <span class="swarm-filter-label" data-i18n="swarm_channel">Canal</span>
+                        <select id="filter-channel">
+                            <option value="all" data-i18n="swarm_channel_filter_all">Todos los canales</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="swarm-daybar" id="swarm-daybar"></div>
@@ -368,6 +374,11 @@
                 </div>
 
                 <div class="text-control-item">
+                    <label data-i18n="label_orientation">Orientación:</label>
+                    <button type="button" id="orientation-toggle" data-i18n="orientation_landscape">Horizontal</button>
+                </div>
+
+                <div class="text-control-item">
                     <label for="text-size" data-i18n="label_text_size">Tamaño:</label>
                     <select id="text-size">
                         <option value="10" data-i18n="size_small">10px</option>
@@ -530,7 +541,7 @@
                 <div class="about-links">
                     <a href="https://discord.gg/hjJcyREthH" target="_blank" data-i18n="about_link_discord">Discord de CONVOYRAMA</a>
                     <a href="https://convoyrama.github.io" target="_blank" data-i18n="about_link_web">Sitio web</a>
-                    <a href="https://github.com/convoyrama/convoyrun" target="_blank" data-i18n="about_link_github">GitHub</a>
+                    <a href="https://www.patreon.com/convoyrama" target="_blank" data-i18n="about_link_patreon">Patreon</a>
                 </div>
             </div>
         </section>
@@ -604,6 +615,14 @@
                 <label class="swarm-field swarm-field-full">
                     <span data-i18n="swarm_wizard_nickname">Tu nickname</span>
                     <input type="text" id="swarm-w-nickname" maxlength="32" data-i18n-placeholder="swarm_wizard_nickname_ph" placeholder="Cómo te llamarán (opcional)">
+                </label>
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_channel">Canal</span>
+                    <input type="text" id="swarm-w-channel" maxlength="32" data-i18n-placeholder="swarm_channel_placeholder_ph" placeholder="General">
+                </label>
+                <label class="swarm-field swarm-field-full" id="swarm-w-password-group" style="display:none">
+                    <span data-i18n="swarm_channel_password">Contraseña del canal</span>
+                    <input type="password" id="swarm-w-channel-password" maxlength="64">
                 </label>
             </div>
             <div class="swarm-wizard-actions">

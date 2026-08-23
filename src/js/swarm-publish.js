@@ -7,10 +7,14 @@ import * as state from './core/state.js';
 import { showCopyMessage } from './core/utils.js';
 import { readMetadataFromPNG } from './core/png-metadata.js';
 import { createConvoy, isWithinPublishWindow } from './core/convoy.js';
-import { swarmPublish, swarmGetConfig, swarmSetConfig } from './native/tauri-bridge.js';
+import { swarmPublish, swarmGetConfig, swarmSetConfig, swarmValidateChannel } from './native/tauri-bridge.js';
 
 const { DateTime } = luxon;
 const MAX_FLYER_BYTES = 2 * 1024 * 1024;
+
+function label(key, fallback) {
+    return state.currentLangData[key] || fallback;
+}
 
 function makeThumb(buffer) {
     return new Promise((resolve) => {
@@ -58,9 +62,31 @@ export function initSwarmPublish(onPublished) {
     const flyerInput = document.getElementById('swarm-w-flyer');
     const flyerPreview = document.getElementById('swarm-w-flyer-preview');
     const flyerStatus = document.getElementById('swarm-w-flyer-status');
+    const channelEl = document.getElementById('swarm-w-channel');
+    const channelPasswordEl = document.getElementById('swarm-w-channel-password');
+    const channelPasswordGroup = document.getElementById('swarm-w-password-group');
 
     let currentThumb = null;
     let currentFlyerSize = 0;
+
+    async function checkChannelPassword() {
+        const ch = channelEl.value.trim();
+        if (!ch || ch.toLowerCase() === 'general') {
+            channelPasswordGroup.style.display = 'none';
+            return;
+        }
+        const ok = await swarmValidateChannel(ch, '');
+        if (!ok) {
+            channelPasswordGroup.style.display = '';
+        } else {
+            channelPasswordGroup.style.display = 'none';
+        }
+    }
+
+    if (channelEl) {
+        channelEl.addEventListener('blur', checkChannelPassword);
+        channelEl.addEventListener('change', checkChannelPassword);
+    }
 
     function updateZoneLabel() {
         const zone = DateTime.local().zoneName || 'local';
@@ -187,22 +213,38 @@ export function initSwarmPublish(onPublished) {
             flyer: { thumb: currentThumb, size: currentFlyerSize, mime: 'image/png' },
         });
 
+        // Agregar canal al convoy
+        const channelName = channelEl ? channelEl.value.trim() : '';
+        if (channelName) convoy.channel = channelName;
+
         if (!isWithinPublishWindow(convoy)) {
             showCopyMessage(state.currentLangData.swarm_wizard_error_window || 'Solo se pueden publicar convoys hasta 3 meses adelante.');
             return;
         }
 
-        await swarmPublish(convoy);
+        submitBtn.disabled = true;
+        submitBtn.textContent = label('swarm_wizard_publishing', 'Publicando...');
 
-        const nick = nicknameEl.value.trim();
-        if (nick) {
-            const cfg = await swarmGetConfig();
-            if (cfg.nickname !== nick) await swarmSetConfig({ ...cfg, nickname: nick });
+        try {
+            const channelPassword = channelPasswordEl ? channelPasswordEl.value : '';
+            await swarmPublish(convoy, channelName, channelPassword);
+
+            const nick = nicknameEl.value.trim();
+            if (nick) {
+                const cfg = await swarmGetConfig();
+                if (cfg.nickname !== nick) await swarmSetConfig({ ...cfg, nickname: nick });
+            }
+
+            closeWizard();
+            showCopyMessage(state.currentLangData.swarm_published_ok || 'Convoy publicado en el Swarm.');
+            if (onPublished) onPublished();
+        } catch (err) {
+            console.error('[SWARM-PUBLISH]', err);
+            showCopyMessage(state.currentLangData.swarm_wizard_error || 'Error al publicar el convoy.');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = label('swarm_wizard_submit', 'Publicar');
         }
-
-        closeWizard();
-        showCopyMessage(state.currentLangData.swarm_published_ok || 'Convoy publicado en el Swarm.');
-        if (onPublished) onPublished();
     }
 
     openBtn.addEventListener('click', openWizard);

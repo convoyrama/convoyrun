@@ -21,6 +21,11 @@ export let startX, startY;
 
 export let currentLangData = {};
 
+const ORIENTATION_KEY = 'convoyrun-is-vertical';
+let isVertical = localStorage.getItem(ORIENTATION_KEY) === 'true';
+export function getIsVertical() { return isVertical; }
+export function setIsVertical(v) { isVertical = v; localStorage.setItem(ORIENTATION_KEY, v); }
+
 // Arranca en "hispano" para no quedar vacía la primera vez; persiste entre sesiones.
 const ACTIVE_ZONES_STORAGE_KEY = 'convoyrun-active-zones';
 const DEFAULT_PRESET = 'hispano';

@@ -8,13 +8,121 @@ use tokio::sync::RwLock;
 
 mod p2p;
 mod convoy;
-use p2p::{NodeStatus, P2pState, UserConfig};
-use convoy::{ConvoyRecord, ConvoyStore, EventData, FlyerData, Schedule, VoteRecord};
+use p2p::{NodeStatus, P2pState, GossipMessage, UserConfig};
+use convoy::{ConvoyRecord, ConvoyStore, EventData, FlyerData, Schedule, VoteRecord, ChannelRecord, ChannelStore};
 
 /// Estado global de la app
 struct AppState {
     p2p: RwLock<Option<Arc<P2pState>>>,
     data_dir: PathBuf,
+}
+
+/// Procesa mensajes de gossip recibidos de otros nodos
+async fn process_gossip_receiver(
+    mut receiver: iroh_gossip::api::GossipReceiver,
+    data_dir: PathBuf,
+) {
+    use futures_lite::stream::StreamExt;
+    eprintln!("[P2P] Gossip receiver started");
+    loop {
+        match receiver.next().await {
+            Some(Ok(event)) => {
+                // Solo procesamos eventos de mensajes recibidos
+                let iroh_gossip::api::Event::Received(message) = event else {
+                    continue;
+                };
+                if let Ok(gossip_msg) = serde_json::from_slice::<GossipMessage>(&message.content) {
+                    match gossip_msg {
+                        GossipMessage::Convoy { data } => {
+                            if let Ok(record) = serde_json::from_str::<ConvoyRecord>(&data) {
+                                // Verificar firma antes de almacenar
+                                match record.verify() {
+                                    Ok(true) => {
+                                        let mut store = match ConvoyStore::load(&data_dir) {
+                                            Ok(s) => s,
+                                            Err(e) => {
+                                                eprintln!("[P2P] Failed to load store: {}", e);
+                                                continue;
+                                            }
+                                        };
+                                        store.upsert_convoy(record);
+                                        if let Err(e) = store.save(&data_dir) {
+                                            eprintln!("[P2P] Failed to save store: {}", e);
+                                        }
+                                    }
+                                    Ok(false) => {
+                                        eprintln!("[P2P] Received convoy with invalid signature, ignoring");
+                                    }
+                                    Err(e) => {
+                                        eprintln!("[P2P] Failed to verify convoy signature: {}", e);
+                                    }
+                                }
+                            }
+                        }
+                        GossipMessage::Vote { data } => {
+                            if let Ok(record) = serde_json::from_str::<VoteRecord>(&data) {
+                                let mut store = match ConvoyStore::load(&data_dir) {
+                                    Ok(s) => s,
+                                    Err(e) => {
+                                        eprintln!("[P2P] Failed to load store: {}", e);
+                                        continue;
+                                    }
+                                };
+                                store.upsert_vote(record);
+                                if let Err(e) = store.save(&data_dir) {
+                                    eprintln!("[P2P] Failed to save store: {}", e);
+                                }
+                            }
+                        }
+                        GossipMessage::DeleteConvoy { convoy_id, peer_id } => {
+                            let mut store = match ConvoyStore::load(&data_dir) {
+                                Ok(s) => s,
+                                Err(e) => {
+                                    eprintln!("[P2P] Failed to load store: {}", e);
+                                    continue;
+                                }
+                            };
+                            // Solo borrar si el delete viene del autor original
+                            if let Some(convoy) = store.convoys.get(&convoy_id) {
+                                if convoy.peer_id == peer_id {
+                                    store.delete_convoy(&convoy_id);
+                                    if let Err(e) = store.save(&data_dir) {
+                                        eprintln!("[P2P] Failed to save store: {}", e);
+                                    }
+                                    eprintln!("[P2P] Convoy deleted by author: {}", convoy_id);
+                                }
+                            }
+                        }
+                        GossipMessage::Channel { data } => {
+                            if let Ok(channel) = serde_json::from_str::<ChannelRecord>(&data) {
+                                let mut ch_store = match ChannelStore::load(&data_dir) {
+                                    Ok(s) => s,
+                                    Err(e) => {
+                                        eprintln!("[P2P] Failed to load channel store: {}", e);
+                                        continue;
+                                    }
+                                };
+                                // Solo crear si no existe
+                                if !ch_store.channels.contains_key(&channel.name) {
+                                    ch_store.channels.insert(channel.name.clone(), channel);
+                                    if let Err(e) = ch_store.save(&data_dir) {
+                                        eprintln!("[P2P] Failed to save channel store: {}", e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Some(Err(e)) => {
+                eprintln!("[P2P] Gossip receiver error: {}", e);
+            }
+            None => {
+                eprintln!("[P2P] Gossip receiver stream ended");
+                break;
+            }
+        }
+    }
 }
 
 // --- Comandos existentes ---
@@ -56,8 +164,13 @@ async fn p2p_init(state: State<'_, AppState>) -> Result<NodeStatus, String> {
 
     // Unirse al topic de gossip
     match p2p.join_topic().await {
-        Ok((sender, _receiver)) => {
+        Ok((sender, receiver)) => {
             p2p.gossip_sender = Some(sender);
+            // Spawnear task para procesar mensajes de gossip de otros nodos
+            let data_dir = state.data_dir.clone();
+            tokio::spawn(async move {
+                process_gossip_receiver(receiver, data_dir).await;
+            });
             eprintln!("[P2P] Joined gossip topic successfully");
         }
         Err(e) => {
@@ -192,6 +305,8 @@ async fn publish_convoy(
     event: EventData,
     schedule: Schedule,
     flyer: Option<FlyerData>,
+    channel: Option<String>,
+    channel_password: Option<String>,
 ) -> Result<ConvoyRecord, String> {
     let p2p_guard = state.p2p.read().await;
     let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
@@ -200,6 +315,37 @@ async fn publish_convoy(
     let config = p2p::load_config(&state.data_dir).map_err(|e| e.to_string())?;
     let nickname = config.nickname.unwrap_or_default();
 
+    // Validar canal si se especifica
+    let channel_name = channel.unwrap_or_default();
+    if !channel_name.is_empty() {
+        let mut ch_store = ChannelStore::load(&state.data_dir).map_err(|e| e.to_string())?;
+
+        // Verificar password si el canal ya existe
+        if !ch_store.can_publish(&channel_name, channel_password.as_deref()) {
+            return Err("Wrong channel password".to_string());
+        }
+
+        // Crear canal si es nuevo
+        if ch_store.get_channel(&channel_name).is_none() {
+            ch_store.create_channel(
+                channel_name.clone(),
+                p2p.peer_id(),
+                channel_password.clone(),
+            );
+            ch_store.save(&state.data_dir).map_err(|e| e.to_string())?;
+
+            // Broadcast canal por gossip
+            if let Some(sender) = &p2p.gossip_sender {
+                if let Some(ch) = ch_store.get_channel(&channel_name) {
+                    let ch_json = serde_json::to_string(ch).map_err(|e| e.to_string())?;
+                    if let Err(e) = P2pState::publish_channel_gossip(sender, &ch_json).await {
+                        eprintln!("[P2P] Failed to publish channel via gossip: {}", e);
+                    }
+                }
+            }
+        }
+    }
+
     // Crear registro
     let mut record = ConvoyRecord::new(
         p2p.peer_id(),
@@ -207,6 +353,7 @@ async fn publish_convoy(
         event,
         schedule,
         flyer,
+        channel_name,
     );
 
     // Verificar que está dentro del horizonte de publicación
@@ -279,6 +426,40 @@ async fn get_convoy_score(
     Ok(store.compute_score(&convoy_id))
 }
 
+/// Obtiene todos los votos de todos los convoys
+#[tauri::command]
+async fn get_all_votes(
+    state: State<'_, AppState>,
+) -> Result<HashMap<String, Vec<VoteRecord>>, String> {
+    let store = ConvoyStore::load(&state.data_dir).map_err(|e| e.to_string())?;
+    let all_votes: HashMap<String, Vec<VoteRecord>> = store
+        .votes
+        .iter()
+        .map(|(convoy_id, votes)| (convoy_id.clone(), votes.values().cloned().collect()))
+        .collect();
+    Ok(all_votes)
+}
+
+// --- Comandos de canales ---
+
+/// Lista canales conocidos
+#[tauri::command]
+async fn list_channels(state: State<'_, AppState>) -> Result<Vec<ChannelRecord>, String> {
+    let store = ChannelStore::load(&state.data_dir).map_err(|e| e.to_string())?;
+    Ok(store.channels.into_values().collect())
+}
+
+/// Verifica si se puede publicar en un canal
+#[tauri::command]
+async fn validate_channel_password(
+    state: State<'_, AppState>,
+    channel: String,
+    password: Option<String>,
+) -> Result<bool, String> {
+    let store = ChannelStore::load(&state.data_dir).map_err(|e| e.to_string())?;
+    Ok(store.can_publish(&channel, password.as_deref()))
+}
+
 // --- Comandos de votos ---
 
 /// Vota por un convoy (+1 o -1). Reemplaza el voto anterior del mismo autor.
@@ -348,6 +529,40 @@ async fn get_my_votes(state: State<'_, AppState>) -> Result<HashMap<String, i32>
     Ok(my_votes)
 }
 
+/// Elimina un convoy propio y notifica a la red
+#[tauri::command]
+async fn delete_convoy(
+    state: State<'_, AppState>,
+    convoy_id: String,
+) -> Result<(), String> {
+    let p2p_guard = state.p2p.read().await;
+    let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
+
+    // Verificar que el convoy existe y es del autor actual
+    let mut store = ConvoyStore::load(&state.data_dir).map_err(|e| e.to_string())?;
+    let convoy = store.convoys.get(&convoy_id)
+        .ok_or("Convoy not found")?;
+
+    if convoy.peer_id != p2p.peer_id() {
+        return Err("Can only delete your own convoys".to_string());
+    }
+
+    // Borrar del store local
+    store.delete_convoy(&convoy_id);
+    store.save(&state.data_dir).map_err(|e| e.to_string())?;
+
+    // Broadcast delete por gossip
+    if let Some(sender) = &p2p.gossip_sender {
+        if let Err(e) = P2pState::publish_delete_gossip(
+            sender, &convoy_id, &p2p.peer_id()
+        ).await {
+            eprintln!("[P2P] Failed to publish delete via gossip: {}", e);
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -391,6 +606,12 @@ pub fn run() {
             // Comandos de votos
             vote_convoy,
             get_my_votes,
+            get_all_votes,
+            // Comandos de canales
+            list_channels,
+            validate_channel_password,
+            // Comandos de delete
+            delete_convoy,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

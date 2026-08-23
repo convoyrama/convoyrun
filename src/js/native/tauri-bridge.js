@@ -52,9 +52,15 @@ export async function swarmStatus() {
     return { mode: 'local', online: false };
 }
 
-export async function swarmPublish(convoy) {
+export async function swarmPublish(convoy, channel, channelPassword) {
     try {
-        await tauri().core.invoke('publish_convoy', { convoy });
+        await tauri().core.invoke('publish_convoy', {
+            event: convoy.event,
+            schedule: convoy.schedule,
+            flyer: convoy.flyer || null,
+            channel: channel || null,
+            channelPassword: channelPassword || null,
+        });
         return { backend: true };
     } catch {
         const cache = localRead(SWARM_CACHE_KEY, []);
@@ -74,7 +80,7 @@ export async function swarmList() {
 
 export async function swarmGetVotes() {
     try {
-        const v = await tauri().core.invoke('get_votes');
+        const v = await tauri().core.invoke('get_all_votes');
         if (v) return v;
     } catch { /* sin backend */ }
     return localRead(SWARM_VOTES_KEY, {});
@@ -125,5 +131,33 @@ export async function swarmSetConfig(config) {
     } catch {
         localWrite(SWARM_CONFIG_KEY, config);
         return { backend: false };
+    }
+}
+
+export async function swarmDelete(convoyId) {
+    try {
+        await tauri().core.invoke('delete_convoy', { convoyId });
+        return { backend: true };
+    } catch {
+        const cache = localRead(SWARM_CACHE_KEY, []);
+        localWrite(SWARM_CACHE_KEY, cache.filter(c => c.id !== convoyId));
+        return { backend: false };
+    }
+}
+
+export async function swarmListChannels() {
+    try {
+        const ch = await tauri().core.invoke('list_channels');
+        if (Array.isArray(ch)) return ch;
+    } catch { /* sin backend */ }
+    return [];
+}
+
+export async function swarmValidateChannel(channel, password) {
+    try {
+        const ok = await tauri().core.invoke('validate_channel_password', { channel, password: password || null });
+        return ok;
+    } catch {
+        return true;
     }
 }

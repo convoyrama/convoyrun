@@ -44,6 +44,8 @@ pub struct UserConfig {
     pub blocked_authors: Vec<String>,
     pub friends: Vec<String>,
     pub followed_blacklists: Vec<String>,
+    #[serde(default)]
+    pub trusted_peers: Vec<String>,
 }
 
 impl P2pState {
@@ -339,9 +341,13 @@ use bytes::Bytes;
 #[serde(tag = "type")]
 pub enum GossipMessage {
     #[serde(rename = "convoy")]
-    Convoy { data: String }, // JSON serializado de ConvoyRecord
+    Convoy { data: String },
     #[serde(rename = "vote")]
-    Vote { data: String },   // JSON serializado de VoteRecord
+    Vote { data: String },
+    #[serde(rename = "delete_convoy")]
+    DeleteConvoy { convoy_id: String, peer_id: String },
+    #[serde(rename = "channel")]
+    Channel { data: String },
 }
 
 /// Convierte un string a TopicId (hash SHA-256 del string)
@@ -388,6 +394,23 @@ impl P2pState {
     pub async fn publish_vote_gossip(sender: &iroh_gossip::api::GossipSender, vote_json: &str) -> Result<()> {
         let message = GossipMessage::Vote {
             data: vote_json.to_string(),
+        };
+        Self::publish_gossip(sender, message).await
+    }
+
+    /// Publica un delete de convoy por gossip
+    pub async fn publish_delete_gossip(sender: &iroh_gossip::api::GossipSender, convoy_id: &str, peer_id: &str) -> Result<()> {
+        let message = GossipMessage::DeleteConvoy {
+            convoy_id: convoy_id.to_string(),
+            peer_id: peer_id.to_string(),
+        };
+        Self::publish_gossip(sender, message).await
+    }
+
+    /// Publica un canal por gossip
+    pub async fn publish_channel_gossip(sender: &iroh_gossip::api::GossipSender, channel_json: &str) -> Result<()> {
+        let message = GossipMessage::Channel {
+            data: channel_json.to_string(),
         };
         Self::publish_gossip(sender, message).await
     }
