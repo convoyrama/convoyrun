@@ -201,6 +201,17 @@ async fn process_gossip_receiver(
                         }
                         GossipMessage::Blacklist { data } => {
                             if let Ok(record) = serde_json::from_str::<BlacklistRecord>(&data) {
+                                match record.verify() {
+                                    Ok(true) => {}
+                                    Ok(false) => {
+                                        eprintln!("[P2P] Received blacklist with invalid signature, ignoring");
+                                        continue;
+                                    }
+                                    Err(e) => {
+                                        eprintln!("[P2P] Failed to verify blacklist signature: {}", e);
+                                        continue;
+                                    }
+                                }
                                 let mut store = blacklist_store.write().await;
                                 store.upsert(record);
                                 flush_blacklist_store(&store, &data_dir);
@@ -230,6 +241,10 @@ async fn process_gossip_receiver(
 
 #[tauri::command]
 fn save_file(path: String, contents: Vec<u8>) -> Result<(), String> {
+    // Basic path validation: reject paths with null bytes or excessively long paths
+    if path.contains('\0') || path.len() > 4096 {
+        return Err("Invalid file path".to_string());
+    }
     std::fs::write(&path, contents).map_err(|e| e.to_string())
 }
 
@@ -395,12 +410,17 @@ async fn publish_blacklist(state: State<'_, AppState>) -> Result<(), String> {
     let p2p_guard = state.p2p.read().await;
     let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
 
-    let record = BlacklistRecord {
+    let mut record = BlacklistRecord {
         schema: "convoyrun/blacklist/v1".to_string(),
         author_peer_id: p2p.peer_id(),
         blocked: config.blocked_authors.clone(),
         updated_at: chrono::Utc::now().timestamp(),
+        signature: String::new(),
     };
+
+    if let Err(e) = record.sign(&p2p.secret_key) {
+        eprintln!("[P2P] Failed to sign blacklist: {}", e);
+    }
 
     let bl_json = serde_json::to_string(&record).map_err(|e| e.to_string())?;
 
@@ -851,11 +871,23 @@ pub fn run() {
             let blacklist_store = Arc::new(RwLock::new(BlacklistStore::load(&data_dir).unwrap_or_default()));
             app.manage(AppState {
                 p2p: RwLock::new(None),
-                data_dir,
-                convoy_store,
+                data_dir: data_dir.clone(),
+                convoy_store: convoy_store.clone(),
                 channel_store,
                 blacklist_store,
             });
+
+            // Purge expired convoys every hour
+            let purge_dir = data_dir.clone();
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+                    let mut store = convoy_store.write().await;
+                    store.purge_expired();
+                    flush_convoy_store(&store, &purge_dir);
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

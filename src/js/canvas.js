@@ -12,6 +12,18 @@ function setObjectUrl(key, url) {
     _objectUrls[key] = url;
 }
 
+// requestAnimationFrame throttle for drag operations
+let _rafPending = false;
+function scheduleRedraw() {
+    if (!_rafPending) {
+        _rafPending = true;
+        requestAnimationFrame(() => {
+            _rafPending = false;
+            drawCanvas();
+        });
+    }
+}
+
 // targetCanvas/scale: performDownload() renderiza más grande en un canvas aparte.
 export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
     const canvas = targetCanvas;
@@ -318,30 +330,29 @@ export function initCanvasEventListeners() {
             state.setStartY(pos.y - state.imageY); 
         } 
     });
-    canvas.addEventListener("mousemove", (e) => { 
+    canvas.addEventListener("mousemove", (e) => {
         const pos = getMousePos(e);
-        
+
         let handled = false;
         state.isDraggingSpeed.forEach((isDragging, i) => {
             if (isDragging) {
                 state.speedIndicators[i].x = pos.x - state.startX;
                 state.speedIndicators[i].y = pos.y - state.startY;
-                drawCanvas();
                 handled = true;
             }
         });
 
-        if (handled) return;
+        if (handled) { scheduleRedraw(); return; }
 
         if (state.isDraggingDetail && state.detailImage) {
             state.setDetailImageX(pos.x - state.startX);
             state.setDetailImageY(pos.y - state.startY);
-            drawCanvas();
-        } else if (state.isDragging && state.mapImage) { 
-            state.setImageX(pos.x - state.startX); 
-            state.setImageY(pos.y - state.startY); 
-            drawCanvas(); 
-        } 
+            scheduleRedraw();
+        } else if (state.isDragging && state.mapImage) {
+            state.setImageX(pos.x - state.startX);
+            state.setImageY(pos.y - state.startY);
+            scheduleRedraw();
+        }
     });
     canvas.addEventListener("mouseup", () => { 
         state.setIsDragging(false); 
@@ -356,19 +367,19 @@ export function initCanvasEventListeners() {
 
     const circleCanvasTop = dom.circleCanvasTop;
     circleCanvasTop.addEventListener("mousedown", (e) => { if (state.circleImageTop) { state.setIsDraggingTop(true); state.setStartX(e.offsetX - state.circleImageXTop); state.setStartY(e.offsetY - state.circleImageYTop); } });
-    circleCanvasTop.addEventListener("mousemove", (e) => { if (state.isDraggingTop && state.circleImageTop) { state.setCircleImageXTop(e.offsetX - state.startX); state.setCircleImageYTop(e.offsetY - state.startY); drawCanvas(); } });
+    circleCanvasTop.addEventListener("mousemove", (e) => { if (state.isDraggingTop && state.circleImageTop) { state.setCircleImageXTop(e.offsetX - state.startX); state.setCircleImageYTop(e.offsetY - state.startY); scheduleRedraw(); } });
     circleCanvasTop.addEventListener("mouseup", () => { state.setIsDraggingTop(false); });
     circleCanvasTop.addEventListener("mouseleave", () => { state.setIsDraggingTop(false); });
 
     const circleCanvasBottom = dom.circleCanvasBottom;
     circleCanvasBottom.addEventListener("mousedown", (e) => { if (state.circleImageBottom) { state.setIsDraggingBottom(true); state.setStartX(e.offsetX - state.circleImageXBottom); state.setStartY(e.offsetY - state.circleImageYBottom); } });
-    circleCanvasBottom.addEventListener("mousemove", (e) => { if (state.isDraggingBottom && state.circleImageBottom) { state.setCircleImageXBottom(e.offsetX - state.startX); state.setCircleImageYBottom(e.offsetY - state.startY); drawCanvas(); } });
+    circleCanvasBottom.addEventListener("mousemove", (e) => { if (state.isDraggingBottom && state.circleImageBottom) { state.setCircleImageXBottom(e.offsetX - state.startX); state.setCircleImageYBottom(e.offsetY - state.startY); scheduleRedraw(); } });
     circleCanvasBottom.addEventListener("mouseup", () => { state.setIsDraggingBottom(false); });
     circleCanvasBottom.addEventListener("mouseleave", () => { state.setIsDraggingBottom(false); });
 
     const circleCanvasWaypoint = dom.circleCanvasWaypoint;
     circleCanvasWaypoint.addEventListener("mousedown", (e) => { if (state.circleImageWaypoint) { state.setIsDraggingWaypoint(true); state.setStartX(e.offsetX - state.circleImageXWaypoint); state.setStartY(e.offsetY - state.circleImageYWaypoint); } });
-    circleCanvasWaypoint.addEventListener("mousemove", (e) => { if (state.isDraggingWaypoint && state.circleImageWaypoint) { state.setCircleImageXWaypoint(e.offsetX - state.startX); state.setCircleImageYWaypoint(e.offsetY - state.startY); drawCanvas(); } });
+    circleCanvasWaypoint.addEventListener("mousemove", (e) => { if (state.isDraggingWaypoint && state.circleImageWaypoint) { state.setCircleImageXWaypoint(e.offsetX - state.startX); state.setCircleImageYWaypoint(e.offsetY - state.startY); scheduleRedraw(); } });
     circleCanvasWaypoint.addEventListener("mouseup", () => { state.setIsDraggingWaypoint(false); });
     circleCanvasWaypoint.addEventListener("mouseleave", () => { state.setIsDraggingWaypoint(false); });
 

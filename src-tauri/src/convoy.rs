@@ -564,6 +564,74 @@ pub struct BlacklistRecord {
     pub author_peer_id: String,
     pub blocked: Vec<String>,
     pub updated_at: i64,
+    /// Firma ed25519 del payload canónico
+    #[serde(default)]
+    pub signature: String,
+}
+
+impl BlacklistRecord {
+    /// Serialización canónica para firma (sin el campo signature)
+    pub fn canonical_json(&self) -> Result<String> {
+        let mut copy = self.clone();
+        copy.signature = String::new();
+        let value = serde_json::to_value(&copy)
+            .context("Failed to serialize BlacklistRecord for canonical JSON")?;
+        Ok(canonical_json(&value))
+    }
+
+    /// Firma el registro con la clave secreta
+    pub fn sign(&mut self, secret_key: &SecretKey) -> Result<()> {
+        use ed25519_dalek::{Signer, SigningKey};
+
+        let canonical = self.canonical_json()?;
+        let message = canonical.as_bytes();
+
+        let key_bytes = secret_key.to_bytes();
+        let signing_key = SigningKey::from_bytes(&key_bytes);
+        let signature = signing_key.sign(message);
+        self.signature = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            signature.to_bytes(),
+        );
+
+        Ok(())
+    }
+
+    /// Verifica la firma del registro
+    pub fn verify(&self) -> Result<bool> {
+        use ed25519_dalek::{Verifier, VerifyingKey};
+
+        if self.signature.is_empty() {
+            return Ok(false);
+        }
+
+        let peer_bytes = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            &self.author_peer_id,
+        )?;
+        if peer_bytes.len() != 32 {
+            return Ok(false);
+        }
+
+        let mut key_array = [0u8; 32];
+        key_array.copy_from_slice(&peer_bytes);
+        let verifying_key = VerifyingKey::from_bytes(&key_array)?;
+
+        let sig_bytes = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            &self.signature,
+        )?;
+        if sig_bytes.len() != 64 {
+            return Ok(false);
+        }
+
+        let mut sig_array = [0u8; 64];
+        sig_array.copy_from_slice(&sig_bytes);
+        let sig = ed25519_dalek::Signature::from_bytes(&sig_array);
+
+        let canonical = self.canonical_json()?;
+        Ok(verifying_key.verify(canonical.as_bytes(), &sig).is_ok())
+    }
 }
 
 /// Estado local de blacklists públicas recibidas por gossip

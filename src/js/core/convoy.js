@@ -76,7 +76,13 @@ export function isRetained(c, now = nowUnix()) {
 }
 
 export function computeScore(votes) {
-    return (votes?.up || 0) - (votes?.down || 0);
+    if (!votes) return 0;
+    // Backend format: array of VoteRecord objects {vote: 1|-1, ...}
+    if (Array.isArray(votes)) {
+        return votes.reduce((sum, v) => sum + (v.vote || 0), 0);
+    }
+    // LocalStorage fallback format: {up: N, down: N}
+    return (votes.up || 0) - (votes.down || 0);
 }
 
 // Reputación de un autor = suma de scores de sus convoys vigentes.
