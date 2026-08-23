@@ -83,6 +83,7 @@ function readFilters() {
         trust: val('filter-author'),
         score: val('filter-score'),
         order: val('filter-order'),
+        channel: val('filter-channel'),
     };
 }
 

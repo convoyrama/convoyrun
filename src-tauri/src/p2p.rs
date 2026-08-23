@@ -30,6 +30,7 @@ pub struct P2pState {
 
 /// Estado público del nodo (para la UI)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NodeStatus {
     pub mode: String, // "online", "offline", "local"
     pub peer_id: String,
@@ -39,6 +40,7 @@ pub struct NodeStatus {
 
 /// Configuración persistente del usuario
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct UserConfig {
     pub nickname: Option<String>,
     pub blocked_authors: Vec<String>,
@@ -138,8 +140,23 @@ fn load_or_create_identity(data_dir: &Path) -> Result<SecretKey> {
         let secret_key = SecretKey::generate();
         let key_bytes = secret_key.to_bytes();
 
-        std::fs::write(&identity_path, key_bytes)
-            .context("Failed to write identity file")?;
+        // Escribir con permisos restrictivos (solo owner)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o600);
+            let f = std::fs::File::create(&identity_path)
+                .context("Failed to create identity file")?;
+            f.set_permissions(perms)
+                .context("Failed to set identity file permissions")?;
+            std::fs::write(&identity_path, key_bytes)
+                .context("Failed to write identity file")?;
+        }
+        #[cfg(not(unix))]
+        {
+            std::fs::write(&identity_path, key_bytes)
+                .context("Failed to write identity file")?;
+        }
 
         eprintln!("[P2P] Created new identity");
         Ok(secret_key)
@@ -285,10 +302,28 @@ pub fn import_identity(
         anyhow::bail!("Invalid key size: expected 32 bytes, got {}", key_bytes.len());
     }
 
-    // Guardar identidad
+    // Guardar identidad — backup previo de la existente
     let identity_path = data_dir.join(IDENTITY_FILE);
-    std::fs::write(&identity_path, &key_bytes)
-        .context("Failed to write identity file")?;
+    if identity_path.exists() {
+        let backup_path = data_dir.join(format!("{}.bak", IDENTITY_FILE));
+        std::fs::copy(&identity_path, &backup_path)
+            .context("Failed to backup existing identity")?;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let f = std::fs::File::create(&identity_path)
+            .context("Failed to create identity file")?;
+        f.set_permissions(std::fs::Permissions::from_mode(0o600))
+            .context("Failed to set identity file permissions")?;
+        std::fs::write(&identity_path, &key_bytes)
+            .context("Failed to write identity file")?;
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::write(&identity_path, &key_bytes)
+            .context("Failed to write identity file")?;
+    }
 
     // Restaurar nickname si existe
     if let Some(nick) = export["nickname"].as_str() {
@@ -345,7 +380,7 @@ pub enum GossipMessage {
     #[serde(rename = "vote")]
     Vote { data: String },
     #[serde(rename = "delete_convoy")]
-    DeleteConvoy { convoy_id: String, peer_id: String },
+    DeleteConvoy { convoy_id: String, peer_id: String, signature: String },
     #[serde(rename = "channel")]
     Channel { data: String },
 }
@@ -399,10 +434,11 @@ impl P2pState {
     }
 
     /// Publica un delete de convoy por gossip
-    pub async fn publish_delete_gossip(sender: &iroh_gossip::api::GossipSender, convoy_id: &str, peer_id: &str) -> Result<()> {
+    pub async fn publish_delete_gossip(sender: &iroh_gossip::api::GossipSender, convoy_id: &str, peer_id: &str, signature: &str) -> Result<()> {
         let message = GossipMessage::DeleteConvoy {
             convoy_id: convoy_id.to_string(),
             peer_id: peer_id.to_string(),
+            signature: signature.to_string(),
         };
         Self::publish_gossip(sender, message).await
     }

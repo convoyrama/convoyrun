@@ -1,5 +1,8 @@
 // Standalone (el sitio usa main-i18n.js aparte); dispara 'languageChanged'.
+let _loading = false;
 async function loadLanguage(lang) {
+    if (_loading) return;
+    _loading = true;
     try {
         const response = await fetch(`./locales/${lang}.json`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -28,8 +31,10 @@ async function loadLanguage(lang) {
 
         window.dispatchEvent(new CustomEvent('languageChanged', { detail: { lang, translations } }));
     } catch (err) {
-        console.error(`Failed to load language "${lang}":`, err);
+        console.error(`[I18N] Failed to load "${lang}":`, err);
         if (lang !== 'en') loadLanguage('en');
+    } finally {
+        _loading = false;
     }
 }
 

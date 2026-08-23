@@ -54,6 +54,7 @@ async function performDownload() {
     drawCanvas(exportCanvas, scale);
     try {
         exportCanvas.toBlob(async (blob) => {
+            try {
             const arrayBuffer = await blob.arrayBuffer();
 
             const customDateValue = dom.customDate.value;
@@ -95,6 +96,9 @@ async function performDownload() {
 
             const dateString = dom.customDate.value || DateTime.local().toISODate();
             await saveFile(new Uint8Array(newPngBuffer), `convoy-map-${dateString}.png`);
+            } catch (err) {
+                console.error("[DOWNLOAD] Failed:", err);
+            }
         }, 'image/png');
     } catch (error) {
         console.error("[DOWNLOAD] Failed:", error);

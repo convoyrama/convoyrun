@@ -45,7 +45,6 @@ base64 = "0.22"
 
 # Utilidades
 anyhow = "1"
-thiserror = "2"
 uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
 bytes = "1"

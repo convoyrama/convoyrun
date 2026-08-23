@@ -30,6 +30,7 @@ pub enum Mode {
 
 /// Datos del evento
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EventData {
     pub name: String,
     pub game: Game,
@@ -48,6 +49,7 @@ pub struct EventData {
 
 /// Horarios del evento
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Schedule {
     /// Timestamp Unix (UTC) de la reunión
     pub meeting_timestamp: i64,
@@ -57,6 +59,7 @@ pub struct Schedule {
 
 /// Imagen del flyer
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FlyerData {
     /// Hash blake3 del PNG completo (en blobs)
     pub blob_hash: String,
@@ -68,6 +71,7 @@ pub struct FlyerData {
 
 /// Registro de convoy (publicado por un autor)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConvoyRecord {
     pub schema: String,
     pub id: String,
@@ -88,6 +92,7 @@ pub struct ConvoyRecord {
 
 /// Registro de voto
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VoteRecord {
     pub schema: String,
     pub convoy_id: String,
@@ -100,6 +105,7 @@ pub struct VoteRecord {
 
 /// Registro de canal (propagado por gossip)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChannelRecord {
     pub schema: String,
     pub name: String,
@@ -270,6 +276,48 @@ impl VoteRecord {
 
         Ok(())
     }
+
+    /// Verifica la firma del voto
+    pub fn verify(&self) -> Result<bool> {
+        use ed25519_dalek::{Verifier, VerifyingKey};
+
+        if self.signature.is_empty() {
+            return Ok(false);
+        }
+
+        let peer_id_bytes = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            &self.voter_peer_id,
+        )
+        .context("Failed to decode voter_peer_id")?;
+
+        if peer_id_bytes.len() != 32 {
+            return Ok(false);
+        }
+
+        let mut key_array = [0u8; 32];
+        key_array.copy_from_slice(&peer_id_bytes);
+        let verifying_key = VerifyingKey::from_bytes(&key_array).context("Invalid public key")?;
+
+        let sig_bytes = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            &self.signature,
+        )
+        .context("Failed to decode signature")?;
+
+        if sig_bytes.len() != 64 {
+            return Ok(false);
+        }
+
+        let mut sig_array = [0u8; 64];
+        sig_array.copy_from_slice(&sig_bytes);
+        let signature = ed25519_dalek::Signature::from_bytes(&sig_array);
+
+        let canonical = self.canonical_json()?;
+        let message = canonical.as_bytes();
+
+        Ok(verifying_key.verify(message, &signature).is_ok())
+    }
 }
 
 impl ConvoyStore {
@@ -420,7 +468,13 @@ impl ChannelStore {
                         Some(p) => blake3::hash(p.as_bytes()).to_hex().to_string(),
                         None => return false,
                     };
-                    &provided == hash
+                    // Comparación constante para evitar timing attacks
+                    if provided.len() != hash.len() { return false; }
+                    let mut diff = 0u8;
+                    for (a, b) in provided.bytes().zip(hash.bytes()) {
+                        diff |= a ^ b;
+                    }
+                    diff == 0
                 }
             }
         }

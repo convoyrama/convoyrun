@@ -267,6 +267,7 @@
     "swarm_wizard_error_window": "Só é possível publicar comboios até 3 meses à frente.",
     "swarm_published_ok": "Comboio publicado em Eventos.",
     "swarm_wizard_publishing": "Publicando...",
+    "swarm_wizard_submit": "Publicar",
     "swarm_wizard_error": "Erro ao publicar o comboio.",
     "swarm_vote_up_title": "Votar a favor",
     "swarm_vote_down_title": "Votar contra",

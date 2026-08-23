@@ -267,6 +267,7 @@
     "swarm_wizard_error_window": "Solo se pueden publicar convoys hasta 3 meses adelante.",
     "swarm_published_ok": "Convoy publicado en Eventos.",
     "swarm_wizard_publishing": "Publicando...",
+    "swarm_wizard_submit": "Publicar",
     "swarm_wizard_error": "Error al publicar el convoy.",
     "swarm_vote_up_title": "Votar a favor",
     "swarm_vote_down_title": "Votar en contra",
