@@ -807,6 +807,17 @@ select option {
 }
 .swarm-delete-btn:hover { color: #ff6666; }
 
+.swarm-block-btn {
+    background: none;
+    border: none;
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 2px 4px;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+}
+.swarm-block-btn:hover { opacity: 1; }
+
 /* Pestaña SWARM — rango por defecto (hoy y mañana) */
 .swarm-range-bar { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 2px 0 14px; }
 .swarm-range-toggle {
@@ -961,3 +972,347 @@ select option {
     cursor: pointer;
 }
 .swarm-wizard-cancel:hover { color: #fff; border-color: rgba(255, 255, 255, 0.5); }
+
+/* ---- Settings Modal -------------------------------------------------------- */
+
+.settings-btn {
+    background: none;
+    border: none;
+    font-size: 1.3rem;
+    cursor: pointer;
+    color: rgba(255,255,255,0.6);
+    padding: 4px 8px;
+    transition: color 0.15s;
+}
+.settings-btn:hover { color: #fff; }
+
+.settings-modal {
+    max-width: 560px;
+    width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.settings-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+    margin-bottom: 16px;
+}
+.settings-tab {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.45);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+.settings-tab:hover { color: rgba(255,255,255,0.7); }
+.settings-tab.active {
+    color: #fff;
+    border-bottom-color: #00aaff;
+}
+
+.settings-panel { display: none; }
+.settings-panel.active { display: block; }
+
+.settings-section {
+    margin-bottom: 20px;
+}
+.settings-section h4 {
+    font-size: 0.8rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.7);
+    margin: 0 0 10px;
+}
+.settings-section h5 {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.5);
+    margin: 14px 0 6px;
+}
+
+.settings-field {
+    margin-bottom: 10px;
+}
+.settings-field label {
+    display: block;
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.settings-peer-id-row,
+.settings-nick-row,
+.settings-add-friend-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.settings-peer-id {
+    flex: 1;
+    font-size: 0.65rem;
+    color: rgba(255,255,255,0.6);
+    background: rgba(255,255,255,0.05);
+    padding: 6px 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.settings-nick-row input,
+.settings-add-friend-row input {
+    flex: 1;
+    font-size: 0.75rem;
+    padding: 6px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.05);
+    color: #fff;
+}
+
+.settings-small-btn {
+    padding: 6px 12px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #fff;
+    background: rgba(0,170,255,0.25);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.settings-small-btn:hover { background: rgba(0,170,255,0.4); }
+
+.settings-action-btn {
+    padding: 8px 16px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #fff;
+    background: rgba(0,170,255,0.2);
+    border: 1px solid rgba(0,170,255,0.3);
+    border-radius: 6px;
+    cursor: pointer;
+}
+.settings-action-btn:hover { background: rgba(0,170,255,0.35); }
+
+.settings-backup-row {
+    display: flex;
+    gap: 10px;
+}
+
+.settings-export-options {
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 6px;
+}
+.settings-export-options label {
+    display: block;
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+.settings-export-options input {
+    width: 100%;
+    font-size: 0.75rem;
+    padding: 6px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.05);
+    color: #fff;
+    margin-bottom: 8px;
+    box-sizing: border-box;
+}
+
+.settings-hint {
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.4);
+    margin: 0 0 8px;
+}
+
+.settings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.settings-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 4px;
+    font-size: 0.7rem;
+}
+.settings-list-item code {
+    color: rgba(255,255,255,0.6);
+    font-size: 0.65rem;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: 8px;
+}
+.settings-list-item .settings-nick {
+    color: rgba(255,255,255,0.8);
+    font-weight: 700;
+    margin-right: 6px;
+    white-space: nowrap;
+}
+.settings-list-item .settings-remove-btn {
+    padding: 4px 10px;
+    font-size: 0.6rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: rgba(255,100,100,0.8);
+    background: rgba(255,100,100,0.1);
+    border: 1px solid rgba(255,100,100,0.2);
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.settings-list-item .settings-remove-btn:hover {
+    background: rgba(255,100,100,0.25);
+    color: #fff;
+}
+.settings-list-item .settings-follow-btn {
+    padding: 4px 10px;
+    font-size: 0.6rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: rgba(0,170,255,0.8);
+    background: rgba(0,170,255,0.1);
+    border: 1px solid rgba(0,170,255,0.2);
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.settings-list-item .settings-follow-btn:hover {
+    background: rgba(0,170,255,0.25);
+    color: #fff;
+}
+
+.settings-empty {
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.3);
+    font-style: italic;
+    margin: 4px 0 0;
+}
+
+.settings-blacklist-actions {
+    margin-bottom: 10px;
+}
+
+/* ---- Responsive: Tablet (≤1024px) ----------------------------------------- */
+
+@media (max-width: 1024px) {
+    .swarm-filters {
+        flex-wrap: wrap;
+    }
+    .swarm-filter-group {
+        min-width: calc(50% - 8px);
+    }
+    .swarm-wizard-modal {
+        max-width: 90vw;
+    }
+    .canvas-controls {
+        flex-wrap: wrap;
+    }
+}
+
+/* ---- Responsive: Mobile (≤640px) ------------------------------------------ */
+
+@media (max-width: 640px) {
+    .app-header {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px 12px;
+    }
+    .app-brand {
+        flex-basis: 100%;
+    }
+    .header-right {
+        flex-basis: 100%;
+        justify-content: space-between;
+    }
+    .app-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .app-tab {
+        flex: 0 0 auto;
+        padding: 8px 14px;
+        font-size: 0.7rem;
+    }
+    .swarm-filters {
+        flex-direction: column;
+    }
+    .swarm-filter-group {
+        min-width: 100%;
+    }
+    .swarm-topbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    .swarm-wizard-modal {
+        max-width: 95vw;
+        width: 95vw;
+        padding: 16px;
+    }
+    .swarm-wizard-grid {
+        grid-template-columns: 1fr;
+    }
+    .canvas-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .canvas-controls button,
+    .canvas-controls select,
+    .canvas-controls label {
+        width: 100%;
+    }
+    .canvas-container {
+        height: auto;
+        aspect-ratio: 16/9;
+        max-height: 60vh;
+    }
+    .settings-modal {
+        max-width: 95vw;
+        width: 95vw;
+    }
+    .settings-tabs {
+        gap: 0;
+    }
+    .settings-tab {
+        font-size: 0.65rem;
+        padding: 6px 8px;
+    }
+    .settings-backup-row {
+        flex-direction: column;
+    }
+    .input-row {
+        flex-direction: column;
+    }
+    .input-col {
+        min-width: 100%;
+    }
+    .last-row .input-group {
+        min-width: 100%;
+    }
+}

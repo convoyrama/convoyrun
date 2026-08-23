@@ -153,6 +153,23 @@ export async function swarmListChannels() {
     return [];
 }
 
+export async function createChannel(name, password) {
+    try {
+        return await tauri().core.invoke('create_channel', { name, password: password || null });
+    } catch {
+        return null;
+    }
+}
+
+export async function deleteChannel(name) {
+    try {
+        await tauri().core.invoke('delete_channel', { name });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 export async function swarmValidateChannel(channel, password) {
     try {
         const ok = await tauri().core.invoke('validate_channel_password', { channel, password: password || null });
@@ -160,4 +177,125 @@ export async function swarmValidateChannel(channel, password) {
     } catch {
         return true;
     }
+}
+
+// ---- Moderación comunitaria --------------------------------------------------
+
+export async function blockAuthor(peerId) {
+    try {
+        await tauri().core.invoke('block_author', { peerId });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export async function unblockAuthor(peerId) {
+    try {
+        await tauri().core.invoke('unblock_author', { peerId });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export async function addFriend(peerId) {
+    try {
+        await tauri().core.invoke('add_friend', { peerId });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export async function removeFriend(peerId) {
+    try {
+        await tauri().core.invoke('remove_friend', { peerId });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+// ---- Identity backup ---------------------------------------------------------
+
+export async function exportIdentity(outputPath, password) {
+    try {
+        await tauri().core.invoke('export_identity', { outputPath, password: password || null });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export async function importIdentity(inputPath, password) {
+    try {
+        await tauri().core.invoke('import_identity', { inputPath, password: password || null });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+// ---- Blacklists públicas -----------------------------------------------------
+
+export async function publishBlacklist() {
+    try {
+        await tauri().core.invoke('publish_blacklist');
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export async function importBlacklist(peerId) {
+    try {
+        await tauri().core.invoke('import_blacklist', { peerId });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export async function stopFollowingBlacklist(peerId) {
+    try {
+        await tauri().core.invoke('stop_following_blacklist', { peerId });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export async function getPublicBlacklists() {
+    try {
+        const list = await tauri().core.invoke('get_public_blacklists');
+        if (Array.isArray(list)) return list;
+    } catch { /* sin backend */ }
+    return [];
+}
+
+export async function getMutualFriends(peerId) {
+    try {
+        const friends = await tauri().core.invoke('get_mutual_friends', { peerId });
+        if (Array.isArray(friends)) return friends;
+    } catch { /* sin backend */ }
+    return [];
+}
+
+export async function getAuthorProfile(peerId) {
+    try {
+        const profile = await tauri().core.invoke('get_author_profile', { peerId });
+        if (profile) return profile;
+    } catch { /* sin backend */ }
+    return null;
+}
+
+// ---- Discovery (auto-peer discovery via DHT) --------------------------------
+
+export async function getDiscoveryState() {
+    try {
+        const state = await tauri().core.invoke('get_discovery_state');
+        if (state) return state;
+    } catch { /* sin backend */ }
+    return { online: false, neighborCount: 0, dhtStatus: 'inactive' };
 }

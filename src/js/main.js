@@ -12,7 +12,7 @@ import { initAbout } from './about.js';
 import { initStylePicker } from './style-picker.js';
 import { initSwarm } from './swarm.js';
 import { initSwarmPublish } from './swarm-publish.js';
-import { initSlots } from './slots.js';
+import { initSlots, recalcTimeline } from './slots.js';
 
 const { DateTime } = luxon;
 
@@ -149,6 +149,9 @@ function initTabs() {
     tabs.forEach(tab => tab.addEventListener('click', () => {
         tabs.forEach(t => t.classList.toggle('active', t === tab));
         panels.forEach(p => p.classList.toggle('active', p.id === `panel-${tab.dataset.tab}`));
+        if (tab.dataset.tab === 'slots') {
+            requestAnimationFrame(recalcTimeline);
+        }
     }));
 }
 
@@ -223,6 +226,7 @@ async function init() {
     initTimeSync();
     initAbout();
     initStylePicker();
+
     const swarmRefresh = initSwarm();
     initSwarmPublish(swarmRefresh);
     initSlots();

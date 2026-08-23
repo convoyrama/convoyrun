@@ -182,6 +182,16 @@ function renderGrid() {
     }
 }
 
+export function recalcTimeline() {
+    const timeline = document.getElementById('slots-timeline');
+    if (!timeline || !timeline.parentElement || timeline.parentElement.offsetWidth === 0) return;
+    const slotWidth = 180;
+    const currentSlotIndex = getCurrentSlotIndex();
+    const currentOffset = slots.length + currentSlotIndex;
+    const offset = -currentOffset * slotWidth + (timeline.parentElement.offsetWidth / 2 - slotWidth / 2);
+    timeline.style.transform = `translateX(${offset}px)`;
+}
+
 export function initSlots() {
     renderTimeline();
 

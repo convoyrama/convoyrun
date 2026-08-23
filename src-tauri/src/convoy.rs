@@ -15,6 +15,7 @@ pub const SCHEMA_VOTE: &str = "convoyrun/vote/v1";
 pub enum Game {
     ATS,
     ETS2,
+    Other,
 }
 
 /// Modos de servidor
@@ -26,6 +27,8 @@ pub enum Mode {
     Realistic,
     #[serde(rename = "arcade")]
     Arcade,
+    #[serde(rename = "other")]
+    Other,
 }
 
 /// Datos del evento
@@ -113,6 +116,9 @@ pub struct ChannelRecord {
     /// blake3 hash del password (None = público)
     pub password_hash: Option<String>,
     pub created_at: i64,
+    /// Firma ed25519 del payload canónico
+    #[serde(default)]
+    pub signature: String,
 }
 
 /// Estado local de convoys (caché)
@@ -320,6 +326,77 @@ impl VoteRecord {
     }
 }
 
+impl ChannelRecord {
+    /// Serialización canónica para firma (sin el campo signature)
+    pub fn canonical_json(&self) -> Result<String> {
+        let mut copy = self.clone();
+        copy.signature = String::new();
+        let value = serde_json::to_value(&copy)
+            .context("Failed to serialize ChannelRecord for canonical JSON")?;
+        Ok(canonical_json(&value))
+    }
+
+    /// Firma el registro con la clave secreta
+    pub fn sign(&mut self, secret_key: &SecretKey) -> Result<()> {
+        use ed25519_dalek::{Signer, SigningKey};
+
+        let canonical = self.canonical_json()?;
+        let message = canonical.as_bytes();
+
+        let key_bytes = secret_key.to_bytes();
+        let signing_key = SigningKey::from_bytes(&key_bytes);
+        let signature = signing_key.sign(message);
+        self.signature = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            signature.to_bytes(),
+        );
+
+        Ok(())
+    }
+
+    /// Verifica la firma del registro
+    pub fn verify(&self) -> Result<bool> {
+        use ed25519_dalek::{Verifier, VerifyingKey};
+
+        if self.signature.is_empty() {
+            return Ok(false);
+        }
+
+        let peer_id_bytes = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            &self.creator_peer_id,
+        )
+        .context("Failed to decode creator_peer_id")?;
+
+        if peer_id_bytes.len() != 32 {
+            return Ok(false);
+        }
+
+        let mut key_array = [0u8; 32];
+        key_array.copy_from_slice(&peer_id_bytes);
+        let verifying_key = VerifyingKey::from_bytes(&key_array).context("Invalid public key")?;
+
+        let sig_bytes = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            &self.signature,
+        )
+        .context("Failed to decode signature")?;
+
+        if sig_bytes.len() != 64 {
+            return Ok(false);
+        }
+
+        let mut sig_array = [0u8; 64];
+        sig_array.copy_from_slice(&sig_bytes);
+        let signature = ed25519_dalek::Signature::from_bytes(&sig_array);
+
+        let canonical = self.canonical_json()?;
+        let message = canonical.as_bytes();
+
+        Ok(verifying_key.verify(message, &signature).is_ok())
+    }
+}
+
 impl ConvoyStore {
     /// Carga el store desde disco
     pub fn load(data_dir: &Path) -> Result<Self> {
@@ -369,15 +446,6 @@ impl ConvoyStore {
             .get(convoy_id)
             .map(|votes| votes.values().map(|v| v.vote).sum())
             .unwrap_or(0)
-    }
-
-    /// Calcula la reputación de un autor (suma de scores de sus convoys)
-    pub fn author_reputation(&self, peer_id: &str) -> i32 {
-        self.convoys
-            .values()
-            .filter(|c| c.peer_id == peer_id)
-            .map(|c| self.compute_score(&c.id))
-            .sum()
     }
 
     /// Lista convoys vigentes (no expirados)
@@ -453,6 +521,7 @@ impl ChannelStore {
             creator_peer_id,
             password_hash,
             created_at: chrono::Utc::now().timestamp(),
+            signature: String::new(),
         });
     }
 
@@ -487,13 +556,55 @@ impl ChannelStore {
     }
 }
 
+/// Registro de lista negra pública (propagado por gossip)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlacklistRecord {
+    pub schema: String,
+    pub author_peer_id: String,
+    pub blocked: Vec<String>,
+    pub updated_at: i64,
+}
+
+/// Estado local de blacklists públicas recibidas por gossip
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BlacklistStore {
+    pub blacklists: HashMap<String, BlacklistRecord>,
+}
+
+impl BlacklistStore {
+    pub fn load(data_dir: &Path) -> Result<Self> {
+        let store_path = data_dir.join("blacklist_store.json");
+        if store_path.exists() {
+            let s = std::fs::read_to_string(&store_path)
+                .context("Failed to read blacklist store")?;
+            let store: Self = serde_json::from_str(&s)
+                .context("Failed to parse blacklist store")?;
+            Ok(store)
+        } else {
+            Ok(Self::default())
+        }
+    }
+
+    pub fn save(&self, data_dir: &Path) -> Result<()> {
+        let store_path = data_dir.join("blacklist_store.json");
+        std::fs::write(&store_path, serde_json::to_string_pretty(self)?)
+            .context("Failed to write blacklist store")?;
+        Ok(())
+    }
+
+    pub fn upsert(&mut self, record: BlacklistRecord) {
+        self.blacklists.insert(record.author_peer_id.clone(), record);
+    }
+}
+
 /// Serialización canónica JSON (claves ordenadas recursivamente)
 fn canonical_json(value: &serde_json::Value) -> String {
     match value {
         serde_json::Value::Null => "null".to_string(),
         serde_json::Value::Bool(b) => b.to_string(),
         serde_json::Value::Number(n) => n.to_string(),
-        serde_json::Value::String(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
+        serde_json::Value::String(s) => serde_json::to_string(s).unwrap(),
         serde_json::Value::Array(arr) => {
             let items: Vec<String> = arr.iter().map(canonical_json).collect();
             format!("[{}]", items.join(","))
@@ -503,7 +614,7 @@ fn canonical_json(value: &serde_json::Value) -> String {
             keys.sort();
             let items: Vec<String> = keys
                 .iter()
-                .map(|k| format!("\"{}\":{}", k, canonical_json(&obj[*k])))
+                .map(|k| format!("{}:{}", serde_json::to_string(k).unwrap(), canonical_json(&obj[*k])))
                 .collect();
             format!("{{{}}}", items.join(","))
         }

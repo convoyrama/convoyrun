@@ -19,60 +19,6 @@
     margin-bottom: 30px;
 }
 
-.slots-topbar-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.timezone-selector {
-    background: rgba(255,255,255,0.03);
-    padding: 14px 24px;
-    border-radius: 50px;
-    margin-bottom: 50px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    justify-content: center;
-    flex-wrap: wrap;
-    border: 1px solid rgba(255,255,255,0.06);
-    backdrop-filter: blur(10px);
-}
-
-.timezone-selector label {
-    font-weight: 500;
-    color: #718096;
-    font-size: 0.85rem;
-}
-
-.timezone-selector select {
-    padding: 10px 20px;
-    border-radius: 25px;
-    border: 1px solid rgba(255,255,255,0.1);
-    background: rgba(255,255,255,0.05);
-    color: #fff;
-    font-size: 0.9rem;
-    font-family: inherit;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.timezone-selector select:hover {
-    border-color: rgba(255,255,255,0.2);
-    background: rgba(255,255,255,0.08);
-}
-
-.timezone-selector select option {
-    background: #1a1a3e;
-    color: #fff;
-}
-
-.timezone-selector select:focus {
-    outline: none;
-    border-color: #f39c12;
-    box-shadow: 0 0 0 3px rgba(243, 156, 18, 0.15);
-}
-
 .current-display {
     text-align: center;
     margin-bottom: 60px;

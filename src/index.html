@@ -21,10 +21,11 @@
                 <span class="time-sync-dot" data-status="syncing"></span>
                 <span class="time-sync-dot" data-status="verified"></span>
             </div>
+            <button type="button" id="settings-btn" class="settings-btn" data-i18n-title="settings_title" title="Settings">⚙</button>
             <div class="lang-selector">
-                <button class="lang-btn" data-lang="en">EN</button>
-                <button class="lang-btn" data-lang="es">ES</button>
-                <button class="lang-btn" data-lang="pt">PT</button>
+                <button class="lang-btn" data-lang="en" aria-label="English">EN</button>
+                <button class="lang-btn" data-lang="es" aria-label="Español">ES</button>
+                <button class="lang-btn" data-lang="pt" aria-label="Português">PT</button>
             </div>
         </div>
     </header>
@@ -50,45 +51,47 @@
                 <div class="swarm-filters" id="swarm-filters">
                     <span class="swarm-filters-title" data-i18n="swarm_filter_label">Filtros</span>
                     <div class="swarm-filter-group">
-                        <span class="swarm-filter-label" data-i18n="swarm_filter_game">Juego</span>
+                        <label class="swarm-filter-label" for="filter-game" data-i18n="swarm_filter_game">Juego</label>
                         <select id="filter-game">
                             <option value="all" data-i18n="swarm_filter_all">Todos</option>
                             <option value="ATS">ATS</option>
                             <option value="ETS2">ETS2</option>
+                            <option value="other" data-i18n="swarm_filter_other">Otro</option>
                         </select>
                     </div>
                     <div class="swarm-filter-group">
-                        <span class="swarm-filter-label" data-i18n="swarm_filter_mode">Modo</span>
+                        <label class="swarm-filter-label" for="filter-mode" data-i18n="swarm_filter_mode">Modo</label>
                         <select id="filter-mode">
                             <option value="all" data-i18n="swarm_filter_all">Todos</option>
                             <option value="simulation" data-i18n="swarm_mode_simulation">Simulación</option>
                             <option value="realistic" data-i18n="swarm_mode_realistic">Realista</option>
                             <option value="arcade" data-i18n="swarm_mode_arcade">Libre</option>
+                            <option value="other" data-i18n="swarm_filter_other">Otro</option>
                         </select>
                     </div>
                     <div class="swarm-filter-group">
-                        <span class="swarm-filter-label" data-i18n="swarm_filter_author">Autor</span>
+                        <label class="swarm-filter-label" for="filter-author" data-i18n="swarm_filter_author">Autor</label>
                         <select id="filter-author">
                             <option value="all" data-i18n="swarm_filter_all">Todos</option>
                             <option value="trusted" data-i18n="swarm_filter_trusted">Solo confianza</option>
                         </select>
                     </div>
                     <div class="swarm-filter-group">
-                        <span class="swarm-filter-label" data-i18n="swarm_filter_score">Calidad</span>
+                        <label class="swarm-filter-label" for="filter-score" data-i18n="swarm_filter_score">Calidad</label>
                         <select id="filter-score">
                             <option value="all" data-i18n="swarm_filter_all">Todos</option>
                             <option value="positive" data-i18n="swarm_filter_positive">Ocultar negativos</option>
                         </select>
                     </div>
                     <div class="swarm-filter-group">
-                        <span class="swarm-filter-label" data-i18n="swarm_filter_order">Orden</span>
+                        <label class="swarm-filter-label" for="filter-order" data-i18n="swarm_filter_order">Orden</label>
                         <select id="filter-order">
                             <option value="time" data-i18n="swarm_filter_order_time">Por hora de reunión</option>
                             <option value="reputation" data-i18n="swarm_filter_order_rep">Por reputación</option>
                         </select>
                     </div>
                     <div class="swarm-filter-group">
-                        <span class="swarm-filter-label" data-i18n="swarm_channel">Canal</span>
+                        <label class="swarm-filter-label" for="filter-channel" data-i18n="swarm_channel">Canal</label>
                         <select id="filter-channel">
                             <option value="all" data-i18n="swarm_channel_filter_all">Todos los canales</option>
                         </select>
@@ -225,7 +228,7 @@
             </div>
             <div class="input-row">
                 <input type="text" id="custom-start-place" data-i18n-placeholder="placeholder_start_place" placeholder="Lugar de partida">
-                <div style="color: #00aaff; font-weight: 900;">➔</div>
+                <div style="color: #00aaff; font-weight: 900;" aria-hidden="true">➔</div>
                 <input type="text" id="custom-destination" data-i18n-placeholder="placeholder_destination" placeholder="Lugar de destino">
             </div>
             <div class="input-row">
@@ -238,8 +241,8 @@
                     <label for="map-upload" data-i18n="label_map">Mapa:</label>
                     <input type="file" id="map-upload" accept="image/*">
                     <div class="zoom-buttons">
-                        <button id="zoom-in">+</button>
-                        <button id="zoom-out">-</button>
+                        <button id="zoom-in" aria-label="Zoom in">+</button>
+                        <button id="zoom-out" aria-label="Zoom out">-</button>
                     </div>
                 </div>
                 <div class="input-group">
@@ -348,7 +351,7 @@
                 </div>
             </div>
             <div class="canvas-container">
-                <canvas id="map-canvas"></canvas>
+                <canvas id="map-canvas" role="img" aria-label="Event flyer preview"></canvas>
                 <canvas id="circle-canvas-top" class="circle-canvas"></canvas>
                 <canvas id="circle-canvas-bottom" class="circle-canvas"></canvas>
                 <canvas id="circle-canvas-waypoint" class="circle-canvas"></canvas>
@@ -463,34 +466,6 @@
             <div class="slots-shell">
                 <div class="slots-topbar">
                     <h3 data-i18n="slots_title">Calendario de Slots</h3>
-                    <div class="slots-topbar-actions">
-                        <span class="node-status" id="slots-node-status" data-mode="local" data-i18n-title="slots_status_title" title="Estado del nodo">Demo local</span>
-                    </div>
-                </div>
-
-                <div class="timezone-selector">
-                    <label for="slots-timezone" data-i18n="slots_timezone">Timezone</label>
-                    <select id="slots-timezone">
-                        <option value="America/Montevideo">GMT-3 (Uruguay)</option>
-                        <option value="America/Buenos_Aires">GMT-3 (Argentina)</option>
-                        <option value="America/Sao_Paulo">GMT-3 (Brazil)</option>
-                        <option value="America/Asuncion">GMT-3 (Paraguay)</option>
-                        <option value="America/Santiago">GMT-3/-4 (Chile)</option>
-                        <option value="America/Lima">GMT-5 (Peru)</option>
-                        <option value="America/Bogota">GMT-5 (Colombia)</option>
-                        <option value="America/Guayaquil">GMT-5 (Ecuador)</option>
-                        <option value="America/Caracas">GMT-4 (Venezuela)</option>
-                        <option value="America/Panama">GMT-5 (Panama)</option>
-                        <option value="America/Mexico_City">GMT-6 (Mexico)</option>
-                        <option value="America/Havana">GMT-5 (Cuba)</option>
-                        <option value="America/Santo_Domingo">GMT-4 (Dominican Republic)</option>
-                        <option value="America/Puerto_Rico">GMT-4 (Puerto Rico)</option>
-                        <option value="Europe/Madrid">GMT+1/+2 (Spain)</option>
-                        <option value="America/New_York">GMT-5/-4 (US East)</option>
-                        <option value="America/Chicago">GMT-6/-5 (US Central)</option>
-                        <option value="America/Denver">GMT-7/-6 (US Mountain)</option>
-                        <option value="America/Los_Angeles">GMT-8/-7 (US Pacific)</option>
-                    </select>
                 </div>
 
                 <div class="current-display">
@@ -499,11 +474,9 @@
                 </div>
 
                 <div class="timeline-section">
-                    <button class="nav-btn prev" id="slots-btn-prev">‹</button>
                     <div class="timeline-container">
                         <div class="timeline" id="slots-timeline"></div>
                     </div>
-                    <button class="nav-btn next" id="slots-btn-next">›</button>
                 </div>
 
                 <div class="legend">
@@ -572,6 +545,7 @@
                         <select id="swarm-w-game">
                             <option value="ATS">ATS</option>
                             <option value="ETS2">ETS2</option>
+                            <option value="other" data-i18n="swarm_filter_other">Otro</option>
                         </select>
                     </label>
                     <label class="swarm-field">
@@ -580,6 +554,7 @@
                             <option value="simulation" data-i18n="swarm_mode_simulation">Simulación</option>
                             <option value="realistic" data-i18n="swarm_mode_realistic">Realista</option>
                             <option value="arcade" data-i18n="swarm_mode_arcade">Libre</option>
+                            <option value="other" data-i18n="swarm_filter_other">Otro</option>
                         </select>
                     </label>
                 </div>
@@ -622,7 +597,7 @@
                 </label>
                 <label class="swarm-field swarm-field-full" id="swarm-w-password-group" style="display:none">
                     <span data-i18n="swarm_channel_password">Contraseña del canal</span>
-                    <input type="password" id="swarm-w-channel-password" maxlength="64">
+                    <input type="password" id="swarm-w-channel-password" maxlength="64" aria-label="Channel password">
                 </label>
             </div>
             <div class="swarm-wizard-actions">
@@ -632,7 +607,119 @@
         </div>
     </div>
 
+    <!-- Settings Modal -->
+    <div id="settings-overlay" class="about-overlay" style="display:none">
+        <div class="about-modal settings-modal">
+            <button type="button" id="settings-close" class="about-close">×</button>
+            <h3 data-i18n="settings_title">Settings</h3>
+
+            <div class="settings-tabs">
+                <button type="button" class="settings-tab active" data-settings-tab="profile" data-i18n="settings_tab_profile">Profile</button>
+                <button type="button" class="settings-tab" data-settings-tab="blacklist" data-i18n="settings_tab_blacklist">Blacklist</button>
+                <button type="button" class="settings-tab" data-settings-tab="friends" data-i18n="settings_tab_friends">Friends</button>
+                <button type="button" class="settings-tab" data-settings-tab="channels" data-i18n="settings_tab_channels">Channels</button>
+            </div>
+
+            <!-- Profile Tab -->
+            <div class="settings-panel active" id="settings-panel-profile">
+                <div class="settings-section">
+                    <h4 data-i18n="settings_identity">Identity</h4>
+                    <div class="settings-field">
+                        <label data-i18n="settings_peer_id">Peer ID</label>
+                        <div class="settings-peer-id-row">
+                            <code id="settings-peer-id" class="settings-peer-id">—</code>
+                            <button type="button" id="settings-copy-peer-id" class="settings-small-btn" data-i18n="settings_peer_id_copy">Copy</button>
+                        </div>
+                    </div>
+                    <div class="settings-field">
+                        <label data-i18n="settings_nickname">Nickname</label>
+                        <div class="settings-nick-row">
+                            <input type="text" id="settings-nickname" maxlength="32" data-i18n-placeholder="settings_nickname_ph" placeholder="Your nickname">
+                            <button type="button" id="settings-save-nick" class="settings-small-btn" data-i18n="settings_nickname_save">Save</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h4 data-i18n="settings_identity_backup">Identity Backup</h4>
+                    <p class="settings-hint" data-i18n="settings_backup_hint">Export your identity to a file. You can protect it with a password.</p>
+                    <div class="settings-backup-row">
+                        <button type="button" id="settings-export-btn" class="settings-action-btn" data-i18n="settings_export_identity">Export</button>
+                        <button type="button" id="settings-import-btn" class="settings-action-btn" data-i18n="settings_import_identity">Import</button>
+                    </div>
+                    <div id="settings-export-options" class="settings-export-options" style="display:none">
+                        <label data-i18n="settings_export_password">Password (optional)</label>
+                        <input type="password" id="settings-export-password" data-i18n-placeholder="settings_export_password_ph" placeholder="Leave empty for no encryption">
+                        <button type="button" id="settings-export-confirm" class="settings-action-btn" data-i18n="settings_export_save">Save backup</button>
+                    </div>
+                    <div id="settings-import-options" class="settings-export-options" style="display:none">
+                        <p class="settings-hint" data-i18n="settings_import_hint">Select a backup file. If it's encrypted, you'll need the password.</p>
+                        <input type="password" id="settings-import-password" data-i18n-placeholder="settings_import_password_ph" placeholder="Password (if encrypted)">
+                        <button type="button" id="settings-import-confirm" class="settings-action-btn" data-i18n="settings_import_open">Restore backup</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Blacklist Tab -->
+            <div class="settings-panel" id="settings-panel-blacklist">
+                <div class="settings-section">
+                    <h4 data-i18n="settings_blocked_list">Blocked Authors</h4>
+                    <div class="settings-add-friend-row">
+                        <input type="text" id="settings-add-blocked-input" data-i18n-placeholder="settings_add_blocked_ph" placeholder="Paste peer ID to block">
+                        <button type="button" id="settings-add-blocked-btn" class="settings-small-btn" data-i18n="settings_add_blocked">Block</button>
+                    </div>
+                    <div id="settings-blocked-list" class="settings-list"></div>
+                    <p id="settings-blocked-empty" class="settings-empty" data-i18n="settings_blocked_empty">No blocked authors.</p>
+                </div>
+                <div class="settings-section">
+                    <h4 data-i18n="settings_public_blacklists">Public Blacklists</h4>
+                    <div class="settings-blacklist-actions">
+                        <button type="button" id="settings-publish-blacklist" class="settings-action-btn" data-i18n="settings_publish_blacklist">Publish my blacklist</button>
+                    </div>
+                    <h5 data-i18n="settings_followed_lists">Lists you follow</h5>
+                    <div id="settings-followed-lists" class="settings-list"></div>
+                    <p id="settings-followed-empty" class="settings-empty" data-i18n="settings_followed_empty">You're not following any blacklist.</p>
+                    <h5 data-i18n="settings_explore_lists">Explore community lists</h5>
+                    <div id="settings-explore-lists" class="settings-list"></div>
+                    <p id="settings-explore-empty" class="settings-empty" data-i18n="settings_explore_empty">No public blacklists available yet.</p>
+                </div>
+            </div>
+
+            <!-- Friends Tab -->
+            <div class="settings-panel" id="settings-panel-friends">
+                <div class="settings-section">
+                    <h4 data-i18n="settings_friends_list">Friends</h4>
+                    <div class="settings-add-friend-row">
+                        <input type="text" id="settings-add-friend-input" data-i18n-placeholder="settings_add_friend_ph" placeholder="Paste peer ID">
+                        <button type="button" id="settings-add-friend-btn" class="settings-small-btn" data-i18n="settings_add_friend">Add</button>
+                    </div>
+                    <div id="settings-friends-list" class="settings-list"></div>
+                    <p id="settings-friends-empty" class="settings-empty" data-i18n="settings_friends_empty">No friends yet.</p>
+                </div>
+            </div>
+
+            <!-- Channels Tab -->
+            <div class="settings-panel" id="settings-panel-channels">
+                <div class="settings-section">
+                    <h4 data-i18n="settings_create_channel">Create Channel</h4>
+                    <div class="settings-add-friend-row">
+                        <input type="text" id="settings-channel-name-input" data-i18n-placeholder="settings_channel_name_ph" placeholder="Channel name">
+                    </div>
+                    <div class="settings-add-friend-row">
+                        <input type="text" id="settings-channel-password-input" data-i18n-placeholder="settings_channel_password_ph" placeholder="Password (optional)">
+                        <button type="button" id="settings-create-channel-btn" class="settings-small-btn" data-i18n="settings_create_channel_btn">Create</button>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h4 data-i18n="settings_known_channels">Known Channels</h4>
+                    <div id="settings-channels-list" class="settings-list"></div>
+                    <p id="settings-channels-empty" class="settings-empty" data-i18n="settings_channels_empty">No channels yet.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="./js/lib/luxon.min.js"></script>
     <script type="module" src="./js/main.js"></script>
+    <script type="module" src="./js/settings.js"></script>
 </body>
 </html>

@@ -12,7 +12,7 @@ import {
 import {
     swarmList, swarmGetVotes, swarmGetMyVotes, swarmVote,
     swarmGetConfig, swarmSetConfig, swarmStatus, swarmPublish,
-    swarmDelete,
+    swarmDelete, blockAuthor, getPublicBlacklists,
 } from './native/tauri-bridge.js';
 
 const { DateTime } = luxon;
@@ -36,6 +36,7 @@ let myPeerId = '';
 let lang = 'en';
 let showAllDays = false;
 let selectedDayKey = null;
+let blockedAuthorsSet = new Set();
 
 let listEl, emptyEl, emptyFilteredEl, statusEl, dayBarEl;
 
@@ -90,6 +91,7 @@ function readFilters() {
 function applyFilters(list) {
     const f = readFilters();
     let out = list.filter(c => isRetained(c));
+    if (blockedAuthorsSet.size > 0) out = out.filter(c => !blockedAuthorsSet.has(c.peerId));
     if (f.game !== 'all') out = out.filter(c => c.event.game === f.game);
     if (f.mode !== 'all') out = out.filter(c => c.event.mode === f.mode);
     if (f.trust === 'trusted') out = out.filter(c => (config.trustedPeers || []).includes(c.peerId));
@@ -265,6 +267,17 @@ function buildEvent(c) {
     });
     author.appendChild(trustBtn);
 
+    if (c.peerId && c.peerId !== myPeerId) {
+        const blockBtn = el('button', 'swarm-block-btn', '🚫');
+        blockBtn.title = 'Block author';
+        blockBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await blockAuthor(c.peerId);
+            await renderAll();
+        });
+        author.appendChild(blockBtn);
+    }
+
     if (c.peerId && c.peerId === myPeerId) {
         const deleteBtn = el('button', 'swarm-delete-btn',
             label('swarm_delete', 'Eliminar'));
@@ -369,13 +382,25 @@ function updateChannelFilter() {
 }
 
 async function renderAll() {
-    const [c, v, my, cfg] = await Promise.all([
+    const [c, v, my, cfg, blacklists] = await Promise.all([
         swarmList(), swarmGetVotes(), swarmGetMyVotes(), swarmGetConfig(),
+        getPublicBlacklists(),
     ]);
     convoys = (Array.isArray(c) ? c : []).filter(validateConvoy);
     votes = v || {};
     myVotes = my || {};
     config = cfg || {};
+
+    const followed = new Set(config.followedBlacklists || []);
+    blockedAuthorsSet = new Set();
+    if (followed.size > 0 && Array.isArray(blacklists)) {
+        for (const bl of blacklists) {
+            if (followed.has(bl.authorPeerId) && Array.isArray(bl.blocked)) {
+                for (const pid of bl.blocked) blockedAuthorsSet.add(pid);
+            }
+        }
+    }
+
     updateChannelFilter();
     renderList();
 }

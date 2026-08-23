@@ -9,15 +9,26 @@ use iroh_gossip::{net::Gossip, ALPN as GOSSIP_ALPN};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+
+// Auto-discovery via Mainline DHT
+use distributed_topic_tracker::{AutoDiscoveryGossip, RecordPublisher, Config as DttConfig, TopicId as DttTopicId};
 
 /// Topic de gossip para el calendario de convoys
 /// Todos los nodos de ConvoyRun se unen a este topic por nombre.
 pub const CONVOY_TOPIC: &str = "convoyrama.convoyrun.v1";
 
+/// Passphrase compartido para discovery por DHT.
+/// Todos los clientes de ConvoyRun lo usan para encontrarse automáticamente
+/// via la Mainline DHT de BitTorrent (BEP 44).
+/// Es público — cualquier persona con este passphrase puede unirse a la red.
+const CONVOY_PASSPHRASE: &str = "convoyrun-convoy-calendar-v1";
+
 /// Nombre del archivo de identidad (SecretKey)
 const IDENTITY_FILE: &str = "node_identity.key";
 
 /// Estado del nodo P2P
+#[allow(dead_code)]
 pub struct P2pState {
     pub endpoint: Endpoint,
     pub blobs: Arc<FsStore>,
@@ -25,7 +36,8 @@ pub struct P2pState {
     pub router: Router,
     pub secret_key: SecretKey,
     pub data_dir: PathBuf,
-    pub gossip_sender: Option<iroh_gossip::api::GossipSender>,
+    pub gossip_sender: Option<distributed_topic_tracker::GossipSender>,
+    pub neighbor_count: Arc<AtomicUsize>,
 }
 
 /// Estado público del nodo (para la UI)
@@ -96,6 +108,7 @@ impl P2pState {
             secret_key,
             data_dir: data_dir.to_path_buf(),
             gossip_sender: None,
+            neighbor_count: Arc::new(AtomicUsize::new(0)),
         })
     }
 
@@ -189,17 +202,21 @@ pub fn export_identity(
         // Encriptar con AES-256-GCM
         use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
         use rand::RngCore;
+        use argon2::Argon2;
 
         let mut rng = rand::thread_rng();
 
-        // Derivar clave de 32 bytes desde la contraseña (simple hash, no ideal pero funcional)
-        let mut key = [0u8; 32];
-        let pwd_bytes = pwd.as_bytes();
-        for (i, b) in pwd_bytes.iter().cycle().take(32).enumerate() {
-            key[i] = *b;
-        }
+        // Salt aleatorio de 16 bytes para KDF
+        let mut salt_bytes = [0u8; 16];
+        rng.fill_bytes(&mut salt_bytes);
 
-        let cipher = Aes256Gcm::new_from_slice(&key).context("Failed to create cipher")?;
+        // Derivar clave de 32 bytes con Argon2id
+        let mut derived_key = [0u8; 32];
+        Argon2::default()
+            .hash_password_into(pwd.as_bytes(), &salt_bytes, &mut derived_key)
+            .map_err(|e| anyhow::anyhow!("KDF failed: {}", e))?;
+
+        let cipher = Aes256Gcm::new_from_slice(&derived_key).context("Failed to create cipher")?;
 
         // Nonce aleatorio de 12 bytes
         let mut nonce_bytes = [0u8; 12];
@@ -211,11 +228,13 @@ pub fn export_identity(
             .encrypt(nonce, key_bytes.as_ref())
             .map_err(|e| anyhow::anyhow!("Encryption failed: {}", e))?;
 
-        // Serializar
+        // Serializar (version 2 con argon2)
         let export_data = serde_json::json!({
-            "version": 1,
+            "version": 2,
             "encrypted": true,
+            "kdf": "argon2id",
             "algorithm": "aes-256-gcm",
+            "salt": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, salt_bytes),
             "nonce": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, nonce_bytes),
             "encryptedKey": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, encrypted),
             "nickname": nickname,
@@ -255,7 +274,7 @@ pub fn import_identity(
         .context("Failed to parse import file")?;
 
     let version = export["version"].as_u64().unwrap_or(0);
-    if version != 1 {
+    if version != 1 && version != 2 {
         anyhow::bail!("Unsupported export version: {}", version);
     }
 
@@ -276,14 +295,31 @@ pub fn import_identity(
         let encrypted_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, encrypted_b64)
             .context("Failed to decode encrypted key")?;
 
-        // Derivar clave (mismo método que en export)
-        let mut key = [0u8; 32];
-        let pwd_bytes = pwd.as_bytes();
-        for (i, b) in pwd_bytes.iter().cycle().take(32).enumerate() {
-            key[i] = *b;
-        }
+        // Derivar clave según versión del backup
+        let derived_key = if version == 2 {
+            // v2: Argon2id con salt
+            use argon2::Argon2;
+            let salt_b64 = export["salt"].as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing salt in v2 backup"))?;
+            let salt_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, salt_b64)
+                .context("Failed to decode salt")?;
+            let mut key = [0u8; 32];
+            Argon2::default()
+                .hash_password_into(pwd.as_bytes(), &salt_bytes, &mut key)
+                .map_err(|e| anyhow::anyhow!("KDF failed: {}", e))?;
+            key
+        } else {
+            // v1: XOR cycle (compatibilidad hacia atrás)
+            let mut key = [0u8; 32];
+            let pwd_bytes = pwd.as_bytes();
+            for (i, b) in pwd_bytes.iter().cycle().take(32).enumerate() {
+                key[i] = *b;
+            }
+            eprintln!("[P2P] WARNING: Importing v1 backup with weak KDF. Re-export with v2 after import.");
+            key
+        };
 
-        let cipher = Aes256Gcm::new_from_slice(&key).context("Failed to create cipher")?;
+        let cipher = Aes256Gcm::new_from_slice(&derived_key).context("Failed to create cipher")?;
         let nonce = Nonce::from_slice(&nonce_bytes);
 
         cipher
@@ -367,10 +403,6 @@ pub fn save_config(data_dir: &Path, config: &UserConfig) -> Result<()> {
 
 // --- Gossip ---
 
-use iroh_gossip::TopicId;
-use iroh::EndpointId;
-use bytes::Bytes;
-
 /// Tipo de mensaje de gossip
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -383,42 +415,66 @@ pub enum GossipMessage {
     DeleteConvoy { convoy_id: String, peer_id: String, signature: String },
     #[serde(rename = "channel")]
     Channel { data: String },
+    #[serde(rename = "blacklist")]
+    Blacklist { data: String },
 }
 
-/// Convierte un string a TopicId (hash SHA-256 del string)
-fn topic_id_from_string(s: &str) -> TopicId {
+/// Convierte un string a TopicId (hash SHA-256 del string) — ya no usado, mantenido por compatibilidad
+#[allow(dead_code)]
+fn topic_id_from_string(s: &str) -> iroh_gossip::TopicId {
     use sha2::{Sha256, Digest};
     let hash = Sha256::digest(s.as_bytes());
     let mut bytes = [0u8; 32];
     bytes.copy_from_slice(&hash);
-    TopicId::from_bytes(bytes)
+    iroh_gossip::TopicId::from_bytes(bytes)
 }
 
 impl P2pState {
-    /// Se une al topic de gossip de convoys
-    /// Retorna (sender, receiver) para publicar y recibir mensajes
-    pub async fn join_topic(&self) -> Result<(iroh_gossip::api::GossipSender, iroh_gossip::api::GossipReceiver)> {
-        let topic_id = topic_id_from_string(CONVOY_TOPIC);
-        
-        // Por ahora sin bootstrap peers (se conectarán cuando haya otros nodos)
-        let bootstrap_peers: Vec<EndpointId> = Vec::new();
-        
-        let gossip_topic = self.gossip.subscribe(topic_id, bootstrap_peers).await?;
-        let (sender, receiver) = gossip_topic.split();
-        
-        eprintln!("[P2P] Joined topic: {}", CONVOY_TOPIC);
+    /// Se une al topic de gossip con auto-discovery vía Mainline DHT.
+    /// No necesita bootstrap peers — los peers se encuentran automáticamente
+    /// usando la DHT de BitTorrent (BEP 44) via distributed-topic-tracker.
+    pub async fn join_topic(&self) -> Result<(distributed_topic_tracker::GossipSender, distributed_topic_tracker::GossipReceiver)> {
+        // Derivar signing key ed25519 desde la SecretKey de iroh
+        let key_bytes = self.secret_key.to_bytes();
+        let key_array: [u8; 32] = key_bytes.into();
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&key_array);
+
+        // TopicId desde el nombre del topic
+        let topic_id = DttTopicId::new(CONVOY_TOPIC.to_string());
+
+        // RecordPublisher gestiona publicación y descubrimiento en DHT
+        let record_publisher = RecordPublisher::new(
+            topic_id,
+            signing_key,
+            None,                      // sin rotación custom de secretos
+            CONVOY_PASSPHRASE.as_bytes().to_vec(),
+            DttConfig::default(),
+        );
+
+        // subscribe_and_join_with_auto_discovery:
+        // 1. Publica el endpoint en la Mainline DHT
+        // 2. Lee records de otros nodos que compartan el mismo passphrase
+        // 3. Se conecta a peers descubiertos via QUIC + NAT traversal
+        // 4. Espera a tener al menos 1 neighbor antes de retornar
+        let topic = self.gossip
+            .subscribe_and_join_with_auto_discovery(record_publisher)
+            .await?;
+
+        let (sender, receiver) = topic.split().await?;
+
+        eprintln!("[P2P] Joined topic with auto-discovery: {}", CONVOY_TOPIC);
         Ok((sender, receiver))
     }
 
     /// Publica un mensaje por gossip usando el sender
-    pub async fn publish_gossip(sender: &iroh_gossip::api::GossipSender, message: GossipMessage) -> Result<()> {
+    pub async fn publish_gossip(sender: &distributed_topic_tracker::GossipSender, message: GossipMessage) -> Result<()> {
         let data = serde_json::to_vec(&message)?;
-        sender.broadcast(Bytes::from(data)).await?;
+        sender.broadcast(data).await?;
         Ok(())
     }
 
     /// Publica un convoy por gossip
-    pub async fn publish_convoy_gossip(sender: &iroh_gossip::api::GossipSender, convoy_json: &str) -> Result<()> {
+    pub async fn publish_convoy_gossip(sender: &distributed_topic_tracker::GossipSender, convoy_json: &str) -> Result<()> {
         let message = GossipMessage::Convoy {
             data: convoy_json.to_string(),
         };
@@ -426,7 +482,7 @@ impl P2pState {
     }
 
     /// Publica un voto por gossip
-    pub async fn publish_vote_gossip(sender: &iroh_gossip::api::GossipSender, vote_json: &str) -> Result<()> {
+    pub async fn publish_vote_gossip(sender: &distributed_topic_tracker::GossipSender, vote_json: &str) -> Result<()> {
         let message = GossipMessage::Vote {
             data: vote_json.to_string(),
         };
@@ -434,7 +490,7 @@ impl P2pState {
     }
 
     /// Publica un delete de convoy por gossip
-    pub async fn publish_delete_gossip(sender: &iroh_gossip::api::GossipSender, convoy_id: &str, peer_id: &str, signature: &str) -> Result<()> {
+    pub async fn publish_delete_gossip(sender: &distributed_topic_tracker::GossipSender, convoy_id: &str, peer_id: &str, signature: &str) -> Result<()> {
         let message = GossipMessage::DeleteConvoy {
             convoy_id: convoy_id.to_string(),
             peer_id: peer_id.to_string(),
@@ -444,9 +500,17 @@ impl P2pState {
     }
 
     /// Publica un canal por gossip
-    pub async fn publish_channel_gossip(sender: &iroh_gossip::api::GossipSender, channel_json: &str) -> Result<()> {
+    pub async fn publish_channel_gossip(sender: &distributed_topic_tracker::GossipSender, channel_json: &str) -> Result<()> {
         let message = GossipMessage::Channel {
             data: channel_json.to_string(),
+        };
+        Self::publish_gossip(sender, message).await
+    }
+
+    /// Publica una lista negra por gossip
+    pub async fn publish_blacklist_gossip(sender: &distributed_topic_tracker::GossipSender, blacklist_json: &str) -> Result<()> {
+        let message = GossipMessage::Blacklist {
+            data: blacklist_json.to_string(),
         };
         Self::publish_gossip(sender, message).await
     }
