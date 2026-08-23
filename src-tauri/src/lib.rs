@@ -879,10 +879,11 @@ pub fn run() {
 
             // Purge expired convoys every hour
             let purge_dir = data_dir.clone();
-            tokio::spawn(async move {
+            let purge_store = convoy_store.clone();
+            tauri::async_runtime::spawn(async move {
                 loop {
                     tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
-                    let mut store = convoy_store.write().await;
+                    let mut store = purge_store.write().await;
                     store.purge_expired();
                     flush_convoy_store(&store, &purge_dir);
                 }
