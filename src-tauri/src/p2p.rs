@@ -451,13 +451,13 @@ impl P2pState {
             DttConfig::default(),
         );
 
-        // subscribe_and_join_with_auto_discovery:
+        // subscribe_and_join_with_auto_discovery_no_wait:
         // 1. Publica el endpoint en la Mainline DHT
         // 2. Lee records de otros nodos que compartan el mismo passphrase
         // 3. Se conecta a peers descubiertos via QUIC + NAT traversal
-        // 4. Espera a tener al menos 1 neighbor antes de retornar
+        // 4. Retorna inmediatamente sin esperar peers (non-blocking)
         let topic = self.gossip
-            .subscribe_and_join_with_auto_discovery(record_publisher)
+            .subscribe_and_join_with_auto_discovery_no_wait(record_publisher)
             .await?;
 
         let (sender, receiver) = topic.split().await?;

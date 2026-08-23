@@ -44,6 +44,14 @@ export async function optimizePng(arrayBuffer) {
 
 // ---- Swarm: comandos con fallback local (modo demo) ---------------------------
 
+export async function swarmInit() {
+    try {
+        const s = await tauri().core.invoke('p2p_init');
+        if (s && s.mode) return s;
+    } catch { /* sin backend */ }
+    return { mode: 'local', online: false, peerId: '' };
+}
+
 export async function swarmStatus() {
     try {
         const s = await tauri().core.invoke('p2p_status');

@@ -7,16 +7,15 @@ import * as state from './core/state.js';
 import { showCopyMessage } from './core/utils.js';
 import {
     isRetained, dayKeyUTC, computeScore, authorReputation, reputationBadge,
-    validateConvoy, createConvoy, nowUnix,
+    validateConvoy, nowUnix,
 } from './core/convoy.js';
 import {
-    swarmList, swarmGetVotes, swarmGetMyVotes, swarmVote,
+    swarmInit, swarmList, swarmGetVotes, swarmGetMyVotes, swarmVote,
     swarmGetConfig, swarmSetConfig, swarmStatus, swarmPublish,
     swarmDelete, blockAuthor, getPublicBlacklists,
 } from './native/tauri-bridge.js';
 
 const { DateTime } = luxon;
-const SEED_KEY = 'convoyrun-swarm-seeded';
 
 const FILTER_LABELS = {
     'filter-game':   { all: 'swarm_filter_all', ATS: 'swarm_game_ats', ETS2: 'swarm_game_ets2' },
@@ -67,10 +66,8 @@ function populateFilterLabels() {
 }
 
 function setStatusLabel() {
-    let text = 'Demo local';
+    let text = label('swarm_status_offline', 'Offline');
     if (nodeMode === 'online') text = label('swarm_status_online', 'Nodo online');
-    else if (nodeMode === 'offline') text = label('swarm_status_offline', 'Nodo offline');
-    else text = label('swarm_status_local', 'Demo local');
     statusEl.textContent = text;
     statusEl.dataset.mode = nodeMode;
     statusEl.title = label('swarm_status_title', 'Estado del nodo');
@@ -405,59 +402,6 @@ async function renderAll() {
     renderList();
 }
 
-function demoThumb(labelText, color) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 144;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = color;
-    ctx.fillRect(0, 0, 256, 144);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 32px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(labelText, 128, 72);
-    return canvas.toDataURL('image/png');
-}
-
-async function seedDemoIfNeeded() {
-    try {
-        if (localStorage.getItem(SEED_KEY)) return;
-        const now = DateTime.local();
-        const at = (days, hour, minute = 0) => now.plus({ days }).set({ hour, minute, second: 0, millisecond: 0 }).toUnixInteger();
-        const demos = [
-            createConvoy({
-                name: 'Cumbre del Desierto', game: 'ATS', mode: 'simulation',
-                meetingTimestamp: at(2, 21, 30), ianaTimeZone: 'America/Argentina/Buenos_Aires',
-                server: 'Simulation 1', startPlace: 'Las Vegas', destination: 'Los Angeles',
-                description: 'Ruta de 1200 km por la I-15, escala en Barstow.', nickname: 'dr.will', peerId: 'demo-ats',
-                flyer: { thumb: demoThumb('ATS', '#0b3d5c'), size: 0, mime: 'image/png' },
-            }),
-            createConvoy({
-                name: 'Tour de Escandinavia', game: 'ETS2', mode: 'realistic',
-                meetingTimestamp: at(4, 20, 0), ianaTimeZone: 'Europe/Madrid',
-                server: 'Realistic 1', startPlace: 'Estocolmo', destination: 'Oslo',
-                description: 'Frío polar, camiones con llantas de invierno.', nickname: 'LagDrive', peerId: 'demo-vtc',
-                flyer: { thumb: demoThumb('ETS2', '#3d2b0b'), size: 0, mime: 'image/png' },
-            }),
-            createConvoy({
-                name: 'Noche de Arcade', game: 'ETS2', mode: 'arcade',
-                meetingTimestamp: at(6, 23, 15), ianaTimeZone: 'America/Mexico_City',
-                server: 'No Collisions', startPlace: 'Praga', destination: 'Viena',
-                description: 'Sin colisiones, ideal para principiantes.', nickname: 'PitStop', peerId: 'demo-pit',
-                flyer: { thumb: demoThumb('ETS2', '#3b0b3d'), size: 0, mime: 'image/png' },
-            }),
-        ];
-        for (const d of demos) await swarmPublish(d);
-        await swarmVote(demos[0].id, 1);
-        await swarmVote(demos[1].id, -1);
-        await swarmVote(demos[1].id, -1);
-        localStorage.setItem(SEED_KEY, '1');
-    } catch (err) {
-        console.error('[SWARM-SEED] Failed:', err);
-    }
-}
-
 export function initSwarm() {
     listEl = document.getElementById('swarm-list');
     emptyEl = document.getElementById('swarm-empty');
@@ -481,11 +425,10 @@ export function initSwarm() {
     });
 
     (async () => {
-        const s = await swarmStatus();
+        const s = await swarmInit();
         nodeMode = s.mode;
         myPeerId = s.peerId || '';
         setStatusLabel();
-        if (s.mode === 'local') await seedDemoIfNeeded();
         await renderAll();
     })();
 
