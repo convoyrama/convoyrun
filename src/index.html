@@ -1,10 +1,13 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title data-i18n="page_title">ConvoyRun</title>
     <link rel="stylesheet" href="./css/fonts.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" media="print" onload="this.media='all'" />
     <link rel="stylesheet" href="./css/style.css" />
     <link rel="stylesheet" href="./css/app-shell.css" />
     <link rel="stylesheet" href="./css/slots.css" />
@@ -16,10 +19,14 @@
             <span class="app-tagline" data-i18n="app_tagline">Convoy &amp; Event Manager</span>
         </div>
         <div class="header-right">
-            <div class="time-sync-indicator" id="time-sync-indicator" data-i18n-title="time_sync_tooltip" title="Verificación de hora / conexión">
+            <div class="time-sync-indicator" id="time-sync-indicator" data-i18n-title="time_sync_tooltip" title="Time sync">
                 <span class="time-sync-dot" data-status="failed"></span>
                 <span class="time-sync-dot" data-status="syncing"></span>
                 <span class="time-sync-dot" data-status="verified"></span>
+            </div>
+            <div class="p2p-indicator" id="p2p-indicator" data-i18n-title="swarm_status_title" title="P2P status">
+                <span class="p2p-dot" data-status="offline"></span>
+                <span class="p2p-count" id="p2p-count">0</span>
             </div>
             <button type="button" id="settings-btn" class="settings-btn" data-i18n-title="settings_title" title="Settings">⚙</button>
             <div class="lang-selector">
@@ -30,7 +37,7 @@
         </div>
     </header>
 
-    <div class="contenedor">
+    <main class="contenedor">
         <nav class="app-tabs" id="app-tabs">
             <button type="button" class="app-tab active" data-tab="swarm" data-i18n="tab_swarm">Eventos</button>
             <button type="button" class="app-tab" data-tab="flyer" data-i18n="tab_flyer">Flyer</button>
@@ -96,23 +103,33 @@
                             <option value="all" data-i18n="swarm_channel_filter_all">Todos los canales</option>
                         </select>
                     </div>
+                    <div class="swarm-filter-group">
+                        <label class="swarm-filter-label" for="filter-language" data-i18n="swarm_filter_language">Idioma</label>
+                        <select id="filter-language">
+                            <option value="all" data-i18n="swarm_filter_all">Todos</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="swarm-daybar" id="swarm-daybar"></div>
 
                 <div class="swarm-range-bar">
-                    <button type="button" id="swarm-range-toggle" class="swarm-range-toggle" style="display:none">Ver próximos días</button>
-                    <p id="swarm-range-hint" class="swarm-range-hint" style="display:none" data-i18n="swarm_range_hint">No hay convoys para hoy o mañana. Tocá "Ver próximos días".</p>
+                    <button type="button" id="swarm-range-toggle" class="swarm-range-toggle" hidden data-i18n="swarm_range_more">Ver próximos días</button>
+                    <p id="swarm-range-hint" class="swarm-range-hint" hidden data-i18n="swarm_range_hint">No hay convoys para hoy o mañana. Tocá "Ver próximos días".</p>
                 </div>
 
                 <div class="swarm-list" id="swarm-list"></div>
+                <div class="swarm-loading" id="swarm-loading" hidden>
+                    <span class="spinner"></span>
+                    <span data-i18n="swarm_loading">Cargando eventos...</span>
+                </div>
 
                 <div class="swarm-empty" id="swarm-empty">
                     <h4 data-i18n="swarm_empty_title">Aún no hay convoys</h4>
                     <p data-i18n="swarm_empty_hint">Los convoys de la comunidad aparecerán acá. Publicá el tuyo para que otros lo vean.</p>
                 </div>
 
-                <div class="swarm-empty" id="swarm-empty-filtered" style="display:none">
+                <div class="swarm-empty" id="swarm-empty-filtered" hidden>
                     <h4 data-i18n="swarm_empty_filtered_title">Nada coincide con los filtros</h4>
                     <p data-i18n="swarm_empty_filtered_hint">Probá con otro juego, modo o autor.</p>
                 </div>
@@ -133,7 +150,7 @@
 
         <div id="zone-settings-overlay" class="about-overlay">
             <div class="about-modal zone-settings-modal">
-                <button type="button" id="zone-settings-close" class="about-close">×</button>
+                <button type="button" id="zone-settings-close" class="about-close" aria-label="Close">×</button>
                 <h3 data-i18n="zone_settings_title">Configurar Husos Horarios</h3>
 
                 <div id="detected-timezone-row">
@@ -186,7 +203,7 @@
                     <div id="custom-zone-input-row">
                         <input type="text" id="zone-search" list="zone-datalist" data-i18n-placeholder="custom_zone_placeholder" placeholder="Buscar ciudad o país (ej: Tokyo)" autocomplete="off">
                         <datalist id="zone-datalist"></datalist>
-                        <button id="zone-search-add" type="button">+</button>
+                        <button id="zone-search-add" type="button" aria-label="Add timezone">+</button>
                     </div>
                 </div>
             </div>
@@ -223,19 +240,25 @@
                 <div id="custom-date-display"></div>
             </div>
             <div class="input-row">
-                <input type="text" id="custom-event-name" data-i18n-placeholder="placeholder_event_name" placeholder="Nombre del evento" style="flex: 2;">
-                <input type="text" id="custom-server" data-i18n-placeholder="placeholder_server" placeholder="Servidor" style="flex: 1;">
+                <input type="text" id="custom-event-name" data-i18n-placeholder="placeholder_event_name" placeholder="Nombre del evento" data-i18n-title="tooltip_event_name" title="Nombre que aparece en el flyer y en la red" style="flex: 2;">
+                <input type="text" id="custom-server" data-i18n-placeholder="placeholder_server" placeholder="Servidor" data-i18n-title="tooltip_server" title="Servidor de juego (Simulation 1, Europe 2, etc.)" style="flex: 1;">
             </div>
-            <div class="input-row">
-                <input type="text" id="custom-start-place" data-i18n-placeholder="placeholder_start_place" placeholder="Lugar de partida">
+            <div class="input-row route-row">
+                <div class="route-group">
+                    <input type="text" id="custom-start-city" data-i18n-placeholder="placeholder_start_city" placeholder="Ciudad de partida" data-i18n-title="tooltip_start_city" title="Ciudad donde inicia el evento">
+                    <input type="text" id="custom-start-location" data-i18n-placeholder="placeholder_start_location" placeholder="Empresa / Zona" data-i18n-title="tooltip_start_location" title="Punto específico (gasolinera, empresa, etc.)">
+                </div>
                 <div style="color: #00aaff; font-weight: 900;" aria-hidden="true">➔</div>
-                <input type="text" id="custom-destination" data-i18n-placeholder="placeholder_destination" placeholder="Lugar de destino">
+                <div class="route-group">
+                    <input type="text" id="custom-dest-city" data-i18n-placeholder="placeholder_dest_city" placeholder="Ciudad de destino" data-i18n-title="tooltip_dest_city" title="Ciudad de destino del evento">
+                    <input type="text" id="custom-dest-location" data-i18n-placeholder="placeholder_dest_location" placeholder="Empresa / Zona" data-i18n-title="tooltip_dest_location" title="Punto específico de llegada">
+                </div>
             </div>
             <div class="input-row">
-                <input type="text" id="custom-event-link" data-i18n-placeholder="placeholder_event_link" placeholder="Enlace del evento">
+                <input type="text" id="custom-event-link" data-i18n-placeholder="placeholder_event_link" placeholder="Enlace del evento" data-i18n-title="tooltip_event_link" title="URL del evento (TruckersMP, Discord, etc.)">
             </div>
             <label for="custom-event-description" data-i18n="label_description">Descripción:</label>
-            <textarea id="custom-event-description" data-i18n-placeholder="placeholder_event_description" placeholder="Descripción del evento" rows="6"></textarea>
+            <textarea id="custom-event-description" data-i18n-placeholder="placeholder_event_description" placeholder="Descripción del evento" rows="6" data-i18n-title="tooltip_description" title="Descripción que aparece en el flyer y se copia al portapapeles"></textarea>
             <div class="input-row">
                 <div class="input-group">
                     <label for="map-upload" data-i18n="label_map">Mapa:</label>
@@ -255,8 +278,8 @@
                     </div>
                     <input type="file" id="circle-upload-top" accept="image/*">
                     <div class="zoom-buttons">
-                        <button id="zoom-in-top">+</button>
-                        <button id="zoom-out-top">-</button>
+                        <button id="zoom-in-top" aria-label="Zoom in">+</button>
+                        <button id="zoom-out-top" aria-label="Zoom out">-</button>
                     </div>
                 </div>
                 <div class="input-group">
@@ -269,8 +292,8 @@
                     </div>
                     <input type="file" id="circle-upload-bottom" accept="image/*">
                     <div class="zoom-buttons">
-                        <button id="zoom-in-bottom">+</button>
-                        <button id="zoom-out-bottom">-</button>
+                        <button id="zoom-in-bottom" aria-label="Zoom in">+</button>
+                        <button id="zoom-out-bottom" aria-label="Zoom out">-</button>
                     </div>
                 </div>
                 <div class="input-group" id="waypoint-group">
@@ -283,16 +306,16 @@
                     </div>
                     <input type="file" id="waypoint-upload" accept="image/*">
                     <div class="zoom-buttons">
-                        <button id="zoom-in-waypoint">+</button>
-                        <button id="zoom-out-waypoint">-</button>
+                        <button id="zoom-in-waypoint" aria-label="Zoom in">+</button>
+                        <button id="zoom-out-waypoint" aria-label="Zoom out">-</button>
                     </div>
                 </div>
                 <div class="input-group">
                     <label for="detail-upload" data-i18n="label_detail">Detalle:</label>
                     <input type="file" id="detail-upload" accept="image/*">
                     <div class="zoom-buttons">
-                        <button id="zoom-in-detail">+</button>
-                        <button id="zoom-out-detail">-</button>
+                        <button id="zoom-in-detail" aria-label="Zoom in">+</button>
+                        <button id="zoom-out-detail" aria-label="Zoom out">-</button>
                     </div>
                 </div>
             </div>
@@ -300,14 +323,14 @@
                 <!-- Limit 1 -->
                 <div class="input-group">
                     <div class="label-container">
-                        <label data-i18n="label_speed_limit_1">Límite 1</label>
+                        <label for="speed-toggle-0" data-i18n="label_speed_limit_1">Límite 1</label>
                         <label class="switch">
-                            <input type="checkbox" id="speed-toggle-0">
+                            <input type="checkbox" id="speed-toggle-0" data-speed-index="0">
                             <span class="slider round"></span>
                         </label>
                     </div>
-                    <input type="number" id="speed-value-0" value="80">
-                    <select id="speed-unit-0">
+                    <input type="number" id="speed-value-0" value="80" aria-label="Speed limit 1" data-speed-index="0">
+                    <select id="speed-unit-0" aria-label="Speed unit 1" data-speed-index="0">
                         <option value="km/h">km/h</option>
                         <option value="mph">mph</option>
                     </select>
@@ -315,14 +338,14 @@
                 <!-- Limit 2 -->
                 <div class="input-group">
                     <div class="label-container">
-                        <label data-i18n="label_speed_limit_2">Límite 2</label>
+                        <label for="speed-toggle-1" data-i18n="label_speed_limit_2">Límite 2</label>
                         <label class="switch">
-                            <input type="checkbox" id="speed-toggle-1">
+                            <input type="checkbox" id="speed-toggle-1" data-speed-index="1">
                             <span class="slider round"></span>
                         </label>
                     </div>
-                    <input type="number" id="speed-value-1" value="60">
-                    <select id="speed-unit-1">
+                    <input type="number" id="speed-value-1" value="60" aria-label="Speed limit 2" data-speed-index="1">
+                    <select id="speed-unit-1" aria-label="Speed unit 1" data-speed-index="1">
                         <option value="km/h">km/h</option>
                         <option value="mph">mph</option>
                     </select>
@@ -330,13 +353,13 @@
                 <!-- Free Text / Fuga (Reused Toggle 3) -->
                 <div class="input-group">
                     <div class="label-container">
-                        <label data-i18n="label_custom_text">Libre / Texto</label>
+                        <label for="speed-toggle-3" data-i18n="label_custom_text">Libre / Texto</label>
                         <label class="switch">
-                            <input type="checkbox" id="speed-toggle-3">
+                            <input type="checkbox" id="speed-toggle-3" data-speed-index="2">
                             <span class="slider round"></span>
                         </label>
                     </div>
-                    <input type="text" id="speed-value-3" value="FUGA" maxlength="12">
+                    <input type="text" id="speed-value-3" value="FUGA" maxlength="12" aria-label="Custom speed text" data-speed-index="2">
                     <div style="font-size: 0.6rem; color: #666; margin-top: 4px; text-align: center;" data-i18n="hint_custom_text">Texto libre (máx. 12 car.)</div>
                 </div>
                 <!-- Background -->
@@ -352,15 +375,15 @@
             </div>
             <div class="canvas-container">
                 <canvas id="map-canvas" role="img" aria-label="Event flyer preview"></canvas>
-                <canvas id="circle-canvas-top" class="circle-canvas"></canvas>
-                <canvas id="circle-canvas-bottom" class="circle-canvas"></canvas>
-                <canvas id="circle-canvas-waypoint" class="circle-canvas"></canvas>
+                <canvas id="circle-canvas-top" class="circle-canvas" aria-hidden="true"></canvas>
+                <canvas id="circle-canvas-bottom" class="circle-canvas" aria-hidden="true"></canvas>
+                <canvas id="circle-canvas-waypoint" class="circle-canvas" aria-hidden="true"></canvas>
             </div>
             <div class="canvas-controls">
                 <button id="download-canvas" data-i18n="btn_download_image">Descargar Imagen</button>
                 <button id="copy-custom-info" data-i18n="btn_copy_discord">Discord</button>
                 <button id="copy-tmp-btn" data-i18n="btn_copy_tmp">TMP</button>
-                <div title="" data-i18n-title="tmp_images_tooltip" class="text-control-item">
+                <div data-i18n-title="tmp_images_tooltip" class="text-control-item">
                     <label class="switch">
                         <input type="checkbox" id="tmp-images-toggle" checked>
                         <span class="slider round"></span>
@@ -445,16 +468,8 @@
 
                 <div class="text-control-item">
                     <label for="text-background-opacity" data-i18n="label_text_background_opacity">Opacidad:</label>
-                    <select id="text-background-opacity">
-                        <option value="0">0%</option>
-                        <option value="0.05">5%</option>
-                        <option value="0.15" selected>15%</option>
-                        <option value="0.3">30%</option>
-                        <option value="0.5">50%</option>
-                        <option value="0.7">70%</option>
-                        <option value="0.8">80%</option>
-                        <option value="0.9">90%</option>
-                    </select>
+                    <input type="range" id="text-background-opacity" min="0" max="100" value="15" step="5">
+                    <span id="opacity-value" class="opacity-value-label">15%</span>
                 </div>
 
                 <button id="reset-canvas" data-i18n="btn_reset_canvas">Reset</button>
@@ -520,7 +535,15 @@
         </section>
 
         <div id="copy-message" data-i18n="copy_message_text">¡Información copiada al portapapeles!</div>
-    </div>
+
+    </main>
+
+    <footer class="app-footer" id="app-footer">
+        <span class="footer-status" id="footer-status" data-i18n="discovery_offline">P2P offline (modo local)</span>
+        <span class="footer-sep">·</span>
+        <span class="footer-peers" id="footer-peers" data-i18n="footer_peers">0 peers</span>
+        <span class="footer-action" id="footer-action"></span>
+    </footer>
 
     <div class="swarm-wizard-overlay" id="swarm-wizard">
         <div class="swarm-wizard" role="dialog" aria-modal="true" aria-labelledby="swarm-wizard-title">
@@ -557,6 +580,17 @@
                             <option value="other" data-i18n="swarm_filter_other">Otro</option>
                         </select>
                     </label>
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_event_type">Tipo de evento</span>
+                        <select id="swarm-w-type">
+                            <option value="convoy" data-i18n="event_type_convoy">Convoy</option>
+                            <option value="truck_show" data-i18n="event_type_truck_show">Expo de Camiones</option>
+                            <option value="exploration" data-i18n="event_type_exploration">Exploración</option>
+                            <option value="competition" data-i18n="event_type_competition">Competencia</option>
+                            <option value="cruise" data-i18n="event_type_cruise">Cruce</option>
+                            <option value="other" data-i18n="event_type_other">Otro</option>
+                        </select>
+                    </label>
                 </div>
                 <div class="swarm-field-row">
                     <label class="swarm-field">
@@ -579,8 +613,18 @@
                         <input type="text" id="swarm-w-start" maxlength="60" data-i18n-placeholder="swarm_wizard_start_place_ph" placeholder="Ej: Las Vegas">
                     </label>
                     <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_start_location">Ubicación de salida</span>
+                        <input type="text" id="swarm-w-start-location" maxlength="60" data-i18n-placeholder="swarm_wizard_start_location_ph" placeholder="Ej: Gasolinera">
+                    </label>
+                </div>
+                <div class="swarm-field-row">
+                    <label class="swarm-field">
                         <span data-i18n="swarm_wizard_destination">Destino (opcional)</span>
                         <input type="text" id="swarm-w-dest" maxlength="60" data-i18n-placeholder="swarm_wizard_destination_ph" placeholder="Ej: Los Angeles">
+                    </label>
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_dest_location">Ubicación de llegada</span>
+                        <input type="text" id="swarm-w-dest-location" maxlength="60" data-i18n-placeholder="swarm_wizard_dest_location_ph" placeholder="Ej: Puerto">
                     </label>
                 </div>
                 <label class="swarm-field swarm-field-full">
@@ -595,22 +639,27 @@
                     <span data-i18n="swarm_channel">Canal</span>
                     <input type="text" id="swarm-w-channel" maxlength="32" data-i18n-placeholder="swarm_channel_placeholder_ph" placeholder="General">
                 </label>
-                <label class="swarm-field swarm-field-full" id="swarm-w-password-group" style="display:none">
+                <label class="swarm-field swarm-field-full" id="swarm-w-password-group" hidden>
                     <span data-i18n="swarm_channel_password">Contraseña del canal</span>
                     <input type="password" id="swarm-w-channel-password" maxlength="64" aria-label="Channel password">
                 </label>
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_wizard_languages">Idiomas del evento</span>
+                    <div id="swarm-w-languages" class="swarm-languages-group"></div>
+                </label>
             </div>
+            <p id="swarm-w-status" class="swarm-wizard-status" hidden></p>
             <div class="swarm-wizard-actions">
-                <button type="button" class="swarm-wizard-cancel" id="swarm-w-cancel" data-i18n="swarm_wizard_cancel">Cancelar</button>
-                <button type="button" class="swarm-publish-btn" id="swarm-w-submit" data-i18n="swarm_wizard_publish">Publicar</button>
+                <button type="button" class="swarm-wizard-cancel" id="swarm-w-cancel" data-i18n="swarm_wizard_cancel" aria-label="Cancel publishing">Cancelar</button>
+                <button type="button" class="swarm-publish-btn" id="swarm-w-submit" data-i18n="swarm_wizard_publish" aria-label="Publish convoy">Publicar</button>
             </div>
         </div>
     </div>
 
     <!-- Settings Modal -->
-    <div id="settings-overlay" class="about-overlay" style="display:none">
+    <div id="settings-overlay" class="about-overlay" hidden>
         <div class="about-modal settings-modal">
-            <button type="button" id="settings-close" class="about-close">×</button>
+            <button type="button" id="settings-close" class="about-close" aria-label="Close settings">×</button>
             <h3 data-i18n="settings_title">Settings</h3>
 
             <div class="settings-tabs">
@@ -628,33 +677,38 @@
                         <label data-i18n="settings_peer_id">Peer ID</label>
                         <div class="settings-peer-id-row">
                             <code id="settings-peer-id" class="settings-peer-id">—</code>
-                            <button type="button" id="settings-copy-peer-id" class="settings-small-btn" data-i18n="settings_peer_id_copy">Copy</button>
+                            <button type="button" id="settings-copy-peer-id" class="settings-small-btn" data-i18n="settings_peer_id_copy" aria-label="Copy peer ID">Copy</button>
                         </div>
                     </div>
                     <div class="settings-field">
                         <label data-i18n="settings_nickname">Nickname</label>
                         <div class="settings-nick-row">
                             <input type="text" id="settings-nickname" maxlength="32" data-i18n-placeholder="settings_nickname_ph" placeholder="Your nickname">
-                            <button type="button" id="settings-save-nick" class="settings-small-btn" data-i18n="settings_nickname_save">Save</button>
+                            <button type="button" id="settings-save-nick" class="settings-small-btn" data-i18n="settings_nickname_save" aria-label="Save nickname">Save</button>
                         </div>
+                    </div>
+                    <div class="settings-field">
+                        <label data-i18n="settings_default_languages">Default languages for new events</label>
+                        <div id="settings-default-languages" class="settings-languages-group"></div>
+                        <button type="button" id="settings-save-languages" class="settings-small-btn" data-i18n="settings_languages_save" aria-label="Save languages">Save</button>
                     </div>
                 </div>
                 <div class="settings-section">
                     <h4 data-i18n="settings_identity_backup">Identity Backup</h4>
                     <p class="settings-hint" data-i18n="settings_backup_hint">Export your identity to a file. You can protect it with a password.</p>
                     <div class="settings-backup-row">
-                        <button type="button" id="settings-export-btn" class="settings-action-btn" data-i18n="settings_export_identity">Export</button>
-                        <button type="button" id="settings-import-btn" class="settings-action-btn" data-i18n="settings_import_identity">Import</button>
+                        <button type="button" id="settings-export-btn" class="settings-action-btn" data-i18n="settings_export_identity" aria-label="Export identity">Export</button>
+                        <button type="button" id="settings-import-btn" class="settings-action-btn" data-i18n="settings_import_identity" aria-label="Import identity">Import</button>
                     </div>
-                    <div id="settings-export-options" class="settings-export-options" style="display:none">
+                    <div id="settings-export-options" class="settings-export-options" hidden>
                         <label data-i18n="settings_export_password">Password (optional)</label>
                         <input type="password" id="settings-export-password" data-i18n-placeholder="settings_export_password_ph" placeholder="Leave empty for no encryption">
-                        <button type="button" id="settings-export-confirm" class="settings-action-btn" data-i18n="settings_export_save">Save backup</button>
+                        <button type="button" id="settings-export-confirm" class="settings-action-btn" data-i18n="settings_export_save" aria-label="Save backup">Save backup</button>
                     </div>
-                    <div id="settings-import-options" class="settings-export-options" style="display:none">
+                    <div id="settings-import-options" class="settings-export-options" hidden>
                         <p class="settings-hint" data-i18n="settings_import_hint">Select a backup file. If it's encrypted, you'll need the password.</p>
                         <input type="password" id="settings-import-password" data-i18n-placeholder="settings_import_password_ph" placeholder="Password (if encrypted)">
-                        <button type="button" id="settings-import-confirm" class="settings-action-btn" data-i18n="settings_import_open">Restore backup</button>
+                        <button type="button" id="settings-import-confirm" class="settings-action-btn" data-i18n="settings_import_open" aria-label="Restore backup">Restore backup</button>
                     </div>
                 </div>
             </div>
@@ -665,7 +719,7 @@
                     <h4 data-i18n="settings_blocked_list">Blocked Authors</h4>
                     <div class="settings-add-friend-row">
                         <input type="text" id="settings-add-blocked-input" data-i18n-placeholder="settings_add_blocked_ph" placeholder="Paste peer ID to block">
-                        <button type="button" id="settings-add-blocked-btn" class="settings-small-btn" data-i18n="settings_add_blocked">Block</button>
+                        <button type="button" id="settings-add-blocked-btn" class="settings-small-btn" data-i18n="settings_add_blocked" aria-label="Block author">Block</button>
                     </div>
                     <div id="settings-blocked-list" class="settings-list"></div>
                     <p id="settings-blocked-empty" class="settings-empty" data-i18n="settings_blocked_empty">No blocked authors.</p>
@@ -673,7 +727,7 @@
                 <div class="settings-section">
                     <h4 data-i18n="settings_public_blacklists">Public Blacklists</h4>
                     <div class="settings-blacklist-actions">
-                        <button type="button" id="settings-publish-blacklist" class="settings-action-btn" data-i18n="settings_publish_blacklist">Publish my blacklist</button>
+                        <button type="button" id="settings-publish-blacklist" class="settings-action-btn" data-i18n="settings_publish_blacklist" aria-label="Publish my blacklist">Publish my blacklist</button>
                     </div>
                     <h5 data-i18n="settings_followed_lists">Lists you follow</h5>
                     <div id="settings-followed-lists" class="settings-list"></div>
@@ -690,7 +744,7 @@
                     <h4 data-i18n="settings_friends_list">Friends</h4>
                     <div class="settings-add-friend-row">
                         <input type="text" id="settings-add-friend-input" data-i18n-placeholder="settings_add_friend_ph" placeholder="Paste peer ID">
-                        <button type="button" id="settings-add-friend-btn" class="settings-small-btn" data-i18n="settings_add_friend">Add</button>
+                        <button type="button" id="settings-add-friend-btn" class="settings-small-btn" data-i18n="settings_add_friend" aria-label="Add friend">Add</button>
                     </div>
                     <div id="settings-friends-list" class="settings-list"></div>
                     <p id="settings-friends-empty" class="settings-empty" data-i18n="settings_friends_empty">No friends yet.</p>
@@ -706,7 +760,7 @@
                     </div>
                     <div class="settings-add-friend-row">
                         <input type="text" id="settings-channel-password-input" data-i18n-placeholder="settings_channel_password_ph" placeholder="Password (optional)">
-                        <button type="button" id="settings-create-channel-btn" class="settings-small-btn" data-i18n="settings_create_channel_btn">Create</button>
+                        <button type="button" id="settings-create-channel-btn" class="settings-small-btn" data-i18n="settings_create_channel_btn" aria-label="Create channel">Create</button>
                     </div>
                 </div>
                 <div class="settings-section">

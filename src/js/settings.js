@@ -6,15 +6,53 @@ import {
     getPublicBlacklists,
     swarmListChannels, createChannel, deleteChannel,
 } from './native/tauri-bridge.js';
+import { setVisible } from './core/utils.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
 const overlay = () => $('#settings-overlay');
 
+function t(key, fallback) {
+    return (window.__convoyrunLangData && window.__convoyrunLangData[key]) || fallback;
+}
+
 function truncPeer(id) {
     if (!id || id.length < 16) return id || '—';
     return id.slice(0, 8) + '…' + id.slice(-6);
+}
+
+const AVAILABLE_LANGUAGES = [
+    { code: 'es', key: 'swarm_lang_es' },
+    { code: 'en', key: 'swarm_lang_en' },
+    { code: 'pt', key: 'swarm_lang_pt' },
+    { code: 'fr', key: 'swarm_lang_fr' },
+    { code: 'de', key: 'swarm_lang_de' },
+    { code: 'it', key: 'swarm_lang_it' },
+    { code: 'nl', key: 'swarm_lang_nl' },
+];
+
+function renderDefaultLanguages(langs) {
+    const container = $('#settings-default-languages');
+    if (!container) return;
+    container.innerHTML = '';
+    for (const lang of AVAILABLE_LANGUAGES) {
+        const lbl = document.createElement('label');
+        lbl.className = 'settings-lang-option';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = lang.code;
+        cb.checked = (langs || []).includes(lang.code);
+        lbl.appendChild(cb);
+        lbl.appendChild(document.createTextNode(' ' + t(lang.key, lang.code.toUpperCase())));
+        container.appendChild(lbl);
+    }
+}
+
+function getDefaultLanguages() {
+    const container = $('#settings-default-languages');
+    if (!container) return [];
+    return Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
 }
 
 async function loadSettingsData() {
@@ -23,6 +61,7 @@ async function loadSettingsData() {
     $('#settings-peer-id').textContent = status.peerId || '—';
     $('#settings-nickname').value = config.nickname || '';
 
+    renderDefaultLanguages(config.defaultLanguages || ['es']);
     renderBlocked(config.blockedAuthors || []);
     renderFriends(config.friends || []);
     renderFollowed(config.followedBlacklists || []);
@@ -35,17 +74,20 @@ async function loadSettingsData() {
 function renderBlocked(blocked) {
     const container = $('#settings-blocked-list');
     const empty = $('#settings-blocked-empty');
-    container.innerHTML = '';
-    if (!blocked.length) { empty.style.display = ''; return; }
-    empty.style.display = 'none';
+    container.replaceChildren();
+    if (!blocked.length) { setVisible(empty, true); return; }
+    setVisible(empty, false);
     blocked.forEach(peerId => {
         const item = document.createElement('div');
         item.className = 'settings-list-item';
-        item.innerHTML = `<code title="${peerId}">${truncPeer(peerId)}</code>`;
+        const code = document.createElement('code');
+        code.title = peerId;
+        code.textContent = truncPeer(peerId);
+        item.appendChild(code);
         const btn = document.createElement('button');
         btn.className = 'settings-remove-btn';
         btn.textContent = '✕';
-        btn.title = 'Unblock';
+        btn.title = t('settings_unblock', 'Unblock');
         btn.onclick = async () => {
             await unblockAuthor(peerId);
             await loadSettingsData();
@@ -58,17 +100,20 @@ function renderBlocked(blocked) {
 function renderFriends(friends) {
     const container = $('#settings-friends-list');
     const empty = $('#settings-friends-empty');
-    container.innerHTML = '';
-    if (!friends.length) { empty.style.display = ''; return; }
-    empty.style.display = 'none';
+    container.replaceChildren();
+    if (!friends.length) { setVisible(empty, true); return; }
+    setVisible(empty, false);
     friends.forEach(peerId => {
         const item = document.createElement('div');
         item.className = 'settings-list-item';
-        item.innerHTML = `<code title="${peerId}">${truncPeer(peerId)}</code>`;
+        const code = document.createElement('code');
+        code.title = peerId;
+        code.textContent = truncPeer(peerId);
+        item.appendChild(code);
         const btn = document.createElement('button');
         btn.className = 'settings-remove-btn';
         btn.textContent = '✕';
-        btn.title = 'Remove friend';
+        btn.title = t('settings_remove_friend', 'Remove friend');
         btn.onclick = async () => {
             await removeFriend(peerId);
             await loadSettingsData();
@@ -81,17 +126,20 @@ function renderFriends(friends) {
 function renderFollowed(followed) {
     const container = $('#settings-followed-lists');
     const empty = $('#settings-followed-empty');
-    container.innerHTML = '';
-    if (!followed.length) { empty.style.display = ''; return; }
-    empty.style.display = 'none';
+    container.replaceChildren();
+    if (!followed.length) { setVisible(empty, true); return; }
+    setVisible(empty, false);
     followed.forEach(peerId => {
         const item = document.createElement('div');
         item.className = 'settings-list-item';
-        item.innerHTML = `<code title="${peerId}">${truncPeer(peerId)}</code>`;
+        const code = document.createElement('code');
+        code.title = peerId;
+        code.textContent = truncPeer(peerId);
+        item.appendChild(code);
         const btn = document.createElement('button');
         btn.className = 'settings-remove-btn';
         btn.textContent = '✕';
-        btn.title = 'Stop following';
+        btn.title = t('settings_stop_following', 'Stop following');
         btn.onclick = async () => {
             await stopFollowingBlacklist(peerId);
             await loadSettingsData();
@@ -104,20 +152,25 @@ function renderFollowed(followed) {
 function renderExplore(lists, followed) {
     const container = $('#settings-explore-lists');
     const empty = $('#settings-explore-empty');
-    container.innerHTML = '';
+    container.replaceChildren();
     const followedSet = new Set(followed);
     const available = lists.filter(l => !followedSet.has(l.authorPeerId));
-    if (!available.length) { empty.style.display = ''; return; }
-    empty.style.display = 'none';
+    if (!available.length) { setVisible(empty, true); return; }
+    setVisible(empty, false);
     available.forEach(list => {
         const item = document.createElement('div');
         item.className = 'settings-list-item';
-        const nick = list.authorPeerId ? truncPeer(list.authorPeerId) : 'Unknown';
-        const count = list.blocked ? list.blocked.length : 0;
-        item.innerHTML = `<span class="settings-nick">${nick}</span><code>${count} blocked</code>`;
+        const nick = document.createElement('span');
+        nick.className = 'settings-nick';
+        nick.textContent = list.authorPeerId ? truncPeer(list.authorPeerId) : 'Unknown';
+        item.appendChild(nick);
+        const count = document.createElement('code');
+        const blockedCount = list.blocked ? list.blocked.length : 0;
+        count.textContent = blockedCount + ' ' + t('settings_blocked_count', 'blocked');
+        item.appendChild(count);
         const btn = document.createElement('button');
         btn.className = 'settings-follow-btn';
-        btn.textContent = 'Follow';
+        btn.textContent = t('settings_follow', 'Follow');
         btn.onclick = async () => {
             await importBlacklist(list.authorPeerId);
             await loadSettingsData();
@@ -130,24 +183,32 @@ function renderExplore(lists, followed) {
 async function renderChannels(myPeerId) {
     const container = $('#settings-channels-list');
     const empty = $('#settings-channels-empty');
-    container.innerHTML = '';
+    container.replaceChildren();
     const channels = await swarmListChannels();
-    if (!channels.length) { empty.style.display = ''; return; }
-    empty.style.display = 'none';
+    if (!channels.length) { setVisible(empty, true); return; }
+    setVisible(empty, false);
     channels.sort((a, b) => a.name.localeCompare(b.name));
     channels.forEach(ch => {
         const item = document.createElement('div');
         item.className = 'settings-list-item';
-        const lock = ch.passwordHash ? '🔒' : '🔓';
-        const creator = ch.creatorPeerId === myPeerId ? 'You' : truncPeer(ch.creatorPeerId);
-        item.innerHTML = `<span>${lock} <strong>${ch.name}</strong></span><code>${creator}</code>`;
+        const lockSpan = document.createElement('span');
+        lockSpan.textContent = (ch.passwordHash ? '🔒 ' : '🔓 ');
+        const nameStrong = document.createElement('strong');
+        nameStrong.textContent = ch.name;
+        lockSpan.appendChild(nameStrong);
+        item.appendChild(lockSpan);
+        const creatorCode = document.createElement('code');
+        const creator = ch.creatorPeerId === myPeerId ? t('settings_you', 'You') : truncPeer(ch.creatorPeerId);
+        creatorCode.textContent = creator;
+        item.appendChild(creatorCode);
         if (ch.creatorPeerId === myPeerId) {
             const btn = document.createElement('button');
             btn.className = 'settings-remove-btn';
             btn.textContent = '✕';
-            btn.title = 'Delete channel';
+            btn.title = t('settings_delete_channel', 'Delete channel');
             btn.onclick = async () => {
-                if (!confirm(`Delete channel "${ch.name}"?`)) return;
+                const msg = (t('settings_delete_channel_confirm', `Delete channel "${ch.name}"?`)).replace('{name}', ch.name);
+                if (!confirm(msg)) return;
                 await deleteChannel(ch.name);
                 await renderChannels(myPeerId);
             };
@@ -159,7 +220,7 @@ async function renderChannels(myPeerId) {
 
 function openSettings() {
     const o = overlay();
-    o.style.display = '';          // clear inline display:none so .open class can take effect
+    setVisible(o, true);
     o.classList.add('open');
     loadSettingsData();
 }
@@ -167,9 +228,9 @@ function openSettings() {
 function closeSettings() {
     const o = overlay();
     o.classList.remove('open');
-    o.style.display = 'none';      // re-hide with inline style
-    $('#settings-export-options').style.display = 'none';
-    $('#settings-import-options').style.display = 'none';
+    setVisible(o, false);
+    setVisible($('#settings-export-options'), false);
+    setVisible($('#settings-import-options'), false);
 }
 
 function switchTab(tabName) {
@@ -195,7 +256,7 @@ function initSettings() {
                 const { copyToClipboard } = await import('./native/tauri-bridge.js');
                 await copyToClipboard(peerId);
                 $('#settings-copy-peer-id').textContent = '✓';
-                setTimeout(() => { $('#settings-copy-peer-id').textContent = 'Copy'; }, 1500);
+                setTimeout(() => { $('#settings-copy-peer-id').textContent = t('settings_peer_id_copy', 'Copy'); }, 1500);
             } catch { /* fallback: nada */ }
         }
     });
@@ -206,19 +267,28 @@ function initSettings() {
         config.nickname = nick || null;
         await swarmSetConfig(config);
         $('#settings-save-nick').textContent = '✓';
-        setTimeout(() => { $('#settings-save-nick').textContent = 'Save'; }, 1500);
+        setTimeout(() => { $('#settings-save-nick').textContent = t('settings_nickname_save', 'Save'); }, 1500);
+    });
+
+    $('#settings-save-languages').addEventListener('click', async () => {
+        const langs = getDefaultLanguages();
+        const config = await swarmGetConfig();
+        config.defaultLanguages = langs;
+        await swarmSetConfig(config);
+        $('#settings-save-languages').textContent = '✓';
+        setTimeout(() => { $('#settings-save-languages').textContent = t('settings_nickname_save', 'Save'); }, 1500);
     });
 
     $('#settings-export-btn').addEventListener('click', () => {
         const opts = $('#settings-export-options');
-        opts.style.display = opts.style.display === 'none' ? '' : 'none';
-        $('#settings-import-options').style.display = 'none';
+        setVisible(opts, opts.hidden);
+        setVisible($('#settings-import-options'), false);
     });
 
     $('#settings-import-btn').addEventListener('click', () => {
         const opts = $('#settings-import-options');
-        opts.style.display = opts.style.display === 'none' ? '' : 'none';
-        $('#settings-export-options').style.display = 'none';
+        setVisible(opts, opts.hidden);
+        setVisible($('#settings-export-options'), false);
     });
 
     $('#settings-export-confirm').addEventListener('click', async () => {
@@ -232,8 +302,8 @@ function initSettings() {
         if (!path) return;
         const ok = await exportIdentity(path, password);
         if (ok) {
-            $('#settings-export-confirm').textContent = '✓ Saved';
-            setTimeout(() => { $('#settings-export-confirm').textContent = 'Save backup'; }, 2000);
+            $('#settings-export-confirm').textContent = `✓ ${t('settings_saved', 'Saved')}`;
+            setTimeout(() => { $('#settings-export-confirm').textContent = t('settings_export_save', 'Save backup'); }, 2000);
         }
     });
 
@@ -247,8 +317,8 @@ function initSettings() {
         const password = $('#settings-import-password').value || null;
         const ok = await importIdentity(path, password);
         if (ok) {
-            $('#settings-import-confirm').textContent = '✓ Restored';
-            setTimeout(() => { $('#settings-import-confirm').textContent = 'Restore backup'; }, 2000);
+            $('#settings-import-confirm').textContent = `✓ ${t('settings_restored', 'Restored')}`;
+            setTimeout(() => { $('#settings-import-confirm').textContent = t('settings_import_open', 'Restore backup'); }, 2000);
             await loadSettingsData();
         }
     });
@@ -284,17 +354,17 @@ function initSettings() {
             const status = await swarmStatus();
             await renderChannels(status.peerId || '');
         } else {
-            alert('Could not create channel. It may already exist.');
+            alert(t('settings_channel_create_error', 'Could not create channel. It may already exist.'));
         }
     });
 
     $('#settings-publish-blacklist').addEventListener('click', async () => {
         const ok = await publishBlacklist();
         if (ok) {
-            $('#settings-publish-blacklist').textContent = '✓ Published';
+            $('#settings-publish-blacklist').textContent = `✓ ${t('settings_published', 'Published')}`;
             setTimeout(() => {
                 const el = $('#settings-publish-blacklist');
-                if (el) el.textContent = 'Publish my blacklist';
+                if (el) el.textContent = t('settings_publish_blacklist', 'Publish my blacklist');
             }, 2000);
         }
     });
@@ -307,3 +377,8 @@ if (document.readyState === 'loading') {
 } else {
     initSettings();
 }
+
+// Escuchar cambios de idioma para mantener traducciones disponibles
+window.addEventListener('languageChanged', (e) => {
+    window.__convoyrunLangData = e.detail.translations;
+});

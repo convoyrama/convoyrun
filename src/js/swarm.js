@@ -4,9 +4,9 @@
 // los convoys de HOY y MAÑANA; se puede ampliar a todos los días. En modo demo
 // (sin backend iroh) sirve la caché local.
 import * as state from './core/state.js';
-import { showCopyMessage } from './core/utils.js';
+import { showCopyMessage, setVisible } from './core/utils.js';
 import {
-    isRetained, dayKeyUTC, computeScore, authorReputation, reputationBadge,
+    dayKeyUTC, computeScore, authorReputation, reputationBadge,
     validateConvoy, nowUnix,
 } from './core/convoy.js';
 import {
@@ -24,6 +24,7 @@ const FILTER_LABELS = {
     'filter-score':  { all: 'swarm_filter_all', positive: 'swarm_filter_positive' },
     'filter-order':  { time: 'swarm_filter_order_time', reputation: 'swarm_filter_order_rep' },
     'filter-channel': { all: 'swarm_channel_filter_all' },
+    'filter-language': { all: 'swarm_filter_all' },
 };
 
 let convoys = [];
@@ -36,8 +37,9 @@ let lang = 'en';
 let showAllDays = false;
 let selectedDayKey = null;
 let blockedAuthorsSet = new Set();
+let _autoRefreshInterval = null;
 
-let listEl, emptyEl, emptyFilteredEl, statusEl, dayBarEl;
+let listEl, emptyEl, emptyFilteredEl, statusEl, dayBarEl, loadingEl;
 
 function label(key, fallback) {
     return state.currentLangData[key] || fallback;
@@ -48,6 +50,29 @@ function el(tag, className, text) {
     if (className) node.className = className;
     if (text !== undefined) node.textContent = text;
     return node;
+}
+
+function showFlyerLightbox(src, alt) {
+    let overlay = document.getElementById('flyer-lightbox');
+    if (!overlay) {
+        overlay = el('div', 'flyer-lightbox-overlay');
+        overlay.id = 'flyer-lightbox';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:pointer;';
+        const img = el('img');
+        img.style.cssText = 'max-width:90vw;max-height:90vh;border-radius:8px;box-shadow:0 0 40px rgba(0,0,0,0.5);';
+        overlay.appendChild(img);
+        const closeBtn = el('button', '', '✕');
+        closeBtn.style.cssText = 'position:absolute;top:16px;right:24px;background:none;border:none;color:#fff;font-size:2rem;cursor:pointer;';
+        overlay.appendChild(closeBtn);
+        const close = () => { setVisible(overlay, false); };
+        overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target === closeBtn) close(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+        document.body.appendChild(overlay);
+    }
+    const img = overlay.querySelector('img');
+    img.src = src;
+    img.alt = alt;
+    setVisible(overlay, true, 'flex');
 }
 
 function modeLabel(mode) {
@@ -82,19 +107,28 @@ function readFilters() {
         score: val('filter-score'),
         order: val('filter-order'),
         channel: val('filter-channel'),
+        language: val('filter-language'),
     };
 }
 
 function applyFilters(list) {
     const f = readFilters();
-    let out = list.filter(c => isRetained(c));
+    let out = [...list];
     if (blockedAuthorsSet.size > 0) out = out.filter(c => !blockedAuthorsSet.has(c.peerId));
     if (f.game !== 'all') out = out.filter(c => c.event.game === f.game);
     if (f.mode !== 'all') out = out.filter(c => c.event.mode === f.mode);
     if (f.trust === 'trusted') out = out.filter(c => (config.trustedPeers || []).includes(c.peerId));
     if (f.score === 'positive') out = out.filter(c => computeScore(votes[c.id]) >= 0);
     if (f.channel !== 'all') out = out.filter(c => c.channel === f.channel);
+    if (f.language !== 'all') out = out.filter(c => (c.event.languages || []).includes(f.language));
+    out = out.filter(c => !isOffensive(c));
     return out;
+}
+
+const OFFENSIVE_PATTERNS = /\b(spam|scam|hack|cheat|free.?coins|click.?here|buy.?followers)\b/i;
+function isOffensive(c) {
+    const text = `${c.event.name || ''} ${c.event.description || ''}`;
+    return OFFENSIVE_PATTERNS.test(text);
 }
 
 function sortList(list) {
@@ -208,13 +242,20 @@ function buildEvent(c) {
     if (c.channel) {
         badges.appendChild(el('span', 'swarm-badge swarm-badge-channel', c.channel));
     }
+    if (c.event.languages && c.event.languages.length) {
+        const langText = c.event.languages.map(l => l.toUpperCase()).join(' ');
+        badges.appendChild(el('span', 'swarm-badge swarm-badge-lang', langText));
+    }
     row.appendChild(badges);
 
     row.appendChild(el('span', 'swarm-row-time', DateTime.fromSeconds(c.schedule.meetingTimestamp).toFormat('HH:mm')));
 
     row.appendChild(el('span', 'swarm-row-name', c.event.name));
 
-    row.appendChild(el('span', 'swarm-row-author', c.nickname || c.peerId || '?'));
+    const authorSpan = el('span', 'swarm-row-author clickable-author', c.nickname || c.peerId || '?');
+    authorSpan.dataset.peerId = c.peerId;
+    authorSpan.title = c.peerId;
+    row.appendChild(authorSpan);
 
     const votesBox = el('div', 'swarm-votes');
     votesBox.appendChild(buildVoteBtn(c, 1));
@@ -231,6 +272,12 @@ function buildEvent(c) {
         const img = el('img', 'swarm-flyer-thumb');
         img.src = c.flyer.thumb;
         img.alt = c.event.name;
+        img.style.cursor = 'pointer';
+        img.title = label('swarm_flyer_zoom', 'Click para ver en grande');
+        img.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showFlyerLightbox(c.flyer.originalUrl || c.flyer.thumb, c.event.name);
+        });
         details.appendChild(img);
     }
 
@@ -250,7 +297,10 @@ function buildEvent(c) {
     const dot = el('span', `rep-dot rep-${reputationBadge(rep)}`);
     dot.title = label('swarm_score_label', 'Puntaje');
     author.appendChild(dot);
-    author.appendChild(el('span', 'swarm-card-nick', c.nickname || c.peerId || '?'));
+    const nickSpan = el('span', 'swarm-card-nick clickable-author', c.nickname || c.peerId || '?');
+    nickSpan.dataset.peerId = c.peerId;
+    nickSpan.title = c.peerId;
+    author.appendChild(nickSpan);
     if ((config.trustedPeers || []).includes(c.peerId)) {
         author.appendChild(el('span', 'swarm-trusted-badge', label('swarm_author_trusted', 'confianza')));
     }
@@ -273,6 +323,23 @@ function buildEvent(c) {
             await renderAll();
         });
         author.appendChild(blockBtn);
+
+        const reportBtn = el('button', 'swarm-report-btn', '⚠️');
+        reportBtn.title = label('swarm_report', 'Reportar evento');
+        reportBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const reason = prompt(label('swarm_report_reason', 'Motivo del reporte:'));
+            if (!reason) return;
+            try {
+                const { swarmReport } = await import('./native/tauri-bridge.js');
+                await swarmReport(c.id, c.peerId, reason);
+                showCopyMessage(label('swarm_report_ok', 'Evento reportado. Gracias.'));
+            } catch (err) {
+                console.error('[SWARM-REPORT] Failed:', err);
+                showCopyMessage(label('swarm_report_fail', 'Error al reportar.'));
+            }
+        });
+        author.appendChild(reportBtn);
     }
 
     if (c.peerId && c.peerId === myPeerId) {
@@ -291,14 +358,26 @@ function buildEvent(c) {
 
     const line = [];
     if (c.event.server) line.push(c.event.server);
-    if (c.event.startPlace && c.event.destination) line.push(`${c.event.startPlace} → ${c.event.destination}`);
-    else if (c.event.startPlace) line.push(c.event.startPlace);
-    else if (c.event.destination) line.push(`→ ${c.event.destination}`);
+    const startCity = c.event.route?.startCity || c.event.startPlace || '';
+    const destCity = c.event.route?.destCity || c.event.destination || '';
+    if (startCity && destCity) line.push(`${startCity} → ${destCity}`);
+    else if (startCity) line.push(startCity);
+    else if (destCity) line.push(`→ ${destCity}`);
     if (line.length) {
         info.appendChild(el('div', 'swarm-detail-kicker', label('swarm_detail_route', 'Ruta')));
         info.appendChild(el('div', 'swarm-detail-line', line.join(' · ')));
     }
     if (c.event.description) info.appendChild(el('p', 'swarm-detail-desc', c.event.description));
+
+    if (c.event.languages && c.event.languages.length) {
+        const langLabel = el('div', 'swarm-detail-kicker', label('swarm_wizard_languages', 'Idiomas'));
+        info.appendChild(langLabel);
+        const langList = el('div', 'swarm-detail-languages');
+        for (const l of c.event.languages) {
+            langList.appendChild(el('span', 'swarm-badge swarm-badge-lang', label(LANG_LABELS[l] || '', l.toUpperCase())));
+        }
+        info.appendChild(langList);
+    }
 
     info.appendChild(el('div', 'swarm-detail-published',
         `${label('swarm_detail_published', 'Publicado')}: ${DateTime.fromSeconds(c.publishedAt).toLocaleString(DateTime.DATE_FULL, { locale: lang })}`));
@@ -313,9 +392,10 @@ function renderList() {
     const filtered = sortList(applyFilters(convoys));
     const showEmpty = convoys.length === 0;
     const showFiltered = !showEmpty && filtered.length === 0;
+    console.log('[SWARM] renderList:', { total: convoys.length, filtered: filtered.length, showEmpty, showFiltered, showAllDays });
 
-    emptyEl.style.display = showEmpty ? 'block' : 'none';
-    emptyFilteredEl.style.display = showFiltered ? 'block' : 'none';
+    setVisible(emptyEl, showEmpty, 'block');
+    setVisible(emptyFilteredEl, showFiltered, 'block');
 
     const groups = new Map();
     for (const c of filtered) {
@@ -326,7 +406,7 @@ function renderList() {
 
     const dayKeys = [...groups.keys()].sort();
     if (selectedDayKey && !dayKeys.includes(selectedDayKey)) selectedDayKey = null;
-    if (dayBarEl) dayBarEl.style.display = (showEmpty || showFiltered) ? 'none' : 'flex';
+    if (dayBarEl) setVisible(dayBarEl, !(showEmpty || showFiltered), 'flex');
     renderDayBar(dayKeys);
 
     const nowTs = nowUnix();
@@ -344,15 +424,15 @@ function renderList() {
     const toggleEl = document.getElementById('swarm-range-toggle');
     const hintEl = document.getElementById('swarm-range-hint');
     if (toggleEl) {
-        toggleEl.style.display = (showEmpty || showFiltered || selectedDayKey) ? 'none' : 'inline-block';
+        setVisible(toggleEl, !(showEmpty || showFiltered || selectedDayKey), 'inline-block');
         toggleEl.textContent = showAllDays
             ? label('swarm_range_fewer', 'Solo hoy y mañana')
             : label('swarm_range_more', 'Ver próximos días');
     }
     const noRangeContent = !showEmpty && !showFiltered && filtered.length > 0 && visibleDays.length === 0;
-    if (hintEl) hintEl.style.display = noRangeContent ? 'block' : 'none';
+    if (hintEl) setVisible(hintEl, noRangeContent, 'block');
 
-    listEl.style.display = (showEmpty || showFiltered || noRangeContent) ? 'none' : 'block';
+    setVisible(listEl, !(showEmpty || showFiltered || noRangeContent), 'block');
     listEl.innerHTML = '';
 
     for (const day of visibleDays) {
@@ -378,12 +458,45 @@ function updateChannelFilter() {
     sel.value = current || 'all';
 }
 
+const LANG_LABELS = {
+    es: 'swarm_lang_es', en: 'swarm_lang_en', pt: 'swarm_lang_pt',
+    fr: 'swarm_lang_fr', de: 'swarm_lang_de', it: 'swarm_lang_it', nl: 'swarm_lang_nl',
+};
+
+function updateLanguageFilter() {
+    const sel = document.getElementById('filter-language');
+    if (!sel) return;
+    const langs = [...new Set(convoys.flatMap(c => c.event.languages || []).filter(Boolean))].sort();
+    const current = sel.value;
+    sel.innerHTML = '';
+    const allOpt = el('option', 'swarm_filter_all', label('swarm_filter_all', 'Todos'));
+    allOpt.value = 'all';
+    sel.appendChild(allOpt);
+    for (const l of langs) {
+        const opt = el('option', '', label(LANG_LABELS[l] || '', l.toUpperCase()));
+        opt.value = l;
+        sel.appendChild(opt);
+    }
+    sel.value = current || 'all';
+}
+
 async function renderAll() {
+    console.log('[SWARM] renderAll called');
+    if (loadingEl) setVisible(loadingEl, true, 'flex');
+    if (listEl) setVisible(listEl, false);
     const [c, v, my, cfg, blacklists] = await Promise.all([
         swarmList(), swarmGetVotes(), swarmGetMyVotes(), swarmGetConfig(),
         getPublicBlacklists(),
     ]);
+    console.log('[SWARM] renderAll raw data:', {
+        listCount: Array.isArray(c) ? c.length : 'not-array',
+        votesCount: v ? Object.keys(v).length : 0,
+    });
     convoys = (Array.isArray(c) ? c : []).filter(validateConvoy);
+    console.log('[SWARM] After validateConvoy filter:', convoys.length, 'convoys remain');
+    if (convoys.length === 0 && Array.isArray(c) && c.length > 0) {
+        console.warn('[SWARM] All convoys rejected by validateConvoy! First convoy:', JSON.stringify(c[0]).slice(0, 500));
+    }
     votes = v || {};
     myVotes = my || {};
     config = cfg || {};
@@ -399,15 +512,21 @@ async function renderAll() {
     }
 
     updateChannelFilter();
+    updateLanguageFilter();
+    if (loadingEl) setVisible(loadingEl, false);
     renderList();
 }
 
+let _swarmInitialized = false;
 export function initSwarm() {
+    if (_swarmInitialized) return;
+    _swarmInitialized = true;
     listEl = document.getElementById('swarm-list');
     emptyEl = document.getElementById('swarm-empty');
     emptyFilteredEl = document.getElementById('swarm-empty-filtered');
     statusEl = document.getElementById('swarm-node-status');
     dayBarEl = document.getElementById('swarm-daybar');
+    loadingEl = document.getElementById('swarm-loading');
     if (!listEl || !emptyEl) return () => {};
 
     populateFilterLabels();
@@ -425,12 +544,22 @@ export function initSwarm() {
     });
 
     (async () => {
+        console.log('[SWARM] Initializing P2P...');
         const s = await swarmInit();
+        console.log('[SWARM] P2P init result:', s);
         nodeMode = s.mode;
         myPeerId = s.peerId || '';
         setStatusLabel();
         await renderAll();
     })();
+
+    // Auto-refresh cada 60 segundos cuando el nodo está online
+    if (_autoRefreshInterval) clearInterval(_autoRefreshInterval);
+    _autoRefreshInterval = setInterval(async () => {
+        if (nodeMode === 'online') {
+            await renderAll();
+        }
+    }, 60000);
 
     return renderAll;
 }

@@ -2,7 +2,7 @@ import { dom } from './dom.js';
 import * as state from './core/state.js';
 import { updateLiveClocks, getGameTime, getDetailedDayNightIcon, formatDateForDisplay, resolveMeetingDateTime } from './core/time.js';
 import { initI18n } from './i18n.js';
-import { drawCanvas, initCanvasEventListeners } from './canvas.js';
+import { drawCanvas, initCanvasEventListeners, revokeAllObjectUrls } from './canvas.js';
 import { showCopyMessage, getZoneLabel } from './core/utils.js';
 import { injectMetadataIntoPNG, readMetadataFromPNG } from './core/png-metadata.js';
 import { saveFile, copyToClipboard, optimizePng } from './native/tauri-bridge.js';
@@ -13,8 +13,12 @@ import { initStylePicker } from './style-picker.js';
 import { initSwarm } from './swarm.js';
 import { initSwarmPublish } from './swarm-publish.js';
 import { initSlots, recalcTimeline } from './slots.js';
+import { initAuthorProfile } from './author-profile.js';
 
 const { DateTime } = luxon;
+
+let _footerInterval = null;
+let _clockInterval = null;
 
 function updateInGameTimeEmojis() {
     if (!dom.ingameEmojiDisplay) return;
@@ -73,26 +77,39 @@ async function performDownload() {
             const arrivalGameTime = getGameTime(arrivalDateTime.toUTC());
 
             const metadata = {
-                eventName: dom.customEventName.value || state.currentLangData.canvas_default_event_name || "Evento Personalizado",
-                eventLink: dom.customEventLink.value || "https://convoyrama.github.io/event.html",
-                startPlace: dom.customStartPlace.value || "Sin especificar",
-                destination: dom.customDestination.value || "Sin especificar",
-                server: dom.customServer.value || "Sin especificar",
-                description: dom.customEventDescription.value || "Sin descripción",
-                meetingTimestamp: meetingDateTime.toUnixInteger(),
-                departureTimestamp: departureDateTime.toUnixInteger(),
-                arrivalTimestamp: arrivalDateTime.toUnixInteger(),
-                meetingGameTime: { hours: meetingGameTime.hours, minutes: meetingGameTime.minutes },
-                arrivalGameTime: { hours: arrivalGameTime.hours, minutes: arrivalGameTime.minutes },
-                ianaTimeZone: zone,
-                utcOffsetMinutes: meetingDateTime.offset,
+                schema: 'convoyrun-event-v1',
+                name: dom.customEventName.value || state.currentLangData.canvas_default_event_name || "Evento Personalizado",
+                type: 'convoy',
+                game: 'ATS',
+                mode: 'simulation',
+                link: dom.customEventLink.value || "",
+                server: dom.customServer.value || "",
+                route: {
+                    startCity: dom.customStartCity?.value || dom.customStartPlace?.value || "",
+                    startLocation: dom.customStartLocation?.value || "",
+                    destCity: dom.customDestCity?.value || dom.customDestination?.value || "",
+                    destLocation: dom.customDestLocation?.value || "",
+                },
+                description: dom.customEventDescription.value || "",
+                languages: [],
+                schedule: {
+                    meetingTimestamp: meetingDateTime.toUnixInteger(),
+                    departureTimestamp: departureDateTime.toUnixInteger(),
+                    arrivalTimestamp: arrivalDateTime.toUnixInteger(),
+                    ianaTimeZone: zone,
+                },
+                gameTime: {
+                    meeting: { hours: meetingGameTime.hours, minutes: meetingGameTime.minutes },
+                    arrival: { hours: arrivalGameTime.hours, minutes: arrivalGameTime.minutes },
+                },
                 generatedAt: DateTime.local().toISO(),
+                generator: 'ConvoyRun',
             };
 
             const optimizedBuffer = await optimizePng(arrayBuffer);
 
             const jsonMetadata = JSON.stringify(metadata);
-            const newPngBuffer = injectMetadataIntoPNG(optimizedBuffer, "convoyrama-event-data", jsonMetadata);
+            const newPngBuffer = injectMetadataIntoPNG(optimizedBuffer, "convoyrun-event-v1", jsonMetadata);
 
             const dateString = dom.customDate.value || DateTime.local().toISODate();
             await saveFile(new Uint8Array(newPngBuffer), `convoy-map-${dateString}.png`);
@@ -156,6 +173,7 @@ function initTabs() {
 }
 
 async function init() {
+    console.log('[MAIN] init() called');
     initI18n();
 
     initTabs();
@@ -164,8 +182,12 @@ async function init() {
     dom.customTime = document.getElementById("custom-time");
     dom.customEventName = document.getElementById("custom-event-name");
     dom.customEventLink = document.getElementById("custom-event-link");
-    dom.customStartPlace = document.getElementById("custom-start-place");
-    dom.customDestination = document.getElementById("custom-destination");
+    dom.customStartCity = document.getElementById("custom-start-city");
+    dom.customStartLocation = document.getElementById("custom-start-location");
+    dom.customDestCity = document.getElementById("custom-dest-city");
+    dom.customDestLocation = document.getElementById("custom-dest-location");
+    dom.customStartPlace = dom.customStartCity;
+    dom.customDestination = dom.customDestCity;
     dom.customServer = document.getElementById("custom-server");
     dom.customEventDescription = document.getElementById("custom-event-description");
     dom.loadFlyerInput = document.getElementById("load-flyer-input");
@@ -222,43 +244,107 @@ async function init() {
 
     dom.manualOffsetSelect.addEventListener('change', () => { drawCanvas(); updateInGameTimeEmojis(); });
 
-    initTimezoneSettings(() => { drawCanvas(); updateInGameTimeEmojis(); });
-    initTimeSync();
-    initAbout();
-    initStylePicker();
+    try { initTimezoneSettings(() => { drawCanvas(); updateInGameTimeEmojis(); }); } catch (e) { console.error('[INIT] timezoneSettings failed:', e); }
+    try { initTimeSync(); } catch (e) { console.error('[INIT] timeSync failed:', e); }
+    try { initAbout(); } catch (e) { console.error('[INIT] about failed:', e); }
+    try { initStylePicker(); } catch (e) { console.error('[INIT] stylePicker failed:', e); }
 
-    const swarmRefresh = initSwarm();
-    initSwarmPublish(swarmRefresh);
-    initSlots();
+    let swarmRefresh;
+    try { swarmRefresh = initSwarm(); } catch (e) { console.error('[INIT] swarm failed:', e); }
+    try { initSwarmPublish(swarmRefresh); } catch (e) { console.error('[INIT] swarmPublish failed:', e); }
+    try { initSlots(); } catch (e) { console.error('[INIT] slots failed:', e); }
+    try { initAuthorProfile(); } catch (e) { console.error('[INIT] authorProfile failed:', e); }
+
+    // Footer status refresh + header P2P indicator
+    async function refreshFooter() {
+        const statusEl = document.getElementById('footer-status');
+        const peersEl = document.getElementById('footer-peers');
+        const p2pDot = document.querySelector('#p2p-indicator .p2p-dot');
+        const p2pCount = document.getElementById('p2p-count');
+        if (!statusEl) return;
+        try {
+            const { swarmStatus, getDiscoveryState } = await import('./native/tauri-bridge.js');
+            const [status, discovery] = await Promise.all([swarmStatus(), getDiscoveryState()]);
+            const mode = status.mode || 'local';
+            const nc = discovery.neighborCount || 0;
+            statusEl.dataset.mode = mode;
+            if (mode === 'online') {
+                statusEl.textContent = state.currentLangData.discovery_connected?.replace('{count}', nc) || `${nc} peers`;
+                peersEl.textContent = '';
+            } else if (mode === 'searching') {
+                statusEl.textContent = state.currentLangData.discovery_searching || 'P2P active — searching for peers...';
+                peersEl.textContent = '';
+            } else {
+                statusEl.textContent = state.currentLangData.discovery_offline || 'P2P offline';
+                peersEl.textContent = '';
+            }
+            if (p2pDot) p2pDot.dataset.status = mode === 'online' ? 'online' : (mode === 'searching' ? 'searching' : 'offline');
+            if (p2pCount) p2pCount.textContent = nc;
+        } catch {
+            statusEl.textContent = 'Offline';
+            peersEl.textContent = '';
+            if (p2pDot) p2pDot.dataset.status = 'offline';
+            if (p2pCount) p2pCount.textContent = '0';
+        }
+    }
+    refreshFooter();
+    if (_footerInterval) clearInterval(_footerInterval);
+    _footerInterval = setInterval(refreshFooter, 30000);
+
+    function setFooterAction(text) {
+        const el = document.getElementById('footer-action');
+        if (el) el.textContent = text || '';
+    }
 
     dom.loadFlyerInput.addEventListener("change", async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         try {
             const buffer = await file.arrayBuffer();
-            const raw = readMetadataFromPNG(buffer, "convoyrama-event-data");
+            // Intentar leer con el nuevo schema primero, luego el viejo para compatibilidad
+            let raw = readMetadataFromPNG(buffer, "convoyrun-event-v1");
+            if (!raw) raw = readMetadataFromPNG(buffer, "convoyrama-event-data");
             if (!raw) {
                 showCopyMessage(state.currentLangData.load_flyer_not_found || "Esta imagen no tiene datos de ConvoyRun.");
                 return;
             }
             const metadata = JSON.parse(raw);
 
-            dom.customEventName.value = metadata.eventName || "";
-            dom.customEventLink.value = metadata.eventLink || "";
-            dom.customStartPlace.value = metadata.startPlace || "";
-            dom.customDestination.value = metadata.destination || "";
+            dom.customEventName.value = metadata.name || metadata.eventName || "";
+            dom.customEventLink.value = metadata.link || metadata.eventLink || "";
             dom.customServer.value = metadata.server || "";
+
+            // Soporte para schema viejo (startPlace/destination) y nuevo (route)
+            const route = metadata.route || {};
+            const startCity = route.startCity || metadata.startPlace || "";
+            const startLocation = route.startLocation || "";
+            const destCity = route.destCity || metadata.destination || "";
+            const destLocation = route.destLocation || "";
+
+            if (dom.customStartCity) dom.customStartCity.value = startCity;
+            else if (dom.customStartPlace) dom.customStartPlace.value = startCity;
+            if (dom.customStartLocation) dom.customStartLocation.value = startLocation;
+            if (dom.customDestCity) dom.customDestCity.value = destCity;
+            else if (dom.customDestination) dom.customDestination.value = destCity;
+            if (dom.customDestLocation) dom.customDestLocation.value = destLocation;
+
             dom.customEventDescription.value = metadata.description || "";
 
-            if (metadata.meetingTimestamp && metadata.ianaTimeZone) {
-                const meeting = DateTime.fromSeconds(metadata.meetingTimestamp, { zone: metadata.ianaTimeZone });
+            // Soporte para schema viejo (campos sueltos) y nuevo (schedule anidado)
+            const schedule = metadata.schedule || {};
+            const meetingTs = schedule.meetingTimestamp || metadata.meetingTimestamp;
+            const ianaTz = schedule.ianaTimeZone || metadata.ianaTimeZone;
+            const departureTs = schedule.departureTimestamp || metadata.departureTimestamp;
+
+            if (meetingTs && ianaTz) {
+                const meeting = DateTime.fromSeconds(meetingTs, { zone: ianaTz });
                 if (meeting.isValid) {
                     dom.customDate.value = meeting.toISODate();
                     dom.customTime.value = meeting.toFormat('HH:mm');
                 }
             }
-            if (metadata.meetingTimestamp && metadata.departureTimestamp) {
-                const diffMinutes = Math.round((metadata.departureTimestamp - metadata.meetingTimestamp) / 60);
+            if (meetingTs && departureTs) {
+                const diffMinutes = Math.round((departureTs - meetingTs) / 60);
                 if ([10, 15, 30, 45].includes(diffMinutes)) dom.departureTimeOffset.value = String(diffMinutes);
             }
 
@@ -278,14 +364,22 @@ async function init() {
     dom.customTime.value = userNow.toFormat('HH:mm');
 
     updateLiveClocks();
-    setInterval(updateLiveClocks, 1000);
+    if (_clockInterval) clearInterval(_clockInterval);
+    _clockInterval = setInterval(updateLiveClocks, 1000);
 
     dom.copyCustomInfo.onclick = () => {
         const customDateValue = dom.customDate.value, customTimeValue = dom.customTime.value;
         const nameKey = state.currentLangData.canvas_default_event_name || "Evento Personalizado";
         const customEventNameValue = dom.customEventName.value || nameKey;
-        const customEventLinkValue = dom.customEventLink.value || "https://convoyrama.github.io/event.html", customEventDescriptionValue = dom.customEventDescription.value || "Sin descripción";
-        const customStartPlaceValue = dom.customStartPlace.value || "Sin especificar", customDestinationValue = dom.customDestination.value || "Sin especificar", customServerValue = dom.customServer.value || "Sin especificar";
+        const customEventLinkValue = dom.customEventLink.value || "https://convoyrama.github.io";
+        const customEventDescriptionValue = dom.customEventDescription.value || "Sin descripción";
+        const customStartCityValue = dom.customStartCity?.value || dom.customStartPlace?.value || "";
+        const customStartLocationValue = dom.customStartLocation?.value || "";
+        const customDestCityValue = dom.customDestCity?.value || dom.customDestination?.value || "";
+        const customDestLocationValue = dom.customDestLocation?.value || "";
+        const customStartPlaceValue = customStartCityValue ? (customStartLocationValue ? `${customStartCityValue} — ${customStartLocationValue}` : customStartCityValue) : "Sin especificar";
+        const customDestinationValue = customDestCityValue ? (customDestLocationValue ? `${customDestCityValue} — ${customDestLocationValue}` : customDestCityValue) : "Sin especificar";
+        const customServerValue = dom.customServer.value || "Sin especificar";
 
         const errorKey = state.currentLangData.error_no_date || "Por favor, selecciona una fecha y hora.";
         if (!customDateValue || !customTimeValue) { showCopyMessage(errorKey); return; }
@@ -330,8 +424,12 @@ async function init() {
         const nameKey = state.currentLangData.canvas_default_event_name || "Evento Personalizado";
         const customEventNameValue = dom.customEventName.value || nameKey;
         const customEventDescriptionValue = dom.customEventDescription.value || "Sin descripción";
-        const customStartPlaceValue = dom.customStartPlace.value || "Sin especificar";
-        const customDestinationValue = dom.customDestination.value || "Sin especificar";
+        const customStartCityValue = dom.customStartCity?.value || dom.customStartPlace?.value || "";
+        const customStartLocationValue = dom.customStartLocation?.value || "";
+        const customDestCityValue = dom.customDestCity?.value || dom.customDestination?.value || "";
+        const customDestLocationValue = dom.customDestLocation?.value || "";
+        const customStartPlaceValue = customStartCityValue ? (customStartLocationValue ? `${customStartCityValue} — ${customStartLocationValue}` : customStartCityValue) : "Sin especificar";
+        const customDestinationValue = customDestCityValue ? (customDestLocationValue ? `${customDestCityValue} — ${customDestLocationValue}` : customDestCityValue) : "Sin especificar";
         const customServerValue = dom.customServer.value || "Sin especificar";
 
         const errorKey = state.currentLangData.error_no_date || "Por favor, selecciona una fecha y hora.";
@@ -422,11 +520,17 @@ async function init() {
     dom.textSize.addEventListener("change", () => drawCanvas());
     dom.textStyle.addEventListener("change", () => drawCanvas());
     dom.textFont.addEventListener("change", () => drawCanvas());
-    dom.textBackgroundOpacity.addEventListener("change", () => drawCanvas());
+    dom.textBackgroundOpacity.addEventListener("input", () => {
+        const opacityLabel = document.getElementById("opacity-value");
+        if (opacityLabel) opacityLabel.textContent = dom.textBackgroundOpacity.value + "%";
+        drawCanvas();
+    });
     dom.downloadCanvas.addEventListener("click", performDownload);
     dom.customEventName.addEventListener("input", () => drawCanvas());
-    dom.customStartPlace.addEventListener("input", () => drawCanvas());
-    dom.customDestination.addEventListener("input", () => drawCanvas());
+    dom.customStartCity.addEventListener("input", () => drawCanvas());
+    dom.customStartLocation.addEventListener("input", () => drawCanvas());
+    dom.customDestCity.addEventListener("input", () => drawCanvas());
+    dom.customDestLocation.addEventListener("input", () => drawCanvas());
     dom.customDate.addEventListener("change", (e) => {
         const d = DateTime.fromISO(e.target.value);
         if (d.isValid && state.currentLangData) {
@@ -444,6 +548,7 @@ async function init() {
     dom.departureTimeOffset.addEventListener("change", () => { drawCanvas(); updateInGameTimeEmojis(); });
 
     dom.resetCanvas.addEventListener("click", () => {
+        revokeAllObjectUrls();
         state.setMapImage(null); state.setCircleImageTop(null); state.setCircleImageBottom(null);
         state.setLogoImage(null); state.setBackgroundImage(null); state.setDetailImage(null); state.setCircleImageWaypoint(null);
         dom.mapUpload.value = ""; dom.circleUploadTop.value = ""; dom.circleUploadBottom.value = "";
@@ -451,15 +556,22 @@ async function init() {
         drawCanvas();
     });
 
-    dom.speedToggles.forEach((toggle, index) => toggle.addEventListener('change', (e) => { state.speedIndicators[index].visible = e.target.checked; drawCanvas(); }));
-    dom.speedValues.forEach((input, index) => input.addEventListener('input', (e) => { state.speedIndicators[index].value = e.target.value; drawCanvas(); }));
-    dom.speedUnits.forEach((select, index) => select.addEventListener('change', (e) => { state.speedIndicators[index].unit = e.target.value; drawCanvas(); }));
+    dom.speedToggles.forEach((toggle) => toggle.addEventListener('change', (e) => { const idx = parseInt(e.target.dataset.speedIndex, 10); if (!isNaN(idx)) { state.speedIndicators[idx].visible = e.target.checked; drawCanvas(); } }));
+    dom.speedValues.forEach((input) => input.addEventListener('input', (e) => { const idx = parseInt(e.target.dataset.speedIndex, 10); if (!isNaN(idx)) { state.speedIndicators[idx].value = e.target.value; drawCanvas(); } }));
+    dom.speedUnits.forEach((select) => select.addEventListener('change', (e) => { const idx = parseInt(e.target.dataset.speedIndex, 10); if (!isNaN(idx)) { state.speedIndicators[idx].unit = e.target.value; drawCanvas(); } }));
 
     drawCanvas();
     updateInGameTimeEmojis();
 
     // Canvas 2D no re-dibuja solo cuando carga un @font-face.
     document.fonts.ready.then(() => drawCanvas());
+
+    // Redraw cuando el watermark termina de cargar (si tardó en cargar)
+    state.watermarkImage.onload = () => drawCanvas();
 }
 
-document.addEventListener('DOMContentLoaded', init);
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}

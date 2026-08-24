@@ -7,6 +7,7 @@ const SWARM_CACHE_KEY = 'convoyrun-swarm-cache';
 const SWARM_VOTES_KEY = 'convoyrun-swarm-votes';
 const SWARM_MY_VOTES_KEY = 'convoyrun-swarm-my-votes';
 const SWARM_CONFIG_KEY = 'convoyrun-swarm-config';
+const SWARM_DELETED_KEY = 'convoyrun-swarm-deleted';
 
 function localRead(key, fallback) {
     try {
@@ -20,15 +21,15 @@ function localRead(key, fallback) {
 function localWrite(key, value) {
     try {
         localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-        // cuota llena o localStorage no disponible: el demo pierde la persistencia
+    } catch (e) {
+        console.warn('[BRIDGE] localStorage write failed (quota?):', e.message);
     }
 }
 
 export async function saveFile(bytes, suggestedName, filters = [{ name: 'PNG Image', extensions: ['png'] }]) {
     const path = await tauri().dialog.save({ defaultPath: suggestedName, filters });
     if (!path) return null; // canceló el diálogo
-    await tauri().core.invoke('save_file', { path, contents: Array.from(bytes) });
+    await tauri().core.invoke('save_file', { path, contents: bytes });
     return path;
 }
 
@@ -38,17 +39,34 @@ export async function copyToClipboard(text) {
 
 // Reencodea el PNG (máxima compresión, sin pérdida) del lado de Rust.
 export async function optimizePng(arrayBuffer) {
-    const optimized = await tauri().core.invoke('optimize_png', { bytes: Array.from(new Uint8Array(arrayBuffer)) });
+    const optimized = await tauri().core.invoke('optimize_png', { bytes: new Uint8Array(arrayBuffer) });
     return new Uint8Array(optimized).buffer;
+}
+
+export async function uploadToCatbox(arrayBuffer) {
+    const blob = new Blob([arrayBuffer], { type: 'image/png' });
+    const formData = new FormData();
+    formData.append('reqtype', 'fileupload');
+    formData.append('fileToUpload', blob, 'flyer.png');
+    const resp = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: formData });
+    if (!resp.ok) throw new Error(`Catbox upload failed: ${resp.status}`);
+    const url = (await resp.text()).trim();
+    if (!url.startsWith('https://')) throw new Error(`Catbox returned invalid URL: ${url}`);
+    return url;
 }
 
 // ---- Swarm: comandos con fallback local (modo demo) ---------------------------
 
 export async function swarmInit() {
     try {
+        console.log('[BRIDGE] Calling p2p_init...');
         const s = await tauri().core.invoke('p2p_init');
+        console.log('[BRIDGE] p2p_init result:', s);
         if (s && s.mode) return s;
-    } catch { /* sin backend */ }
+    } catch (err) {
+        console.warn('[BRIDGE] p2p_init failed:', err);
+    }
+    console.log('[BRIDGE] Falling back to local mode');
     return { mode: 'local', online: false, peerId: '' };
 }
 
@@ -61,7 +79,15 @@ export async function swarmStatus() {
 }
 
 export async function swarmPublish(convoy, channel, channelPassword) {
+    console.log('[BRIDGE] swarmPublish called', { id: convoy.id, peerId: convoy.peerId });
+    const local = { ...convoy, peerId: convoy.peerId || 'local-user' };
+    const cache = localRead(SWARM_CACHE_KEY, []);
+    cache.push(local);
+    localWrite(SWARM_CACHE_KEY, cache);
+    console.log('[BRIDGE] Saved to localStorage, cache size:', cache.length);
+
     try {
+        console.log('[BRIDGE] Calling backend publish_convoy...');
         await tauri().core.invoke('publish_convoy', {
             event: convoy.event,
             schedule: convoy.schedule,
@@ -69,21 +95,36 @@ export async function swarmPublish(convoy, channel, channelPassword) {
             channel: channel || null,
             channelPassword: channelPassword || null,
         });
+        console.log('[BRIDGE] Backend publish_convoy succeeded');
         return { backend: true };
-    } catch {
-        const cache = localRead(SWARM_CACHE_KEY, []);
-        cache.push({ ...convoy, peerId: convoy.peerId || 'local-user' });
-        localWrite(SWARM_CACHE_KEY, cache);
+    } catch (err) {
+        console.warn('[BRIDGE] Backend publish_convoy failed:', err);
         return { backend: false };
     }
 }
 
 export async function swarmList() {
+    const local = localRead(SWARM_CACHE_KEY, []);
+    const deleted = localRead(SWARM_DELETED_KEY, []);
+    const deletedSet = new Set(deleted);
+    const localFiltered = local.filter(c => !deletedSet.has(c.id));
+    console.log('[BRIDGE] swarmList: localStorage has', local.length, 'convoys,', localFiltered.length, 'after delete filter');
     try {
         const rows = await tauri().core.invoke('list_convoys');
-        if (Array.isArray(rows)) return rows;
-    } catch { /* sin backend */ }
-    return localRead(SWARM_CACHE_KEY, []);
+        console.log('[BRIDGE] Backend list_convoys returned', Array.isArray(rows) ? rows.length : 'non-array', 'rows');
+        if (Array.isArray(rows)) {
+            const byId = new Map();
+            rows.filter(c => !deletedSet.has(c.id)).forEach(c => byId.set(c.id, c));
+            localFiltered.forEach(c => { if (!byId.has(c.id)) byId.set(c.id, c); });
+            const merged = Array.from(byId.values());
+            console.log('[BRIDGE] Merged result:', merged.length, 'convoys');
+            return merged;
+        }
+    } catch (err) {
+        console.warn('[BRIDGE] Backend list_convoys failed:', err);
+    }
+    console.log('[BRIDGE] Returning localStorage only:', localFiltered.length, 'convoys');
+    return localFiltered;
 }
 
 export async function swarmGetVotes() {
@@ -91,7 +132,7 @@ export async function swarmGetVotes() {
         const v = await tauri().core.invoke('get_all_votes');
         if (v) return v;
     } catch { /* sin backend */ }
-    return localRead(SWARM_VOTES_KEY, {});
+    return {};
 }
 
 export async function swarmGetMyVotes() {
@@ -99,28 +140,18 @@ export async function swarmGetMyVotes() {
         const v = await tauri().core.invoke('get_my_votes');
         if (v) return v;
     } catch { /* sin backend */ }
-    return localRead(SWARM_MY_VOTES_KEY, {});
+    return {};
 }
 
 // vote: 1 (a favor) o -1 (en contra). Reemplaza el voto anterior del autor.
+// Los votos siempre van a la red P2P, no se almacenan localmente.
 export async function swarmVote(convoyId, vote) {
     try {
         await tauri().core.invoke('vote_convoy', { convoyId, vote });
         return vote;
-    } catch {
-        const votes = localRead(SWARM_VOTES_KEY, {});
-        const my = localRead(SWARM_MY_VOTES_KEY, {});
-        const prev = my[convoyId] || 0;
-        const v = votes[convoyId] || { up: 0, down: 0 };
-        if (prev === 1) v.up = Math.max(0, v.up - 1);
-        if (prev === -1) v.down = Math.max(0, v.down - 1);
-        my[convoyId] = vote;
-        if (vote === 1) v.up += 1;
-        if (vote === -1) v.down += 1;
-        votes[convoyId] = v;
-        localWrite(SWARM_VOTES_KEY, votes);
-        localWrite(SWARM_MY_VOTES_KEY, my);
-        return vote;
+    } catch (err) {
+        console.warn('[BRIDGE] vote_convoy failed:', err);
+        throw err;
     }
 }
 
@@ -143,12 +174,15 @@ export async function swarmSetConfig(config) {
 }
 
 export async function swarmDelete(convoyId) {
+    const cache = localRead(SWARM_CACHE_KEY, []);
+    localWrite(SWARM_CACHE_KEY, cache.filter(c => c.id !== convoyId));
+    const deleted = localRead(SWARM_DELETED_KEY, []);
+    if (!deleted.includes(convoyId)) { deleted.push(convoyId); localWrite(SWARM_DELETED_KEY, deleted); }
+
     try {
         await tauri().core.invoke('delete_convoy', { convoyId });
         return { backend: true };
     } catch {
-        const cache = localRead(SWARM_CACHE_KEY, []);
-        localWrite(SWARM_CACHE_KEY, cache.filter(c => c.id !== convoyId));
         return { backend: false };
     }
 }
@@ -306,4 +340,10 @@ export async function getDiscoveryState() {
         if (state) return state;
     } catch { /* sin backend */ }
     return { online: false, neighborCount: 0, dhtStatus: 'inactive' };
+}
+
+// ---- Report ----------------------------------------------------------------
+
+export async function swarmReport(convoyId, authorPeerId, reason) {
+    return tauri().core.invoke('report_event', { convoyId, authorPeerId, reason });
 }

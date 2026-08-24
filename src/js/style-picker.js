@@ -26,6 +26,7 @@ function renderPanel() {
 export function initStylePicker() {
     dom.stylePickerToggle = document.getElementById('style-picker-toggle');
     dom.stylePickerPanel = document.getElementById('style-picker-panel');
+    if (!dom.stylePickerToggle || !dom.stylePickerPanel) return;
 
     dom.stylePickerToggle.addEventListener('click', () => {
         const willOpen = !dom.stylePickerPanel.classList.contains('open');

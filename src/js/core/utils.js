@@ -1,10 +1,21 @@
 import { dom } from '../dom.js';
 import { timezoneCountryCodes } from './config.js';
 
+/** Show/hide element using the `hidden` attribute + explicit display for shown state. */
+export function setVisible(el, show, display) {
+    if (!el) return;
+    el.hidden = !show;
+    if (show && display) el.style.display = display;
+}
+
+let _copyMessageTimeout = null;
+
 export function showCopyMessage(message = "¡Información copiada al portapapeles!") {
+    if (!dom.copyMessage) { console.warn('[UTILS] copyMessage element not found'); return; }
+    if (_copyMessageTimeout) { clearTimeout(_copyMessageTimeout); }
     dom.copyMessage.textContent = message;
-    dom.copyMessage.style.display = "block";
-    setTimeout(() => { dom.copyMessage.style.display = "none"; }, 2000);
+    setVisible(dom.copyMessage, true, 'block');
+    _copyMessageTimeout = setTimeout(() => { setVisible(dom.copyMessage, false); _copyMessageTimeout = null; }, 2000);
 }
 
 export function wrapText(ctx, text, maxWidth) {

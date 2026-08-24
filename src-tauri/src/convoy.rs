@@ -1,4 +1,4 @@
-//! Módulo de datos de convoys — schema, validación, firma, almacenamiento local
+//! Módulo de datos de eventos — schema, validación, firma, almacenamiento local
 
 use anyhow::{Context, Result};
 use iroh::SecretKey;
@@ -7,8 +7,24 @@ use std::collections::HashMap;
 use std::path::Path;
 
 /// Schema version
-pub const SCHEMA_CONVOY: &str = "convoyrun/convoy/v1";
+pub const SCHEMA_EVENT: &str = "convoyrun/event/v1";
 pub const SCHEMA_VOTE: &str = "convoyrun/vote/v1";
+
+/// Tipos de evento
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum EventType {
+    Convoy,
+    TruckShow,
+    Exploration,
+    Competition,
+    Cruise,
+    Other,
+}
+
+impl Default for EventType {
+    fn default() -> Self { Self::Convoy }
+}
 
 /// Juegos soportados
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -31,11 +47,27 @@ pub enum Mode {
     Other,
 }
 
+/// Ruta del evento (ciudades y ubicaciones específicas)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Route {
+    #[serde(default)]
+    pub start_city: String,
+    #[serde(default)]
+    pub start_location: String,
+    #[serde(default)]
+    pub dest_city: String,
+    #[serde(default)]
+    pub dest_location: String,
+}
+
 /// Datos del evento
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EventData {
     pub name: String,
+    #[serde(default)]
+    pub event_type: EventType,
     pub game: Game,
     pub mode: Mode,
     #[serde(default)]
@@ -43,11 +75,11 @@ pub struct EventData {
     #[serde(default)]
     pub server: String,
     #[serde(default)]
-    pub start_place: String,
-    #[serde(default)]
-    pub destination: String,
+    pub route: Route,
     #[serde(default)]
     pub description: String,
+    #[serde(default)]
+    pub languages: Vec<String>,
 }
 
 /// Horarios del evento
@@ -64,12 +96,19 @@ pub struct Schedule {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FlyerData {
-    /// Hash blake3 del PNG completo (en blobs)
-    pub blob_hash: String,
-    /// Tamaño en bytes
-    pub size: u64,
     /// Thumbnail base64 (256px)
     pub thumb: String,
+    /// URL de la imagen original subida a catbox.moe
+    #[serde(default)]
+    pub original_url: Option<String>,
+    /// Tamaño en bytes
+    pub size: u64,
+    /// Hash blake3 del PNG completo (optionnel, pour usage futur blob)
+    #[serde(default)]
+    pub blob_hash: Option<String>,
+    /// MIME type (optionnel)
+    #[serde(default)]
+    pub mime: Option<String>,
 }
 
 /// Registro de convoy (publicado por un autor)
@@ -139,7 +178,7 @@ impl ConvoyRecord {
         channel: String,
     ) -> Self {
         Self {
-            schema: SCHEMA_CONVOY.to_string(),
+            schema: SCHEMA_EVENT.to_string(),
             id: uuid::Uuid::new_v4().to_string(),
             peer_id,
             nickname,
@@ -554,6 +593,12 @@ impl ChannelStore {
         let normalized = name.trim().to_lowercase();
         self.channels.get(&normalized)
     }
+
+    /// Elimina canales con created_at mayor a 180 días
+    pub fn purge_expired(&mut self) {
+        let cutoff = chrono::Utc::now().timestamp() - 180 * 86400;
+        self.channels.retain(|_, ch| ch.created_at > cutoff);
+    }
 }
 
 /// Registro de lista negra pública (propagado por gossip)
@@ -664,6 +709,12 @@ impl BlacklistStore {
     pub fn upsert(&mut self, record: BlacklistRecord) {
         self.blacklists.insert(record.author_peer_id.clone(), record);
     }
+
+    /// Elimina blacklists con updated_at mayor a 90 días
+    pub fn purge_expired(&mut self) {
+        let cutoff = chrono::Utc::now().timestamp() - 90 * 86400;
+        self.blacklists.retain(|_, r| r.updated_at > cutoff);
+    }
 }
 
 /// Serialización canónica JSON (claves ordenadas recursivamente)
@@ -672,7 +723,7 @@ fn canonical_json(value: &serde_json::Value) -> String {
         serde_json::Value::Null => "null".to_string(),
         serde_json::Value::Bool(b) => b.to_string(),
         serde_json::Value::Number(n) => n.to_string(),
-        serde_json::Value::String(s) => serde_json::to_string(s).unwrap(),
+        serde_json::Value::String(s) => serde_json::to_string(s).unwrap_or_else(|_| "\"\"".to_string()),
         serde_json::Value::Array(arr) => {
             let items: Vec<String> = arr.iter().map(canonical_json).collect();
             format!("[{}]", items.join(","))
@@ -682,7 +733,7 @@ fn canonical_json(value: &serde_json::Value) -> String {
             keys.sort();
             let items: Vec<String> = keys
                 .iter()
-                .map(|k| format!("{}:{}", serde_json::to_string(k).unwrap(), canonical_json(&obj[*k])))
+                .map(|k| format!("{}:{}", serde_json::to_string(k).unwrap_or_else(|_| "\"\"".to_string()), canonical_json(&obj[*k])))
                 .collect();
             format!("{{{}}}", items.join(","))
         }

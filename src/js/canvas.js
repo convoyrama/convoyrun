@@ -2,6 +2,8 @@ import { dom } from './dom.js';
 import * as state from './core/state.js';
 import { getGameTime, getDetailedDayNightIcon, formatDateForDisplayShort, formatTime, resolveMeetingDateTime } from './core/time.js';
 
+let _canvasListenersInitialized = false;
+
 const { DateTime } = luxon;
 import { wrapText, getZoneLabel } from './core/utils.js';
 
@@ -10,6 +12,13 @@ const _objectUrls = {};
 function setObjectUrl(key, url) {
     if (_objectUrls[key]) URL.revokeObjectURL(_objectUrls[key]);
     _objectUrls[key] = url;
+}
+
+export function revokeAllObjectUrls() {
+    for (const key of Object.keys(_objectUrls)) {
+        URL.revokeObjectURL(_objectUrls[key]);
+        delete _objectUrls[key];
+    }
 }
 
 // requestAnimationFrame throttle for drag operations
@@ -32,16 +41,29 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
     const logicalWidth = isV ? 720 : 1280, logicalHeight = isV ? 1280 : 720;
     // 'high' es lento con mapas grandes; solo vale la pena en el export.
     const smoothingQuality = (canvas === dom.mapCanvas) ? 'low' : 'high';
-    const textSize = parseInt(dom.textSize.value), textStyle = dom.textStyle.value, textBackgroundOpacity = parseFloat(dom.textBackgroundOpacity.value);
+    const textSize = parseInt(dom.textSize.value), textStyle = dom.textStyle.value, textBackgroundOpacity = parseInt(dom.textBackgroundOpacity.value, 10) / 100;
     const customDateValue = dom.customDate.value, customTimeValue = dom.customTime.value, customEventNameValue = dom.customEventName.value || (state.currentLangData.canvas_default_event_name || "Evento Personalizado");
-    const customStartPlaceValue = dom.customStartPlace.value || "Sin especificar", customDestinationValue = dom.customDestination.value || "Sin especificar", customServerValue = dom.customServer.value || "Sin especificar";
+    const customStartCityValue = dom.customStartCity?.value || dom.customStartPlace?.value || "";
+    const customStartLocationValue = dom.customStartLocation?.value || "";
+    const customDestCityValue = dom.customDestCity?.value || dom.customDestination?.value || "";
+    const customDestLocationValue = dom.customDestLocation?.value || "";
+    const customStartPlaceValue = customStartCityValue ? (customStartLocationValue ? `${customStartCityValue} — ${customStartLocationValue}` : customStartCityValue) : "Sin especificar";
+    const customDestinationValue = customDestCityValue ? (customDestLocationValue ? `${customDestCityValue} — ${customDestLocationValue}` : customDestCityValue) : "Sin especificar";
+    const customServerValue = dom.customServer.value || "Sin especificar";
 
     canvas.width = logicalWidth * scale; canvas.height = logicalHeight * scale;
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = smoothingQuality;
-    if (state.backgroundImage) { ctx.drawImage(state.backgroundImage, 0, 0, logicalWidth, logicalHeight); } else { ctx.fillStyle = "#333"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); }
-    if (state.mapImage) ctx.drawImage(state.mapImage, state.imageX, state.imageY, state.mapImage.width * state.imageScale, state.mapImage.height * state.imageScale);
+    if (state.backgroundImage && state.backgroundImage.complete && state.backgroundImage.naturalWidth !== 0) { ctx.drawImage(state.backgroundImage, 0, 0, logicalWidth, logicalHeight); } else { ctx.fillStyle = "#333"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); }
+    if (state.mapImage) {
+        const mapW = state.mapImage.width * state.imageScale;
+        const mapH = state.mapImage.height * state.imageScale;
+        ctx.drawImage(state.mapImage, state.imageX, state.imageY, mapW, mapH);
+        ctx.strokeStyle = "rgba(255,255,255,0.15)";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(state.imageX, state.imageY, mapW, mapH);
+    }
 
     let textFill = "rgb(240,240,240)";
     let shadowColor = "rgba(0,0,0,0.8)";
@@ -104,8 +126,6 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
     ctx.restore();
 
     ctx.shadowColor = shadowColor;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
     
     ctx.font = `bold ${textSize + 8}px ${dom.textFont.value}`;
     ctx.textAlign = "center";
@@ -143,7 +163,8 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
             dayEntry.times.push({ tzLabel, reunionTime: formatTime(reunionTimeLuxon), partidaTime: formatTime(partidaTimeLuxon) });
         });
         const monthMap = (state.currentLangData.months_short || ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]).reduce((acc, month, index) => { acc[month] = index; return acc; }, {});
-        const sortedDays = Array.from(datesByDay.keys()).sort((a, b) => { const [dayA, monthAbbrA] = a.split(' '); const [dayB, monthAbbrB] = b.split(' '); const dateA = new Date(new Date().getFullYear(), monthMap[monthAbbrA], dayA); const dateB = new Date(new Date().getFullYear(), monthMap[monthAbbrB], dayB); return dateA - dateB; });
+        const refYear = meetingDateTime.year;
+        const sortedDays = Array.from(datesByDay.keys()).sort((a, b) => { const [dayA, monthAbbrA] = a.split(' '); const [dayB, monthAbbrB] = b.split(' '); const dateA = new Date(refYear, monthMap[monthAbbrA], dayA); const dateB = new Date(refYear, monthMap[monthAbbrB], dayB); return dateA - dateB; });
         const newTextLines = [];
         newTextLines.push(`${state.currentLangData.canvas_meeting_time || 'Hora de reunión / Hora de partida:'}`);
         sortedDays.forEach(dayString => { newTextLines.push(dayString); const dayEntry = datesByDay.get(dayString); dayEntry.times.forEach(timeEntry => { newTextLines.push(`  ${timeEntry.tzLabel}: ${timeEntry.reunionTime} / ${timeEntry.partidaTime}`); }); });
@@ -285,6 +306,8 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
 }
 
 export function initCanvasEventListeners() {
+    if (_canvasListenersInitialized) return;
+    _canvasListenersInitialized = true;
     const canvas = dom.mapCanvas;
     
     const getMousePos = (e) => {

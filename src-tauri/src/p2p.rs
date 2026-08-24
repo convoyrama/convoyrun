@@ -27,14 +27,19 @@ const CONVOY_PASSPHRASE: &str = "convoyrun-convoy-calendar-v1";
 /// Nombre del archivo de identidad (SecretKey)
 const IDENTITY_FILE: &str = "node_identity.key";
 
+use std::collections::HashSet;
+
 /// Estado del nodo P2P
-#[allow(dead_code)]
 pub struct P2pState {
+    #[allow(dead_code)] // kept alive for iroh resource ownership
     pub endpoint: Endpoint,
+    #[allow(dead_code)]
     pub blobs: Arc<FsStore>,
     pub gossip: Gossip,
+    #[allow(dead_code)]
     pub router: Router,
     pub secret_key: SecretKey,
+    #[allow(dead_code)]
     pub data_dir: PathBuf,
     pub gossip_sender: Option<distributed_topic_tracker::GossipSender>,
     pub neighbor_count: Arc<AtomicUsize>,
@@ -55,11 +60,15 @@ pub struct NodeStatus {
 #[serde(rename_all = "camelCase")]
 pub struct UserConfig {
     pub nickname: Option<String>,
-    pub blocked_authors: Vec<String>,
-    pub friends: Vec<String>,
+    pub blocked_authors: HashSet<String>,
+    pub friends: HashSet<String>,
     pub followed_blacklists: Vec<String>,
     #[serde(default)]
     pub trusted_peers: Vec<String>,
+    #[serde(default)]
+    pub default_languages: Vec<String>,
+    #[serde(default)]
+    pub last_publish_ts: Option<i64>,
 }
 
 impl P2pState {
@@ -119,12 +128,12 @@ impl P2pState {
 
     /// Obtiene el estado actual del nodo
     pub fn status(&self, nickname: Option<String>) -> NodeStatus {
-        // TODO: Detectar estado real (online/offline) basado en conexiones
+        let nc = self.neighbor_count.load(std::sync::atomic::Ordering::Relaxed);
         NodeStatus {
-            mode: "online".to_string(),
+            mode: if nc > 0 { "online" } else { "searching" }.to_string(),
             peer_id: self.peer_id(),
             nickname,
-            online: true,
+            online: nc > 0,
         }
     }
 }
@@ -167,6 +176,8 @@ fn load_or_create_identity(data_dir: &Path) -> Result<SecretKey> {
         }
         #[cfg(not(unix))]
         {
+            // On Windows, default file permissions restrict access to the current user
+            // in standard user profiles. No explicit ACL manipulation needed.
             std::fs::write(&identity_path, key_bytes)
                 .context("Failed to write identity file")?;
         }
@@ -176,16 +187,13 @@ fn load_or_create_identity(data_dir: &Path) -> Result<SecretKey> {
     }
 }
 
-/// Exporta la identidad a un archivo JSON (para backup).
-/// Opcionalmente encripta con contraseña.
-pub fn export_identity(
+/// Exporta la identidad usando key bytes en memoria (evita lectura de disco).
+pub fn export_identity_with_key(
+    key_bytes: &[u8],
     data_dir: &Path,
     output_path: &Path,
     password: Option<&str>,
 ) -> Result<()> {
-    let identity_path = data_dir.join(IDENTITY_FILE);
-    let key_bytes = std::fs::read(&identity_path)
-        .context("Failed to read identity file")?;
 
     // Cargar nickname si existe
     let config_path = data_dir.join("convoyrun_config.json");
@@ -315,7 +323,7 @@ pub fn import_identity(
             for (i, b) in pwd_bytes.iter().cycle().take(32).enumerate() {
                 key[i] = *b;
             }
-            eprintln!("[P2P] WARNING: Importing v1 backup with weak KDF. Re-export with v2 after import.");
+            eprintln!("[P2P] ⚠️  SECURITY: v1 backup uses weak XOR-key KDF (low entropy). Re-export as v2 immediately after import.");
             key
         };
 
@@ -417,16 +425,8 @@ pub enum GossipMessage {
     Channel { data: String },
     #[serde(rename = "blacklist")]
     Blacklist { data: String },
-}
-
-/// Convierte un string a TopicId (hash SHA-256 del string) — ya no usado, mantenido por compatibilidad
-#[allow(dead_code)]
-fn topic_id_from_string(s: &str) -> iroh_gossip::TopicId {
-    use sha2::{Sha256, Digest};
-    let hash = Sha256::digest(s.as_bytes());
-    let mut bytes = [0u8; 32];
-    bytes.copy_from_slice(&hash);
-    iroh_gossip::TopicId::from_bytes(bytes)
+    #[serde(rename = "report")]
+    Report { data: String },
 }
 
 impl P2pState {
@@ -511,6 +511,14 @@ impl P2pState {
     pub async fn publish_blacklist_gossip(sender: &distributed_topic_tracker::GossipSender, blacklist_json: &str) -> Result<()> {
         let message = GossipMessage::Blacklist {
             data: blacklist_json.to_string(),
+        };
+        Self::publish_gossip(sender, message).await
+    }
+
+    /// Publica un reporte por gossip
+    pub async fn publish_report_gossip(sender: &distributed_topic_tracker::GossipSender, report_json: &str) -> Result<()> {
+        let message = GossipMessage::Report {
+            data: report_json.to_string(),
         };
         Self::publish_gossip(sender, message).await
     }

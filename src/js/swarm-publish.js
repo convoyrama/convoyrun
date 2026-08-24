@@ -7,7 +7,7 @@ import * as state from './core/state.js';
 import { showCopyMessage } from './core/utils.js';
 import { readMetadataFromPNG } from './core/png-metadata.js';
 import { createConvoy, isWithinPublishWindow } from './core/convoy.js';
-import { swarmPublish, swarmGetConfig, swarmSetConfig, swarmValidateChannel } from './native/tauri-bridge.js';
+import { swarmPublish, swarmGetConfig, swarmSetConfig, swarmValidateChannel, uploadToCatbox } from './native/tauri-bridge.js';
 
 const { DateTime } = luxon;
 const MAX_FLYER_BYTES = 2 * 1024 * 1024;
@@ -41,20 +41,38 @@ function makeThumb(buffer) {
     });
 }
 
+let _publishInitialized = false;
 export function initSwarmPublish(onPublished) {
+    if (_publishInitialized) return;
+    _publishInitialized = true;
+    console.log('[SWARM-PUBLISH] initSwarmPublish called');
     const overlay = document.getElementById('swarm-wizard');
     const openBtn = document.getElementById('swarm-publish-btn');
     const cancelBtn = document.getElementById('swarm-w-cancel');
     const submitBtn = document.getElementById('swarm-w-submit');
     const zoneEl = document.getElementById('swarm-w-zone');
-    if (!overlay || !openBtn) return;
+    console.log('[SWARM-PUBLISH] Elements found:', {
+        overlay: !!overlay, openBtn: !!openBtn, cancelBtn: !!cancelBtn,
+        submitBtn: !!submitBtn, zoneEl: !!zoneEl
+    });
+    if (!overlay || !openBtn) {
+        console.error('[SWARM-PUBLISH] ABORT: overlay or openBtn is null');
+        return;
+    }
+    if (!submitBtn) {
+        console.error('[SWARM-PUBLISH] ABORT: submitBtn is null');
+        return;
+    }
 
     const nameEl = document.getElementById('swarm-w-name');
     const gameEl = document.getElementById('swarm-w-game');
     const modeEl = document.getElementById('swarm-w-mode');
+    const typeEl = document.getElementById('swarm-w-type');
     const serverEl = document.getElementById('swarm-w-server');
     const startEl = document.getElementById('swarm-w-start');
+    const startLocEl = document.getElementById('swarm-w-start-location');
     const destEl = document.getElementById('swarm-w-dest');
+    const destLocEl = document.getElementById('swarm-w-dest-location');
     const descEl = document.getElementById('swarm-w-desc');
     const dateEl = document.getElementById('swarm-w-date');
     const timeEl = document.getElementById('swarm-w-time');
@@ -65,21 +83,72 @@ export function initSwarmPublish(onPublished) {
     const channelEl = document.getElementById('swarm-w-channel');
     const channelPasswordEl = document.getElementById('swarm-w-channel-password');
     const channelPasswordGroup = document.getElementById('swarm-w-password-group');
+    const languagesGroup = document.getElementById('swarm-w-languages');
+    const statusEl = document.getElementById('swarm-w-status');
 
     let currentThumb = null;
+    let currentOriginalUrl = null;
     let currentFlyerSize = 0;
+
+    const AVAILABLE_LANGUAGES = [
+        { code: 'es', key: 'swarm_lang_es' },
+        { code: 'en', key: 'swarm_lang_en' },
+        { code: 'pt', key: 'swarm_lang_pt' },
+        { code: 'fr', key: 'swarm_lang_fr' },
+        { code: 'de', key: 'swarm_lang_de' },
+        { code: 'it', key: 'swarm_lang_it' },
+        { code: 'nl', key: 'swarm_lang_nl' },
+    ];
+
+    function populateLanguages(defaultLangs) {
+        if (!languagesGroup) return;
+        languagesGroup.innerHTML = '';
+        for (const lang of AVAILABLE_LANGUAGES) {
+            const lbl = document.createElement('label');
+            lbl.className = 'swarm-lang-option';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = lang.code;
+            cb.checked = defaultLangs.includes(lang.code);
+            lbl.appendChild(cb);
+            lbl.appendChild(document.createTextNode(' ' + label(lang.key, lang.code.toUpperCase())));
+            languagesGroup.appendChild(lbl);
+        }
+    }
+
+    function getSelectedLanguages() {
+        if (!languagesGroup) return [];
+        return Array.from(languagesGroup.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+    }
+
+    let statusTimeout = null;
+
+    function showStatus(msg, isError) {
+        if (!statusEl) return showCopyMessage(msg);
+        if (statusTimeout) { clearTimeout(statusTimeout); statusTimeout = null; }
+        statusEl.textContent = msg;
+        statusEl.hidden = false;
+        statusEl.style.color = isError !== false ? '#ff6b6b' : '#4ade80';
+        statusEl.style.background = isError !== false ? 'rgba(255,107,107,0.1)' : 'rgba(74,222,128,0.1)';
+        statusEl.style.borderColor = isError !== false ? 'rgba(255,107,107,0.3)' : 'rgba(74,222,128,0.3)';
+        if (isError !== false) statusTimeout = setTimeout(() => { statusEl.hidden = true; statusTimeout = null; }, 4000);
+    }
+
+    function hideStatus() {
+        if (statusEl) statusEl.hidden = true;
+    }
 
     async function checkChannelPassword() {
         const ch = channelEl.value.trim();
         if (!ch || ch.toLowerCase() === 'general') {
-            channelPasswordGroup.style.display = 'none';
+            channelPasswordGroup.hidden = true;
             return;
         }
         const ok = await swarmValidateChannel(ch, '');
         if (!ok) {
-            channelPasswordGroup.style.display = '';
+            channelPasswordGroup.hidden = false;
         } else {
-            channelPasswordGroup.style.display = 'none';
+            channelPasswordGroup.hidden = true;
         }
     }
 
@@ -102,6 +171,7 @@ export function initSwarmPublish(onPublished) {
         flyerStatus.textContent = '';
         flyerStatus.classList.remove('ok');
         currentThumb = null;
+        currentOriginalUrl = null;
         currentFlyerSize = 0;
         flyerPreview.hidden = true;
 
@@ -120,16 +190,25 @@ export function initSwarmPublish(onPublished) {
         file.arrayBuffer().then(async (buffer) => {
             const u8 = new Uint8Array(buffer);
             try {
-                const raw = readMetadataFromPNG(buffer, 'convoyrama-event-data');
+                const raw = readMetadataFromPNG(buffer, 'convoyrun-event-v1') || readMetadataFromPNG(buffer, 'convoyrama-event-data');
                 if (raw) {
                     const m = JSON.parse(raw);
-                    fillEmpty(nameEl, m.eventName);
+                    fillEmpty(nameEl, m.eventName || m.name);
                     fillEmpty(serverEl, m.server);
-                    fillEmpty(startEl, m.startPlace);
-                    fillEmpty(destEl, m.destination);
+                    if (m.route) {
+                        fillEmpty(startEl, m.route.startCity);
+                        fillEmpty(startLocEl, m.route.startLocation);
+                        fillEmpty(destEl, m.route.destCity);
+                        fillEmpty(destLocEl, m.route.destLocation);
+                    }
+                    if (m.eventType && typeEl) {
+                        typeEl.value = m.eventType;
+                    }
                     fillEmpty(descEl, m.description);
-                    if (m.meetingTimestamp && m.ianaTimeZone) {
-                        const meeting = DateTime.fromSeconds(m.meetingTimestamp, { zone: m.ianaTimeZone });
+                    const meetingTs = m.meetingTimestamp || (m.schedule && m.schedule.meetingTimestamp);
+                    const tz = m.ianaTimeZone || (m.schedule && m.schedule.ianaTimeZone);
+                    if (meetingTs && tz) {
+                        const meeting = DateTime.fromSeconds(meetingTs, { zone: tz });
                         if (meeting.isValid) {
                             dateEl.value = meeting.toISODate();
                             timeEl.value = meeting.toFormat('HH:mm');
@@ -151,6 +230,15 @@ export function initSwarmPublish(onPublished) {
                 flyerPreview.src = currentThumb;
                 flyerPreview.hidden = false;
             }
+            flyerStatus.textContent = state.currentLangData.swarm_wizard_image_uploading || 'Subiendo imagen...';
+            try {
+                currentOriginalUrl = await uploadToCatbox(buffer);
+                flyerStatus.textContent = state.currentLangData.swarm_wizard_image_uploaded || 'Imagen subida correctamente.';
+                flyerStatus.classList.add('ok');
+            } catch (err) {
+                console.error('[SWARM-FLYER-UPLOAD] Failed:', err);
+                flyerStatus.textContent = state.currentLangData.swarm_wizard_image_upload_fail || 'No se pudo subir la imagen. Se usará la miniatura.';
+            }
         }).catch((err) => {
             console.error('[SWARM-FLYER-READ] Failed:', err);
             showCopyMessage(state.currentLangData.swarm_wizard_error_image || 'No se pudo leer la imagen.');
@@ -160,6 +248,7 @@ export function initSwarmPublish(onPublished) {
     async function openWizard() {
         const cfg = await swarmGetConfig();
         if (cfg.nickname && !nicknameEl.value) nicknameEl.value = cfg.nickname;
+        populateLanguages(cfg.defaultLanguages || ['es']);
         const now = DateTime.local();
         if (!dateEl.value) dateEl.value = now.toISODate();
         if (!timeEl.value) timeEl.value = now.plus({ hours: 2 }).toFormat('HH:mm');
@@ -171,54 +260,65 @@ export function initSwarmPublish(onPublished) {
     function closeWizard() {
         overlay.classList.remove('open');
         currentThumb = null;
+        currentOriginalUrl = null;
         currentFlyerSize = 0;
         flyerInput.value = '';
         flyerPreview.hidden = true;
         flyerPreview.removeAttribute('src');
         flyerStatus.textContent = '';
         flyerStatus.classList.remove('ok');
+        hideStatus();
     }
 
     async function submit() {
         const name = nameEl.value.trim();
         const dateVal = dateEl.value;
         const timeVal = timeEl.value;
+        console.log('[SWARM-PUBLISH] Submit clicked', { name, dateVal, timeVal, hasThumb: !!currentThumb });
+
+        hideStatus();
 
         if (!currentThumb) {
-            showCopyMessage(state.currentLangData.swarm_wizard_error_image || 'Adjuntá una imagen (PNG) del convoy.');
+            showStatus(state.currentLangData.swarm_wizard_error_image || 'Adjuntá una imagen (PNG) del convoy.');
             return;
         }
         if (!name || !dateVal || !timeVal) {
-            showCopyMessage(state.currentLangData.swarm_wizard_error_required || 'Completá nombre, juego, modo, fecha y hora.');
+            showStatus(state.currentLangData.swarm_wizard_error_required || 'Completá nombre, juego, modo, fecha y hora.');
             return;
         }
 
         const meeting = DateTime.fromISO(`${dateVal}T${timeVal}`);
         if (!meeting.isValid) {
-            showCopyMessage(state.currentLangData.error_invalid_date || 'Fecha u hora inválida.');
+            showStatus(state.currentLangData.error_invalid_date || 'Fecha u hora inválida.');
             return;
         }
 
         const convoy = createConvoy({
             name,
+            type: typeEl ? typeEl.value : 'convoy',
             game: gameEl.value,
             mode: modeEl.value,
             meetingTimestamp: meeting.toUnixInteger(),
             ianaTimeZone: DateTime.local().zoneName || 'UTC',
             server: serverEl.value.trim(),
-            startPlace: startEl.value.trim(),
-            destination: destEl.value.trim(),
+            startCity: startEl.value.trim(),
+            startLocation: startLocEl ? startLocEl.value.trim() : '',
+            destCity: destEl.value.trim(),
+            destLocation: destLocEl ? destLocEl.value.trim() : '',
             description: descEl.value.trim(),
+            languages: getSelectedLanguages(),
             nickname: nicknameEl.value.trim() || undefined,
-            flyer: { thumb: currentThumb, size: currentFlyerSize, mime: 'image/png' },
+            flyer: { thumb: currentThumb, originalUrl: currentOriginalUrl, size: currentFlyerSize, mime: 'image/png' },
         });
 
         // Agregar canal al convoy
         const channelName = channelEl ? channelEl.value.trim() : '';
         if (channelName) convoy.channel = channelName;
 
+        console.log('[SWARM-PUBLISH] Convoy created', { id: convoy.id, game: convoy.event.game, mode: convoy.event.mode });
+
         if (!isWithinPublishWindow(convoy)) {
-            showCopyMessage(state.currentLangData.swarm_wizard_error_window || 'Solo se pueden publicar convoys hasta 3 meses adelante.');
+            showStatus(state.currentLangData.swarm_wizard_error_window || 'Solo se pueden publicar convoys hasta 3 meses adelante.');
             return;
         }
 
@@ -227,7 +327,9 @@ export function initSwarmPublish(onPublished) {
 
         try {
             const channelPassword = channelPasswordEl ? channelPasswordEl.value : '';
-            await swarmPublish(convoy, channelName, channelPassword);
+            console.log('[SWARM-PUBLISH] Calling swarmPublish...');
+            const result = await swarmPublish(convoy, channelName, channelPassword);
+            console.log('[SWARM-PUBLISH] swarmPublish result:', result);
 
             const nick = nicknameEl.value.trim();
             if (nick) {
@@ -239,21 +341,30 @@ export function initSwarmPublish(onPublished) {
             showCopyMessage(state.currentLangData.swarm_published_ok || 'Convoy publicado en el Swarm.');
             if (onPublished) onPublished();
         } catch (err) {
-            console.error('[SWARM-PUBLISH]', err);
-            showCopyMessage(state.currentLangData.swarm_wizard_error || 'Error al publicar el convoy.');
+            console.error('[SWARM-PUBLISH] Failed:', err);
+            const msg = err?.toString() || '';
+            if (msg.includes('wait') || msg.includes('esperar') || msg.includes('cooldown')) {
+                showStatus(msg, true);
+            } else {
+                showStatus(state.currentLangData.swarm_wizard_error || 'Error al publicar el convoy.');
+            }
         } finally {
             submitBtn.disabled = false;
             submitBtn.textContent = label('swarm_wizard_submit', 'Publicar');
         }
     }
 
-    openBtn.addEventListener('click', openWizard);
-    cancelBtn.addEventListener('click', closeWizard);
-    submitBtn.addEventListener('click', submit);
+    console.log('[SWARM-PUBLISH] Attaching event listeners...');
+    openBtn.addEventListener('click', () => openWizard().catch(e => console.error('[SWARM-PUBLISH] openWizard error:', e)));
+    console.log('[SWARM-PUBLISH] openBtn listener attached');
+    if (cancelBtn) cancelBtn.addEventListener('click', closeWizard);
+    submitBtn.addEventListener('click', () => submit().catch(e => console.error('[SWARM-PUBLISH] submit error:', e)));
+    console.log('[SWARM-PUBLISH] submitBtn listener attached');
     flyerInput.addEventListener('change', (e) => handleFlyerFile(e.target.files[0]));
     overlay.addEventListener('click', (e) => { if (e.target === overlay) closeWizard(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && overlay.classList.contains('open')) closeWizard(); });
     window.addEventListener('languageChanged', updateZoneLabel);
+    console.log('[SWARM-PUBLISH] All listeners attached successfully');
 
     // WebKitGTK no cierra el picker de fecha/hora solo con seleccionar: hay que
     // hacer blur (mismo fix que main.js) para que el calendario nativo desaparezca.

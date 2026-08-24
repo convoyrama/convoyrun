@@ -6,6 +6,7 @@ const TIME_SOURCES = ['https://convoyrama.github.io/', 'https://github.com/'];
 const TIMEOUT_MS = 8000;
 
 async function fetchServerDate(url) {
+    if (!window.__TAURI__?.http) return null;
     try {
         const response = await window.__TAURI__.http.fetch(url, { method: 'HEAD', connectTimeout: TIMEOUT_MS });
         const dateHeader = response.headers.get('date');
@@ -32,6 +33,6 @@ export async function syncTime() {
 export function initTimeSync() {
     dom.timeSyncDots = Array.from(document.querySelectorAll('.time-sync-dot'));
     dom.timeSyncIndicator = document.getElementById('time-sync-indicator');
-    dom.timeSyncIndicator.addEventListener('click', syncTime);
+    if (dom.timeSyncIndicator) dom.timeSyncIndicator.addEventListener('click', syncTime);
     syncTime();
 }

@@ -1,10 +1,12 @@
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::ImageEncoder;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
 use tauri::{Manager, State};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 use tokio::sync::RwLock;
 
 mod p2p;
@@ -19,37 +21,53 @@ struct AppState {
     convoy_store: Arc<RwLock<ConvoyStore>>,
     channel_store: Arc<RwLock<ChannelStore>>,
     blacklist_store: Arc<RwLock<BlacklistStore>>,
+    config: Arc<RwLock<UserConfig>>,
+    reports: Arc<RwLock<Vec<serde_json::Value>>>,
 }
 
 /// Helper: flush convoy store a disco (llamar con lock ya adquirido)
-fn flush_convoy_store(store: &ConvoyStore, data_dir: &PathBuf) {
+fn flush_convoy_store(store: &ConvoyStore, data_dir: &Path) {
     if let Err(e) = store.save(data_dir) {
         eprintln!("[P2P] Failed to save convoy store: {}", e);
     }
 }
 
 /// Helper: flush channel store a disco
-fn flush_channel_store(store: &ChannelStore, data_dir: &PathBuf) {
+fn flush_channel_store(store: &ChannelStore, data_dir: &Path) {
     if let Err(e) = store.save(data_dir) {
         eprintln!("[P2P] Failed to save channel store: {}", e);
     }
 }
 
 /// Helper: flush blacklist store a disco
-fn flush_blacklist_store(store: &BlacklistStore, data_dir: &PathBuf) {
+fn flush_blacklist_store(store: &BlacklistStore, data_dir: &Path) {
     if let Err(e) = store.save(data_dir) {
         eprintln!("[P2P] Failed to save blacklist store: {}", e);
     }
+}
+
+/// Helper: load config from shared cache (avoid disk I/O on every command)
+async fn load_config_cached(config: &Arc<RwLock<UserConfig>>) -> UserConfig {
+    config.read().await.clone()
+}
+
+/// Helper: save config to shared cache + disk
+async fn save_config_cached(data_dir: &Path, config: &Arc<RwLock<UserConfig>>, new_config: &UserConfig) -> Result<(), String> {
+    p2p::save_config(data_dir, new_config).map_err(|e| e.to_string())?;
+    *config.write().await = new_config.clone();
+    Ok(())
 }
 
 /// Procesa mensajes de gossip recibidos de otros nodos
 async fn process_gossip_receiver(
     mut receiver: distributed_topic_tracker::GossipReceiver,
     data_dir: PathBuf,
+    config_cache: Arc<RwLock<UserConfig>>,
     convoy_store: Arc<RwLock<ConvoyStore>>,
     channel_store: Arc<RwLock<ChannelStore>>,
     blacklist_store: Arc<RwLock<BlacklistStore>>,
     neighbor_count: Arc<AtomicUsize>,
+    reports: Arc<RwLock<Vec<serde_json::Value>>>,
 ) {
     eprintln!("[P2P] Gossip receiver started");
     loop {
@@ -62,9 +80,9 @@ async fn process_gossip_receiver(
                         continue;
                     }
                     iroh_gossip::api::Event::NeighborDown(ref peer) => {
-                        let old = neighbor_count.fetch_sub(1, Ordering::Relaxed);
-                        if old == 0 {
-                            neighbor_count.store(0, Ordering::Relaxed);
+                        let prev = neighbor_count.load(Ordering::Relaxed);
+                        if prev > 0 {
+                            neighbor_count.store(prev - 1, Ordering::Relaxed);
                         }
                         let count = neighbor_count.load(Ordering::Relaxed);
                         eprintln!("[P2P] NeighborDown: {} (neighbors: {})", peer, count);
@@ -91,13 +109,17 @@ async fn process_gossip_receiver(
                         GossipMessage::Blacklist { data } => {
                             serde_json::from_str::<BlacklistRecord>(data).ok().map(|r| r.author_peer_id)
                         }
+                        GossipMessage::Report { data } => {
+                            serde_json::from_str::<serde_json::Value>(data)
+                                .ok()
+                                .and_then(|v| v.get("reporterPeerId").and_then(|id| id.as_str()).map(String::from))
+                        }
                     };
                     if let Some(ref pid) = author_peer_id {
-                        if let Ok(config) = p2p::load_config(&data_dir) {
-                            if config.blocked_authors.contains(pid) {
-                                eprintln!("[P2P] Blocked author {}, ignoring message", pid);
-                                continue;
-                            }
+                        let config = config_cache.read().await;
+                        if config.blocked_authors.contains(pid) {
+                            eprintln!("[P2P] Blocked author {}, ignoring message", pid);
+                            continue;
                         }
                     }
                     match gossip_msg {
@@ -217,6 +239,13 @@ async fn process_gossip_receiver(
                                 flush_blacklist_store(&store, &data_dir);
                             }
                         }
+                        GossipMessage::Report { data } => {
+                            eprintln!("[P2P] Received report: {}", data);
+                            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&data) {
+                                let mut r = reports.write().await;
+                                r.push(val);
+                            }
+                        }
                     }
                 }
                     }
@@ -240,12 +269,15 @@ async fn process_gossip_receiver(
 // --- Comandos existentes ---
 
 #[tauri::command]
-fn save_file(path: String, contents: Vec<u8>) -> Result<(), String> {
-    // Basic path validation: reject paths with null bytes or excessively long paths
+async fn save_file(state: State<'_, AppState>, path: String, contents: Vec<u8>) -> Result<(), String> {
     if path.contains('\0') || path.len() > 4096 {
         return Err("Invalid file path".to_string());
     }
-    std::fs::write(&path, contents).map_err(|e| e.to_string())
+    if path.contains("..") {
+        return Err("Path traversal not allowed".to_string());
+    }
+    let full_path = state.data_dir.join(&path);
+    tokio::fs::write(&full_path, contents).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -267,7 +299,7 @@ async fn p2p_init(state: State<'_, AppState>) -> Result<NodeStatus, String> {
     let mut p2p_guard = state.p2p.write().await;
 
     if let Some(p2p) = p2p_guard.as_ref() {
-        let config = p2p::load_config(&state.data_dir).unwrap_or_default();
+        let config = load_config_cached(&state.config).await;
         return Ok(p2p.status(config.nickname));
     }
 
@@ -283,8 +315,10 @@ async fn p2p_init(state: State<'_, AppState>) -> Result<NodeStatus, String> {
             let chs = state.channel_store.clone();
             let bls = state.blacklist_store.clone();
             let nc = p2p.neighbor_count.clone();
+            let rp = state.reports.clone();
+            let cc = state.config.clone();
             tokio::spawn(async move {
-                process_gossip_receiver(receiver, data_dir, cs, chs, bls, nc).await;
+                process_gossip_receiver(receiver, data_dir, cc, cs, chs, bls, nc, rp).await;
             });
             eprintln!("[P2P] Joined gossip topic successfully");
         }
@@ -293,7 +327,7 @@ async fn p2p_init(state: State<'_, AppState>) -> Result<NodeStatus, String> {
         }
     }
 
-    let config = p2p::load_config(&state.data_dir).unwrap_or_default();
+    let config = load_config_cached(&state.config).await;
     let status = p2p.status(config.nickname);
 
     *p2p_guard = Some(Arc::new(p2p));
@@ -307,7 +341,7 @@ async fn p2p_status(state: State<'_, AppState>) -> Result<NodeStatus, String> {
 
     match p2p_guard.as_ref() {
         Some(p2p) => {
-            let config = p2p::load_config(&state.data_dir).unwrap_or_default();
+            let config = load_config_cached(&state.config).await;
             Ok(p2p.status(config.nickname))
         }
         None => Ok(NodeStatus {
@@ -327,7 +361,19 @@ async fn export_identity(
     output_path: String,
     password: Option<String>,
 ) -> Result<(), String> {
-    p2p::export_identity(
+    let key_bytes = {
+        let p2p_guard = state.p2p.read().await;
+        match p2p_guard.as_ref() {
+            Some(p2p) => p2p.secret_key.to_bytes().to_vec(),
+            None => {
+                // Fallback: read from disk if P2P not initialized
+                let identity_path = state.data_dir.join("node_identity.key");
+                std::fs::read(&identity_path).map_err(|e| format!("Failed to read identity: {}", e))?
+            }
+        }
+    };
+    p2p::export_identity_with_key(
+        &key_bytes,
         &state.data_dir,
         &PathBuf::from(output_path),
         password.as_deref(),
@@ -353,7 +399,7 @@ async fn import_identity(
 
 #[tauri::command]
 async fn get_config(state: State<'_, AppState>) -> Result<UserConfig, String> {
-    p2p::load_config(&state.data_dir).map_err(|e| format!("Failed to load config: {}", e))
+    Ok(load_config_cached(&state.config).await)
 }
 
 #[tauri::command]
@@ -361,44 +407,44 @@ async fn set_config(
     state: State<'_, AppState>,
     config: UserConfig,
 ) -> Result<(), String> {
-    p2p::save_config(&state.data_dir, &config).map_err(|e| format!("Failed to save config: {}", e))
+    save_config_cached(&state.data_dir, &state.config, &config).await
 }
 
 // --- Comandos de moderación comunitaria ---
 
 #[tauri::command]
 async fn block_author(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
-    let mut config = p2p::load_config(&state.data_dir).map_err(|e| e.to_string())?;
+    let mut config = load_config_cached(&state.config).await;
     if !config.blocked_authors.contains(&peer_id) {
-        config.blocked_authors.push(peer_id);
-        p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
+        config.blocked_authors.insert(peer_id);
+        save_config_cached(&state.data_dir, &state.config, &config).await?;
     }
     Ok(())
 }
 
 #[tauri::command]
 async fn unblock_author(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
-    let mut config = p2p::load_config(&state.data_dir).map_err(|e| e.to_string())?;
-    config.blocked_authors.retain(|id| id != &peer_id);
-    p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
+    let mut config = load_config_cached(&state.config).await;
+    config.blocked_authors.remove(&peer_id);
+    save_config_cached(&state.data_dir, &state.config, &config).await?;
     Ok(())
 }
 
 #[tauri::command]
 async fn add_friend(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
-    let mut config = p2p::load_config(&state.data_dir).map_err(|e| e.to_string())?;
+    let mut config = load_config_cached(&state.config).await;
     if !config.friends.contains(&peer_id) {
-        config.friends.push(peer_id);
-        p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
+        config.friends.insert(peer_id);
+        save_config_cached(&state.data_dir, &state.config, &config).await?;
     }
     Ok(())
 }
 
 #[tauri::command]
 async fn remove_friend(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
-    let mut config = p2p::load_config(&state.data_dir).map_err(|e| e.to_string())?;
-    config.friends.retain(|id| id != &peer_id);
-    p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
+    let mut config = load_config_cached(&state.config).await;
+    config.friends.remove(&peer_id);
+    save_config_cached(&state.data_dir, &state.config, &config).await?;
     Ok(())
 }
 
@@ -406,20 +452,21 @@ async fn remove_friend(state: State<'_, AppState>, peer_id: String) -> Result<()
 
 #[tauri::command]
 async fn publish_blacklist(state: State<'_, AppState>) -> Result<(), String> {
-    let config = p2p::load_config(&state.data_dir).map_err(|e| e.to_string())?;
+    let config = load_config_cached(&state.config).await;
     let p2p_guard = state.p2p.read().await;
     let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
 
     let mut record = BlacklistRecord {
         schema: "convoyrun/blacklist/v1".to_string(),
         author_peer_id: p2p.peer_id(),
-        blocked: config.blocked_authors.clone(),
+        blocked: config.blocked_authors.iter().cloned().collect(),
         updated_at: chrono::Utc::now().timestamp(),
         signature: String::new(),
     };
 
     if let Err(e) = record.sign(&p2p.secret_key) {
         eprintln!("[P2P] Failed to sign blacklist: {}", e);
+        return Err(format!("Failed to sign blacklist: {}", e));
     }
 
     let bl_json = serde_json::to_string(&record).map_err(|e| e.to_string())?;
@@ -435,19 +482,19 @@ async fn publish_blacklist(state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 async fn import_blacklist(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
-    let mut config = p2p::load_config(&state.data_dir).map_err(|e| e.to_string())?;
+    let mut config = load_config_cached(&state.config).await;
     if !config.followed_blacklists.contains(&peer_id) {
         config.followed_blacklists.push(peer_id);
-        p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
+        save_config_cached(&state.data_dir, &state.config, &config).await?;
     }
     Ok(())
 }
 
 #[tauri::command]
 async fn stop_following_blacklist(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
-    let mut config = p2p::load_config(&state.data_dir).map_err(|e| e.to_string())?;
+    let mut config = load_config_cached(&state.config).await;
     config.followed_blacklists.retain(|id| id != &peer_id);
-    p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
+    save_config_cached(&state.data_dir, &state.config, &config).await?;
     Ok(())
 }
 
@@ -458,21 +505,12 @@ async fn get_public_blacklists(state: State<'_, AppState>) -> Result<Vec<Blackli
 }
 
 #[tauri::command]
-async fn get_mutual_friends(state: State<'_, AppState>, peer_id: String) -> Result<Vec<String>, String> {
-    let config = p2p::load_config(&state.data_dir).map_err(|e| e.to_string())?;
+async fn get_mutual_friends(state: State<'_, AppState>, _peer_id: String) -> Result<Vec<String>, String> {
+    let config = load_config_cached(&state.config).await;
     let store = state.convoy_store.read().await;
 
-    let my_friends: std::collections::HashSet<String> = config.friends.iter().cloned().collect();
-
     let mut mutual: Vec<String> = Vec::new();
-    for convoy in store.convoys.values() {
-        if convoy.peer_id == peer_id && !convoy.nickname.is_empty() {
-            // Los amigos mutuos son los que están en mi lista de amigos
-            // y también publicaron convoys (están activos)
-        }
-    }
-
-    for friend in &my_friends {
+    for friend in &config.friends {
         if store.convoys.values().any(|c| &c.peer_id == friend) {
             mutual.push(friend.clone());
         }
@@ -504,30 +542,78 @@ async fn get_discovery_state(state: State<'_, AppState>) -> Result<serde_json::V
 }
 
 #[tauri::command]
+async fn report_event(
+    state: State<'_, AppState>,
+    convoy_id: String,
+    author_peer_id: String,
+    reason: String,
+) -> Result<(), String> {
+    let peer_id = {
+        let p2p_guard = state.p2p.read().await;
+        match p2p_guard.as_ref() {
+            Some(p2p) => p2p.peer_id(),
+            None => return Err("P2P not initialized".to_string()),
+        }
+    };
+
+    let report = serde_json::json!({
+        "schema": "convoyrun/report/v1",
+        "reporterPeerId": peer_id,
+        "convoyId": convoy_id,
+        "authorPeerId": author_peer_id,
+        "reason": reason,
+        "timestamp": chrono::Utc::now().timestamp(),
+    });
+
+    eprintln!("[MOD] Report filed by {} against convoy {}: {}", peer_id, convoy_id, reason);
+
+    if let Some(p2p_guard) = state.p2p.read().await.as_ref() {
+        if let Some(sender) = &p2p_guard.gossip_sender {
+            if let Err(e) = P2pState::publish_report_gossip(sender, &report.to_string()).await {
+                eprintln!("[MOD] Failed to publish report via gossip: {}", e);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 async fn get_author_profile(
     state: State<'_, AppState>,
     peer_id: String,
 ) -> Result<serde_json::Value, String> {
     let store = state.convoy_store.read().await;
-    let config = p2p::load_config(&state.data_dir).map_err(|e| e.to_string())?;
+    let config = load_config_cached(&state.config).await;
 
     let convoys: Vec<&ConvoyRecord> = store.convoys.values().filter(|c| c.peer_id == peer_id).collect();
     let reputation: i32 = convoys.iter().map(|c| store.compute_score(&c.id)).sum();
 
     let nickname = convoys.first().map(|c| c.nickname.as_str()).unwrap_or("");
 
-    let my_friends: std::collections::HashSet<String> = config.friends.iter().cloned().collect();
-    let mutual_friends: Vec<String> = my_friends.iter()
-        .filter(|f| store.convoys.values().any(|c| &c.peer_id == *f))
-        .cloned()
-        .collect();
+    let is_friend = config.friends.contains(&peer_id);
+    let is_blocked = config.blocked_authors.contains(&peer_id);
+
+    let convoy_list: Vec<serde_json::Value> = convoys.iter().map(|c| {
+        serde_json::json!({
+            "id": c.id,
+            "name": c.event.name,
+            "game": c.event.game,
+            "mode": c.event.mode,
+            "meetingTimestamp": c.schedule.meeting_timestamp,
+            "channel": c.channel,
+            "score": store.compute_score(&c.id),
+        })
+    }).collect();
 
     Ok(serde_json::json!({
         "peerId": peer_id,
         "nickname": nickname,
         "reputation": reputation,
         "convoyCount": convoys.len(),
-        "mutualFriends": mutual_friends,
+        "isFriend": is_friend,
+        "isBlocked": is_blocked,
+        "convoys": convoy_list,
     }))
 }
 
@@ -545,10 +631,19 @@ async fn publish_convoy(
     let p2p_guard = state.p2p.read().await;
     let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
 
-    let config = p2p::load_config(&state.data_dir).map_err(|e| e.to_string())?;
+    let config = load_config_cached(&state.config).await;
     let nickname = config.nickname.unwrap_or_default();
 
-    let channel_name = channel.unwrap_or_default();
+    // Rate limiting: máximo 1 convoy cada 60 segundos
+    const PUBLISH_COOLDOWN: i64 = 60;
+    if let Some(last_ts) = config.last_publish_ts {
+        let now = chrono::Utc::now().timestamp();
+        if now - last_ts < PUBLISH_COOLDOWN {
+            return Err(format!("Debés esperar {} segundos antes de publicar otro convoy.", PUBLISH_COOLDOWN - (now - last_ts)));
+        }
+    }
+
+    let channel_name = channel.unwrap_or_default().trim().to_lowercase();
     if !channel_name.is_empty() {
         let mut ch_store = state.channel_store.write().await;
 
@@ -566,7 +661,7 @@ async fn publish_convoy(
             // Firmar el canal antes de persistir y propagar
             if let Some(ch) = ch_store.channels.get_mut(&channel_name) {
                 if let Err(e) = ch.sign(&p2p.secret_key) {
-                    eprintln!("[P2P] Failed to sign channel: {}", e);
+                    return Err(format!("Failed to sign channel: {}", e));
                 }
             }
             flush_channel_store(&ch_store, &state.data_dir);
@@ -602,6 +697,13 @@ async fn publish_convoy(
         let mut store = state.convoy_store.write().await;
         store.upsert_convoy(record.clone());
         flush_convoy_store(&store, &state.data_dir);
+    }
+
+    // Actualizar timestamp de última publicación
+    {
+        let mut cfg = load_config_cached(&state.config).await;
+        cfg.last_publish_ts = Some(chrono::Utc::now().timestamp());
+        let _ = save_config_cached(&state.data_dir, &state.config, &cfg).await;
     }
 
     if let Some(sender) = &p2p.gossip_sender {
@@ -710,6 +812,7 @@ async fn create_channel(
 
     if let Err(e) = channel.sign(&p2p.secret_key) {
         eprintln!("[P2P] Failed to sign channel: {}", e);
+        return Err(format!("Failed to sign channel: {}", e));
     }
 
     store.channels.insert(channel.name.clone(), channel.clone());
@@ -860,7 +963,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_http::init())
         .setup(|app| {
-            let data_dir = app.path().app_data_dir().expect("Failed to get app data dir");
+            let data_dir = app.path().app_data_dir().map_err(|e| format!("Failed to get app data dir: {}", e))?;
             let convoy_store = Arc::new(RwLock::new({
                 let mut s = ConvoyStore::load(&data_dir).unwrap_or_default();
                 s.purge_expired();
@@ -869,12 +972,15 @@ pub fn run() {
             }));
             let channel_store = Arc::new(RwLock::new(ChannelStore::load(&data_dir).unwrap_or_default()));
             let blacklist_store = Arc::new(RwLock::new(BlacklistStore::load(&data_dir).unwrap_or_default()));
+            let config = p2p::load_config(&data_dir).unwrap_or_default();
             app.manage(AppState {
                 p2p: RwLock::new(None),
                 data_dir: data_dir.clone(),
                 convoy_store: convoy_store.clone(),
-                channel_store,
-                blacklist_store,
+                channel_store: channel_store.clone(),
+                blacklist_store: blacklist_store.clone(),
+                config: Arc::new(RwLock::new(config)),
+                reports: Arc::new(RwLock::new(Vec::new())),
             });
 
             // Purge expired convoys every hour
@@ -888,6 +994,97 @@ pub fn run() {
                     flush_convoy_store(&store, &purge_dir);
                 }
             });
+
+            // Purge expired blacklists every 6 hours
+            {
+                let bl_dir = data_dir.clone();
+                let bl_store = blacklist_store.clone();
+                tauri::async_runtime::spawn(async move {
+                    loop {
+                        tokio::time::sleep(std::time::Duration::from_secs(6 * 3600)).await;
+                        let mut store = bl_store.write().await;
+                        store.purge_expired();
+                        flush_blacklist_store(&store, &bl_dir);
+                    }
+                });
+            }
+
+            // Purge expired channels every 12 hours
+            {
+                let ch_dir = data_dir.clone();
+                let ch_store = channel_store.clone();
+                tauri::async_runtime::spawn(async move {
+                    loop {
+                        tokio::time::sleep(std::time::Duration::from_secs(12 * 3600)).await;
+                        let mut store = ch_store.write().await;
+                        store.purge_expired();
+                        flush_channel_store(&store, &ch_dir);
+                    }
+                });
+            }
+
+            // --- System Tray ---
+            let quit = MenuItem::with_id(app, "quit", "Quit ConvoyRun", true, None::<&str>)?;
+            let show = MenuItem::with_id(app, "show", "Show ConvoyRun", true, None::<&str>)?;
+            let tray_menu = Menu::with_items(app, &[&show, &quit])?;
+
+            // Flag para permitir cierre real desde el menú "Quit"
+            let quitting = Arc::new(AtomicBool::new(false));
+
+            let quitting_for_menu = quitting.clone();
+            tauri::tray::TrayIconBuilder::new()
+                .icon(tauri::include_image!("icons/icon.png"))
+                .tooltip("ConvoyRun — Convoy & Event Manager")
+                .menu(&tray_menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(move |app, event| {
+                    match event.id().as_ref() {
+                        "quit" => {
+                            quitting_for_menu.store(true, Ordering::Relaxed);
+                            if let Some(win) = app.get_webview_window("main") {
+                                let _ = win.destroy();
+                            }
+                            app.exit(0);
+                        }
+                        "show" => {
+                            if let Some(win) = app.get_webview_window("main") {
+                                let _ = win.show();
+                                let _ = win.set_focus();
+                            }
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+
+            // Hide to tray on close (X button) — unless "Quit" was clicked
+            if let Some(window) = app.get_webview_window("main") {
+                let win_for_close = window.clone();
+                let quitting_for_close = quitting.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        if quitting_for_close.load(Ordering::Relaxed) {
+                            return; // Permitir cierre real
+                        }
+                        api.prevent_close();
+                        let _ = win_for_close.hide();
+                    }
+                });
+            }
 
             Ok(())
         })
@@ -924,6 +1121,7 @@ pub fn run() {
             create_channel,
             delete_channel,
             delete_convoy,
+            report_event,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

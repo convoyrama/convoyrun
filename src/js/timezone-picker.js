@@ -22,6 +22,7 @@ const displayToZone = new Map();
 
 function populateDatalist() {
     displayToZone.clear();
+    if (!dom.zoneDatalist) return;
     dom.zoneDatalist.innerHTML = '';
     buildZoneCatalog().forEach(z => {
         const option = document.createElement('option');
@@ -32,12 +33,14 @@ function populateDatalist() {
 }
 
 function renderDetectedTimezone() {
+    if (!dom.detectedTimezoneInfo) return;
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const offset = DateTime.local().toFormat('ZZ');
     dom.detectedTimezoneInfo.textContent = `${tz} (UTC${offset})`;
 }
 
 function renderActiveZoneList(onChange) {
+    if (!dom.zoneList) return;
     dom.zoneList.innerHTML = '';
     state.getActiveZones().forEach(z => {
         const chip = document.createElement('span');
@@ -61,6 +64,7 @@ function renderActiveZoneList(onChange) {
 
 // Sacarla de la lista activa solo la destilda acá, no la hace desaparecer.
 function renderPresetZoneToggles(onChange) {
+    if (!dom.presetButtons) return;
     dom.presetButtons.innerHTML = '';
     Object.keys(timezoneRegions).forEach(regionKey => {
         const region = timezoneRegions[regionKey];
@@ -134,8 +138,8 @@ export function initTimezoneSettings(onChange) {
         onChange();
     };
 
-    dom.zoneSearchAdd.addEventListener('click', addZone);
-    dom.zoneSearch.addEventListener('keydown', (e) => {
+    if (dom.zoneSearchAdd) dom.zoneSearchAdd.addEventListener('click', addZone);
+    if (dom.zoneSearch) dom.zoneSearch.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); addZone(); }
     });
 }
