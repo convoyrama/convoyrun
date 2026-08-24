@@ -55,7 +55,7 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = smoothingQuality;
-    if (state.backgroundImage && state.backgroundImage.complete && state.backgroundImage.naturalWidth !== 0) { ctx.drawImage(state.backgroundImage, 0, 0, logicalWidth, logicalHeight); } else { ctx.fillStyle = "#333"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); }
+    if (state.backgroundImage) { ctx.drawImage(state.backgroundImage, 0, 0, logicalWidth, logicalHeight); } else { ctx.fillStyle = "#333"; ctx.fillRect(0, 0, logicalWidth, logicalHeight); }
     if (state.mapImage) {
         const mapW = state.mapImage.width * state.imageScale;
         const mapH = state.mapImage.height * state.imageScale;
