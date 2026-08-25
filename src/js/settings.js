@@ -196,7 +196,7 @@ async function renderChannels(myPeerId) {
 function switchTab(tabName) {
     $$('.settings-tab').forEach(t => t.classList.toggle('active', t.dataset.settingsTab === tabName));
     $$('.settings-panel').forEach(p => {
-        p.style.display = (p.id === `settings-panel-${tabName}`) ? 'block' : 'none';
+        p.classList.toggle('active', p.id === `settings-panel-${tabName}`);
     });
 }
 

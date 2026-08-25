@@ -1,6 +1,6 @@
 /* RESET GLOBAL */
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: Arial, sans-serif; min-height: 100vh; display: flex; flex-direction: column; background: #0f0f0f; color: #fff; }
+body { font-family: 'Inter', Arial, sans-serif; min-height: 100vh; display: flex; flex-direction: column; background: #0f0f0f; color: #fff; }
 
 .contenedor { padding: 15px; max-width: 1200px; margin: 0 auto; flex: 1; width: 100%; }
 
@@ -88,7 +88,7 @@ body { font-family: Arial, sans-serif; min-height: 100vh; display: flex; flex-di
     transition: all 0.3s ease;
 }
 .input-row .input-group:hover { border-color: rgba(0, 170, 255, 0.3); background: rgba(255, 255, 255, 0.05); }
-.input-row .input-group label { font-size: 0.62rem; color: #00aaff; margin-bottom: 4px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+.input-row .input-group label { font-size: 0.68rem; color: #00aaff; margin-bottom: 4px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
 
 /* INPUTS DENTRO DE LOS BOXES */
 .input-group input[type="number"], 
@@ -169,7 +169,7 @@ body { font-family: Arial, sans-serif; min-height: 100vh; display: flex; flex-di
 
 /* SELECTORES DE TEXTO DENTRO DE LA BARRA */
 .text-control-item { display: flex; align-items: center; gap: 8px; }
-.text-control-item label { color: #666; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; white-space: nowrap; }
+.text-control-item label { color: rgba(255,255,255,0.5); font-size: 0.68rem; font-weight: 800; text-transform: uppercase; white-space: nowrap; }
 .text-control-item select { 
     padding: 4px 8px; 
     font-size: 0.75rem; 
@@ -214,7 +214,7 @@ body { font-family: Arial, sans-serif; min-height: 100vh; display: flex; flex-di
 
 /* ZOOM MICRO */
 .zoom-buttons { display: flex; gap: 3px; margin-top: 4px; }
-.zoom-buttons button { padding: 0; font-size: 0.6rem; min-width: 16px; height: 16px; background: #222; border: 1px solid #444; color: #fff; cursor: pointer; border-radius: 2px; display: flex; align-items: center; justify-content: center; line-height: 1; }
+.zoom-buttons button { padding: 0; font-size: 0.75rem; min-width: 22px; height: 22px; background: #222; border: 1px solid #444; color: #fff; cursor: pointer; border-radius: 3px; display: flex; align-items: center; justify-content: center; line-height: 1; }
 
 /* OTROS */
 #copy-message { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 15px 30px; background: #00aaff; border-radius: 8px; color: #fff; font-weight: bold; text-align: center; display: none; z-index: 3000; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }

@@ -346,7 +346,7 @@
                         </label>
                     </div>
                     <input type="text" id="speed-value-3" value="FUGA" maxlength="12" aria-label="Custom speed text" data-speed-index="2">
-                    <div style="font-size: 0.6rem; color: #666; margin-top: 4px; text-align: center;" data-i18n="hint_custom_text">Texto libre (máx. 12 car.)</div>
+                    <div style="font-size: 0.68rem; color: rgba(255,255,255,0.45); margin-top: 4px; text-align: center;" data-i18n="hint_custom_text">Texto libre (máx. 12 car.)</div>
                 </div>
                 <!-- Background -->
                 <div class="input-group">
@@ -510,7 +510,7 @@
             <div class="about-panel">
                 <img src="./images/branding/logotext.png" alt="ConvoyRun" class="about-logo">
                 <div class="about-tagline" data-i18n="app_tagline">Convoy & Event Manager</div>
-                <div class="about-version">v<span id="about-version">0.3.3</span></div>
+                <div class="about-version">v<span id="about-version">0.3.4</span></div>
                 <p class="about-credit"><span data-i18n="about_credit">Developed by</span> <span class="architect">dr.will</span> for <strong>CONVOYRAMA</strong></p>
                 <div class="about-links">
                     <a href="https://discord.gg/hjJcyREthH" target="_blank" data-i18n="about_link_discord">Discord de CONVOYRAMA</a>
@@ -658,7 +658,7 @@
             </div>
 
             <!-- Profile Tab -->
-            <div class="settings-panel visible" id="settings-panel-profile">
+            <div class="settings-panel active" id="settings-panel-profile">
                 <div class="settings-section">
                     <h4 data-i18n="settings_identity">Identity</h4>
                     <div class="settings-field">
@@ -702,10 +702,10 @@
             </div>
 
             <!-- Blacklist Tab -->
-            <div class="settings-panel" id="settings-panel-blacklist" style="display:none">
+            <div class="settings-panel" id="settings-panel-blacklist">
                 <div class="settings-section">
                     <h4 data-i18n="settings_blocked_list">Blocked Authors</h4>
-                    <div class="settings-add-friend-row">
+                    <div class="settings-input-row">
                         <input type="text" id="settings-add-blocked-input" data-i18n-placeholder="settings_add_blocked_ph" placeholder="Paste peer ID to block">
                         <button type="button" id="settings-add-blocked-btn" class="settings-small-btn" data-i18n="settings_add_blocked" aria-label="Block author">Block</button>
                     </div>
@@ -727,13 +727,13 @@
             </div>
 
             <!-- Channels Tab -->
-            <div class="settings-panel" id="settings-panel-channels" style="display:none">
+            <div class="settings-panel" id="settings-panel-channels">
                 <div class="settings-section">
                     <h4 data-i18n="settings_create_channel">Create Channel</h4>
-                    <div class="settings-add-friend-row">
+                    <div class="settings-input-row">
                         <input type="text" id="settings-channel-name-input" data-i18n-placeholder="settings_channel_name_ph" placeholder="Channel name">
                     </div>
-                    <div class="settings-add-friend-row">
+                    <div class="settings-input-row">
                         <input type="text" id="settings-channel-password-input" data-i18n-placeholder="settings_channel_password_ph" placeholder="Password (optional)">
                         <button type="button" id="settings-create-channel-btn" class="settings-small-btn" data-i18n="settings_create_channel_btn" aria-label="Create channel">Create</button>
                     </div>

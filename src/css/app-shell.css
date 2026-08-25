@@ -76,11 +76,11 @@ select option {
 }
 
 .app-tagline {
-    font-size: 0.55rem;
+    font-size: 0.62rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 2.5px;
-    color: rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.45);
     white-space: nowrap;
 }
 
@@ -172,8 +172,8 @@ select option {
 #zone-settings-section { margin-top: 18px; }
 #zone-settings-section > label {
     display: block;
-    font-size: 0.65rem;
-    color: #666;
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.5);
     text-transform: uppercase;
     font-weight: 800;
     letter-spacing: 0.5px;
@@ -192,7 +192,7 @@ select option {
     font-weight: 700;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.5);
     border-radius: 20px;
     cursor: pointer;
 }
@@ -545,11 +545,11 @@ select option {
     gap: 3px;
 }
 .swarm-filter-label {
-    font-size: 0.6rem;
+    font-size: 0.68rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: rgba(255, 255, 255, 0.45);
+    color: rgba(255, 255, 255, 0.5);
 }
 .swarm-filters select {
     min-width: 140px;
@@ -676,7 +676,7 @@ select option {
     letter-spacing: 0.2px;
 }
 .swarm-detail-kicker {
-    font-size: 0.58rem;
+    font-size: 0.68rem;
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -708,10 +708,10 @@ select option {
 }
 .swarm-detail-published {
     margin-top: 12px;
-    font-size: 0.62rem;
+    font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #555;
+    color: rgba(255,255,255,0.35);
 }
 
 .swarm-badges { display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
@@ -880,7 +880,7 @@ select option {
 }
 .swarm-field-full { width: 100%; }
 .swarm-field > span {
-    font-size: 0.62rem;
+    font-size: 0.68rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -1017,10 +1017,16 @@ select option {
 }
 
 .settings-panel { display: none; }
-.settings-panel.visible { display: block; }
+.settings-panel.active { display: block; }
 
 .settings-section {
     margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.settings-section:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
 }
 .settings-section h4 {
     font-size: 0.8rem;
@@ -1051,15 +1057,15 @@ select option {
 
 .settings-peer-id-row,
 .settings-nick-row,
-.settings-add-friend-row {
+.settings-input-row {
     display: flex;
     gap: 8px;
     align-items: center;
 }
 .settings-peer-id {
     flex: 1;
-    font-size: 0.65rem;
-    color: rgba(255,255,255,0.6);
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.7);
     background: rgba(255,255,255,0.05);
     padding: 6px 8px;
     border-radius: 4px;
@@ -1068,7 +1074,7 @@ select option {
     white-space: nowrap;
 }
 .settings-nick-row input,
-.settings-add-friend-row input {
+.settings-input-row input {
     flex: 1;
     font-size: 0.75rem;
     padding: 6px 8px;
@@ -1108,6 +1114,9 @@ select option {
 .settings-backup-row {
     display: flex;
     gap: 10px;
+    padding: 10px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 6px;
 }
 
 .settings-export-options {
@@ -1138,7 +1147,7 @@ select option {
 
 .settings-hint {
     font-size: 0.7rem;
-    color: rgba(255,255,255,0.4);
+    color: rgba(255,255,255,0.5);
     margin: 0 0 8px;
 }
 
@@ -1158,7 +1167,7 @@ select option {
 }
 .settings-list-item code {
     color: rgba(255,255,255,0.6);
-    font-size: 0.65rem;
+    font-size: 0.72rem;
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1206,7 +1215,7 @@ select option {
 
 .settings-empty {
     font-size: 0.7rem;
-    color: rgba(255,255,255,0.3);
+    color: rgba(255,255,255,0.4);
     font-style: italic;
     margin: 4px 0 0;
 }
@@ -1478,7 +1487,7 @@ select option {
     justify-content: center;
     gap: 8px;
     font-size: 0.72rem;
-    color: #666;
+    color: rgba(255,255,255,0.45);
     z-index: 100;
     padding: 0 16px;
     user-select: none;

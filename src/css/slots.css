@@ -54,7 +54,7 @@
 
 .current-slot-info {
     font-size: 1rem;
-    color: #718096;
+    color: rgba(255,255,255,0.5);
     margin-top: 25px;
     font-weight: 400;
 }
@@ -65,7 +65,7 @@
 }
 
 .current-slot-info .slot-range {
-    color: #4a5568;
+    color: rgba(255,255,255,0.3);
 }
 
 .timeline-section {
@@ -82,7 +82,7 @@
     border-radius: 50%;
     border: 1px solid rgba(255,255,255,0.1);
     background: rgba(255,255,255,0.03);
-    color: #718096;
+    color: rgba(255,255,255,0.5);
     font-size: 1.4rem;
     cursor: pointer;
     transition: all 0.25s ease;
@@ -196,7 +196,7 @@
 
 .slot-end {
     font-size: 0.85rem;
-    color: #4a5568;
+    color: rgba(255,255,255,0.4);
     font-weight: 400;
 }
 
@@ -205,8 +205,8 @@
 }
 
 .slot-number {
-    font-size: 0.65rem;
-    color: #2d3748;
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.35);
     margin-top: 12px;
     padding: 3px 10px;
     background: rgba(255,255,255,0.04);
@@ -234,7 +234,7 @@
     align-items: center;
     gap: 10px;
     font-size: 0.8rem;
-    color: #4a5568;
+    color: rgba(255,255,255,0.45);
     font-weight: 500;
 }
 
@@ -250,7 +250,7 @@
 }
 
 .legend-dot.past {
-    background: #2d3748;
+    background: rgba(255,255,255,0.2);
 }
 
 .legend-dot.future {
@@ -266,7 +266,7 @@
 .slots-grid-title {
     text-align: center;
     font-size: 0.8rem;
-    color: #4a5568;
+    color: rgba(255,255,255,0.45);
     letter-spacing: 2px;
     text-transform: uppercase;
     margin-bottom: 25px;
@@ -300,8 +300,8 @@
 }
 
 .grid-slot-number {
-    font-size: 0.65rem;
-    color: #4a5568;
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.4);
     font-weight: 600;
     letter-spacing: 1px;
     margin-bottom: 10px;
@@ -329,7 +329,7 @@
 
 .grid-slot-end {
     font-size: 0.8rem;
-    color: #4a5568;
+    color: rgba(255,255,255,0.4);
 }
 
 .slots-footer {
@@ -340,7 +340,7 @@
 }
 
 .slots-footer p {
-    color: #2d3748;
+    color: rgba(255,255,255,0.3);
     font-size: 0.75rem;
     letter-spacing: 1px;
 }
