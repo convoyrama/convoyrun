@@ -8,6 +8,7 @@ import { showCopyMessage } from './core/utils.js';
 import { readMetadataFromPNG } from './core/png-metadata.js';
 import { createConvoy, isWithinPublishWindow } from './core/convoy.js';
 import { swarmPublish, swarmGetConfig, swarmSetConfig, swarmValidateChannel, uploadToCatbox } from './native/tauri-bridge.js';
+import { AVAILABLE_LANGUAGES } from './core/config.js';
 
 const { DateTime } = luxon;
 const MAX_FLYER_BYTES = 2 * 1024 * 1024;
@@ -45,24 +46,13 @@ let _publishInitialized = false;
 export function initSwarmPublish(onPublished) {
     if (_publishInitialized) return;
     _publishInitialized = true;
-    console.log('[SWARM-PUBLISH] initSwarmPublish called');
     const overlay = document.getElementById('swarm-wizard');
     const openBtn = document.getElementById('swarm-publish-btn');
     const cancelBtn = document.getElementById('swarm-w-cancel');
     const submitBtn = document.getElementById('swarm-w-submit');
     const zoneEl = document.getElementById('swarm-w-zone');
-    console.log('[SWARM-PUBLISH] Elements found:', {
-        overlay: !!overlay, openBtn: !!openBtn, cancelBtn: !!cancelBtn,
-        submitBtn: !!submitBtn, zoneEl: !!zoneEl
-    });
-    if (!overlay || !openBtn) {
-        console.error('[SWARM-PUBLISH] ABORT: overlay or openBtn is null');
-        return;
-    }
-    if (!submitBtn) {
-        console.error('[SWARM-PUBLISH] ABORT: submitBtn is null');
-        return;
-    }
+    if (!overlay || !openBtn) return;
+    if (!submitBtn) return;
 
     const nameEl = document.getElementById('swarm-w-name');
     const gameEl = document.getElementById('swarm-w-game');
@@ -89,16 +79,6 @@ export function initSwarmPublish(onPublished) {
     let currentThumb = null;
     let currentOriginalUrl = null;
     let currentFlyerSize = 0;
-
-    const AVAILABLE_LANGUAGES = [
-        { code: 'es', key: 'swarm_lang_es' },
-        { code: 'en', key: 'swarm_lang_en' },
-        { code: 'pt', key: 'swarm_lang_pt' },
-        { code: 'fr', key: 'swarm_lang_fr' },
-        { code: 'de', key: 'swarm_lang_de' },
-        { code: 'it', key: 'swarm_lang_it' },
-        { code: 'nl', key: 'swarm_lang_nl' },
-    ];
 
     function populateLanguages(defaultLangs) {
         if (!languagesGroup) return;
@@ -274,7 +254,6 @@ export function initSwarmPublish(onPublished) {
         const name = nameEl.value.trim();
         const dateVal = dateEl.value;
         const timeVal = timeEl.value;
-        console.log('[SWARM-PUBLISH] Submit clicked', { name, dateVal, timeVal, hasThumb: !!currentThumb });
 
         hideStatus();
 
@@ -315,8 +294,6 @@ export function initSwarmPublish(onPublished) {
         const channelName = channelEl ? channelEl.value.trim() : '';
         if (channelName) convoy.channel = channelName;
 
-        console.log('[SWARM-PUBLISH] Convoy created', { id: convoy.id, game: convoy.event.game, mode: convoy.event.mode });
-
         if (!isWithinPublishWindow(convoy)) {
             showStatus(state.currentLangData.swarm_wizard_error_window || 'Solo se pueden publicar convoys hasta 3 meses adelante.');
             return;
@@ -327,9 +304,7 @@ export function initSwarmPublish(onPublished) {
 
         try {
             const channelPassword = channelPasswordEl ? channelPasswordEl.value : '';
-            console.log('[SWARM-PUBLISH] Calling swarmPublish...');
             const result = await swarmPublish(convoy, channelName, channelPassword);
-            console.log('[SWARM-PUBLISH] swarmPublish result:', result);
 
             const nick = nicknameEl.value.trim();
             if (nick) {
@@ -354,22 +329,18 @@ export function initSwarmPublish(onPublished) {
         }
     }
 
-    console.log('[SWARM-PUBLISH] Attaching event listeners...');
     openBtn.addEventListener('click', () => openWizard().catch(e => console.error('[SWARM-PUBLISH] openWizard error:', e)));
-    console.log('[SWARM-PUBLISH] openBtn listener attached');
     if (cancelBtn) cancelBtn.addEventListener('click', closeWizard);
     submitBtn.addEventListener('click', () => submit().catch(e => console.error('[SWARM-PUBLISH] submit error:', e)));
-    console.log('[SWARM-PUBLISH] submitBtn listener attached');
     flyerInput.addEventListener('change', (e) => handleFlyerFile(e.target.files[0]));
     overlay.addEventListener('click', (e) => { if (e.target === overlay) closeWizard(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && overlay.classList.contains('open')) closeWizard(); });
     window.addEventListener('languageChanged', updateZoneLabel);
-    console.log('[SWARM-PUBLISH] All listeners attached successfully');
 
-    // WebKitGTK no cierra el picker de fecha/hora solo con seleccionar: hay que
-    // hacer blur (mismo fix que main.js) para que el calendario nativo desaparezca.
+    // Prevenir que clicks en date/time picker propaguen al overlay
     [dateEl, timeEl].forEach(input => {
-        input.addEventListener('change', () => input.blur());
+        input.addEventListener('click', (e) => e.stopPropagation());
+        input.addEventListener('mousedown', (e) => e.stopPropagation());
         input.addEventListener('keydown', (e) => { if (e.key === 'Escape') input.blur(); });
     });
 }

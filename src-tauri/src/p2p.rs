@@ -425,8 +425,6 @@ pub enum GossipMessage {
     Channel { data: String },
     #[serde(rename = "blacklist")]
     Blacklist { data: String },
-    #[serde(rename = "report")]
-    Report { data: String },
 }
 
 impl P2pState {
@@ -515,11 +513,4 @@ impl P2pState {
         Self::publish_gossip(sender, message).await
     }
 
-    /// Publica un reporte por gossip
-    pub async fn publish_report_gossip(sender: &distributed_topic_tracker::GossipSender, report_json: &str) -> Result<()> {
-        let message = GossipMessage::Report {
-            data: report_json.to_string(),
-        };
-        Self::publish_gossip(sender, message).await
-    }
 }

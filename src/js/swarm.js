@@ -18,13 +18,12 @@ import {
 const { DateTime } = luxon;
 
 const FILTER_LABELS = {
-    'filter-game':   { all: 'swarm_filter_all', ATS: 'swarm_game_ats', ETS2: 'swarm_game_ets2' },
-    'filter-mode':   { all: 'swarm_filter_all', simulation: 'swarm_mode_simulation', realistic: 'swarm_mode_realistic', arcade: 'swarm_mode_arcade' },
+    'filter-game':   { all: 'swarm_filter_all', ATS: 'swarm_game_ats', ETS2: 'swarm_game_ets2', other: 'swarm_filter_other' },
+    'filter-mode':   { all: 'swarm_filter_all', simulation: 'swarm_mode_simulation', realistic: 'swarm_mode_realistic', arcade: 'swarm_mode_arcade', other: 'swarm_filter_other' },
     'filter-author': { all: 'swarm_filter_all', trusted: 'swarm_filter_trusted' },
     'filter-score':  { all: 'swarm_filter_all', positive: 'swarm_filter_positive' },
     'filter-order':  { time: 'swarm_filter_order_time', reputation: 'swarm_filter_order_rep' },
     'filter-channel': { all: 'swarm_channel_filter_all' },
-    'filter-language': { all: 'swarm_filter_all' },
 };
 
 let convoys = [];
@@ -34,12 +33,11 @@ let config = {};
 let nodeMode = 'local';
 let myPeerId = '';
 let lang = 'en';
-let showAllDays = false;
-let selectedDayKey = null;
 let blockedAuthorsSet = new Set();
 let _autoRefreshInterval = null;
+let expandedConvoyId = null;
 
-let listEl, emptyEl, emptyFilteredEl, statusEl, dayBarEl, loadingEl;
+let listEl, emptyEl, emptyFilteredEl, loadingEl;
 
 function label(key, fallback) {
     return state.currentLangData[key] || fallback;
@@ -90,14 +88,6 @@ function populateFilterLabels() {
     }
 }
 
-function setStatusLabel() {
-    let text = label('swarm_status_offline', 'Offline');
-    if (nodeMode === 'online') text = label('swarm_status_online', 'Nodo online');
-    statusEl.textContent = text;
-    statusEl.dataset.mode = nodeMode;
-    statusEl.title = label('swarm_status_title', 'Estado del nodo');
-}
-
 function readFilters() {
     const val = id => { const s = document.getElementById(id); return s ? s.value : 'all'; };
     return {
@@ -107,7 +97,7 @@ function readFilters() {
         score: val('filter-score'),
         order: val('filter-order'),
         channel: val('filter-channel'),
-        language: val('filter-language'),
+        language: 'all',
     };
 }
 
@@ -120,12 +110,20 @@ function applyFilters(list) {
     if (f.trust === 'trusted') out = out.filter(c => (config.trustedPeers || []).includes(c.peerId));
     if (f.score === 'positive') out = out.filter(c => computeScore(votes[c.id]) >= 0);
     if (f.channel !== 'all') out = out.filter(c => c.channel === f.channel);
-    if (f.language !== 'all') out = out.filter(c => (c.event.languages || []).includes(f.language));
+    // Filtrar por idiomas seleccionados en Settings (defaultLanguages)
+    const allowedLangs = config.defaultLanguages || [];
+    if (allowedLangs.length > 0) {
+        out = out.filter(c => {
+            const cLangs = c.event.languages || [];
+            if (cLangs.length === 0) return true; // eventos sin idioma siempre visibles
+            return cLangs.some(l => allowedLangs.includes(l));
+        });
+    }
     out = out.filter(c => !isOffensive(c));
     return out;
 }
 
-const OFFENSIVE_PATTERNS = /\b(spam|scam|hack|cheat|free.?coins|click.?here|buy.?followers)\b/i;
+const OFFENSIVE_PATTERNS = /\b(spam|scam|hack|cheat|free.?coins|click.?here|buy.?followers|estafa|robo|hackeo|monedas.?gratis|golpistas|hack\.\w+\.\w+)\b/i;
 function isOffensive(c) {
     const text = `${c.event.name || ''} ${c.event.description || ''}`;
     return OFFENSIVE_PATTERNS.test(text);
@@ -152,37 +150,6 @@ function buildDayHeader(dayKey) {
     else if (dayKey === dayKeyUTC(nowTs + 86400)) title = label('swarm_day_tomorrow', 'Mañana');
     else title = dt.toLocaleString(DateTime.DATE_FULL, { locale: lang });
     return el('div', 'swarm-day', title);
-}
-
-function dayChipLabel(dayKey, nowTs) {
-    if (dayKey === dayKeyUTC(nowTs)) return label('swarm_day_today', 'Hoy');
-    if (dayKey === dayKeyUTC(nowTs + 86400)) return label('swarm_day_tomorrow', 'Mañana');
-    return DateTime.fromISO(dayKey, { zone: 'UTC' }).toFormat('EEE d', { locale: lang });
-}
-
-function renderDayBar(dayKeys) {
-    if (!dayBarEl) return;
-    dayBarEl.innerHTML = '';
-
-    const soonChip = el('button', 'swarm-day-chip' + (selectedDayKey === null ? ' active' : ''),
-        showAllDays ? label('swarm_day_all', 'Todos') : label('swarm_day_soon', 'Próximos'));
-    soonChip.type = 'button';
-    soonChip.addEventListener('click', () => {
-        selectedDayKey = null;
-        renderAll();
-    });
-    dayBarEl.appendChild(soonChip);
-
-    for (const day of dayKeys) {
-        const chip = el('button', 'swarm-day-chip' + (selectedDayKey === day ? ' active' : ''), dayChipLabel(day, nowUnix()));
-        chip.type = 'button';
-        chip.title = DateTime.fromISO(day, { zone: 'UTC' }).toLocaleString(DateTime.DATE_FULL, { locale: lang });
-        chip.addEventListener('click', () => {
-            selectedDayKey = selectedDayKey === day ? null : day;
-            renderAll();
-        });
-        dayBarEl.appendChild(chip);
-    }
 }
 
 function formatMeetingTime(c) {
@@ -213,25 +180,27 @@ function buildVoteBtn(c, dir) {
     return b;
 }
 
-function toggleExpand(wrap) {
+function toggleExpand(wrap, convoyId) {
     const details = wrap.querySelector('.swarm-row-details');
     const caret = wrap.querySelector('.swarm-row-caret');
-    const open = !details.hidden;
-    details.hidden = open;
-    wrap.classList.toggle('open', !open);
-    caret.textContent = open ? '▶' : '▼';
+    const wasOpen = !details.hidden;
+    details.hidden = wasOpen;
+    wrap.classList.toggle('open', !wasOpen);
+    caret.textContent = wasOpen ? '▶' : '▼';
+    expandedConvoyId = wasOpen ? null : convoyId;
 }
 
 function buildEvent(c) {
     const wrap = el('div', 'swarm-event');
+    wrap.dataset.convoyId = c.id;
 
     const row = el('div', 'swarm-row');
     row.tabIndex = 0;
     row.setAttribute('role', 'button');
     row.title = label('swarm_row_toggle', 'Ver detalles');
-    row.addEventListener('click', () => toggleExpand(wrap));
+    row.addEventListener('click', () => toggleExpand(wrap, c.id));
     row.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpand(wrap); }
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpand(wrap, c.id); }
     });
 
     row.appendChild(el('span', 'swarm-row-caret', '▶'));
@@ -301,45 +270,30 @@ function buildEvent(c) {
     nickSpan.dataset.peerId = c.peerId;
     nickSpan.title = c.peerId;
     author.appendChild(nickSpan);
-    if ((config.trustedPeers || []).includes(c.peerId)) {
-        author.appendChild(el('span', 'swarm-trusted-badge', label('swarm_author_trusted', 'confianza')));
+    if (c.peerId && c.peerId !== myPeerId) {
+        if ((config.trustedPeers || []).includes(c.peerId)) {
+            author.appendChild(el('span', 'swarm-trusted-badge', label('swarm_author_trusted', 'confianza')));
+        }
+        const trustBtn = el('button', 'swarm-trust-btn',
+            (config.trustedPeers || []).includes(c.peerId) ? label('swarm_trust_remove', 'Quitar confianza') : label('swarm_trust_add', 'Confiar'));
+        trustBtn.addEventListener('click', async () => {
+            const list = config.trustedPeers || [];
+            const next = list.includes(c.peerId) ? list.filter(p => p !== c.peerId) : [...list, c.peerId];
+            await swarmSetConfig({ ...config, trustedPeers: next });
+            await renderAll();
+        });
+        author.appendChild(trustBtn);
     }
-    const trustBtn = el('button', 'swarm-trust-btn',
-        (config.trustedPeers || []).includes(c.peerId) ? label('swarm_trust_remove', 'Quitar confianza') : label('swarm_trust_add', 'Confiar'));
-    trustBtn.addEventListener('click', async () => {
-        const list = config.trustedPeers || [];
-        const next = list.includes(c.peerId) ? list.filter(p => p !== c.peerId) : [...list, c.peerId];
-        await swarmSetConfig({ ...config, trustedPeers: next });
-        await renderAll();
-    });
-    author.appendChild(trustBtn);
 
     if (c.peerId && c.peerId !== myPeerId) {
         const blockBtn = el('button', 'swarm-block-btn', '🚫');
-        blockBtn.title = 'Block author';
+        blockBtn.title = label('swarm_block_title', 'Block author');
         blockBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
             await blockAuthor(c.peerId);
             await renderAll();
         });
         author.appendChild(blockBtn);
-
-        const reportBtn = el('button', 'swarm-report-btn', '⚠️');
-        reportBtn.title = label('swarm_report', 'Reportar evento');
-        reportBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const reason = prompt(label('swarm_report_reason', 'Motivo del reporte:'));
-            if (!reason) return;
-            try {
-                const { swarmReport } = await import('./native/tauri-bridge.js');
-                await swarmReport(c.id, c.peerId, reason);
-                showCopyMessage(label('swarm_report_ok', 'Evento reportado. Gracias.'));
-            } catch (err) {
-                console.error('[SWARM-REPORT] Failed:', err);
-                showCopyMessage(label('swarm_report_fail', 'Error al reportar.'));
-            }
-        });
-        author.appendChild(reportBtn);
     }
 
     if (c.peerId && c.peerId === myPeerId) {
@@ -348,8 +302,13 @@ function buildEvent(c) {
         deleteBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (!confirm(label('swarm_delete_confirm', '¿Eliminar este convoy? No se puede deshacer.'))) return;
-            await swarmDelete(c.id);
-            await renderAll();
+            try {
+                await swarmDelete(c.id);
+                await renderAll();
+            } catch (err) {
+                console.error('[SWARM] Delete failed:', err);
+                showCopyMessage(label('swarm_delete_fail', 'No se pudo eliminar: ' + (err?.toString() || 'error')));
+            }
         });
         author.appendChild(deleteBtn);
     }
@@ -392,8 +351,6 @@ function renderList() {
     const filtered = sortList(applyFilters(convoys));
     const showEmpty = convoys.length === 0;
     const showFiltered = !showEmpty && filtered.length === 0;
-    console.log('[SWARM] renderList:', { total: convoys.length, filtered: filtered.length, showEmpty, showFiltered, showAllDays });
-
     setVisible(emptyEl, showEmpty, 'block');
     setVisible(emptyFilteredEl, showFiltered, 'block');
 
@@ -405,39 +362,31 @@ function renderList() {
     }
 
     const dayKeys = [...groups.keys()].sort();
-    if (selectedDayKey && !dayKeys.includes(selectedDayKey)) selectedDayKey = null;
-    if (dayBarEl) setVisible(dayBarEl, !(showEmpty || showFiltered), 'flex');
-    renderDayBar(dayKeys);
 
     const nowTs = nowUnix();
     const today = dayKeyUTC(nowTs);
     const tomorrow = dayKeyUTC(nowTs + 86400);
-    const inRange = day => showAllDays || day === today || day === tomorrow;
 
-    let visibleDays;
-    if (selectedDayKey) {
-        visibleDays = [selectedDayKey];
-    } else {
-        visibleDays = dayKeys.filter(inRange);
-    }
-
-    const toggleEl = document.getElementById('swarm-range-toggle');
-    const hintEl = document.getElementById('swarm-range-hint');
-    if (toggleEl) {
-        setVisible(toggleEl, !(showEmpty || showFiltered || selectedDayKey), 'inline-block');
-        toggleEl.textContent = showAllDays
-            ? label('swarm_range_fewer', 'Solo hoy y mañana')
-            : label('swarm_range_more', 'Ver próximos días');
-    }
-    const noRangeContent = !showEmpty && !showFiltered && filtered.length > 0 && visibleDays.length === 0;
-    if (hintEl) setVisible(hintEl, noRangeContent, 'block');
-
-    setVisible(listEl, !(showEmpty || showFiltered || noRangeContent), 'block');
+    setVisible(listEl, !(showEmpty || showFiltered), 'block');
     listEl.innerHTML = '';
 
-    for (const day of visibleDays) {
-        listEl.appendChild(buildDayHeader(day));
-        groups.get(day).forEach(c => listEl.appendChild(buildEvent(c)));
+    for (const day of dayKeys) {
+        const header = buildDayHeader(day);
+        if (day === today) header.classList.add('swarm-day-today');
+        else if (day === tomorrow) header.classList.add('swarm-day-tomorrow');
+        listEl.appendChild(header);
+        groups.get(day).forEach(c => {
+            const wrap = buildEvent(c);
+            if (day < today) wrap.classList.add('swarm-event-past');
+            else if (day === today) wrap.classList.add('swarm-event-today');
+            else if (day === tomorrow) wrap.classList.add('swarm-event-tomorrow');
+            listEl.appendChild(wrap);
+        });
+    }
+
+    if (expandedConvoyId) {
+        const expandedWrap = listEl.querySelector(`[data-convoy-id="${expandedConvoyId}"]`)?.closest('.swarm-event');
+        if (expandedWrap) toggleExpand(expandedWrap, expandedConvoyId);
     }
 }
 
@@ -458,44 +407,18 @@ function updateChannelFilter() {
     sel.value = current || 'all';
 }
 
-const LANG_LABELS = {
-    es: 'swarm_lang_es', en: 'swarm_lang_en', pt: 'swarm_lang_pt',
-    fr: 'swarm_lang_fr', de: 'swarm_lang_de', it: 'swarm_lang_it', nl: 'swarm_lang_nl',
-};
 
-function updateLanguageFilter() {
-    const sel = document.getElementById('filter-language');
-    if (!sel) return;
-    const langs = [...new Set(convoys.flatMap(c => c.event.languages || []).filter(Boolean))].sort();
-    const current = sel.value;
-    sel.innerHTML = '';
-    const allOpt = el('option', 'swarm_filter_all', label('swarm_filter_all', 'Todos'));
-    allOpt.value = 'all';
-    sel.appendChild(allOpt);
-    for (const l of langs) {
-        const opt = el('option', '', label(LANG_LABELS[l] || '', l.toUpperCase()));
-        opt.value = l;
-        sel.appendChild(opt);
-    }
-    sel.value = current || 'all';
-}
 
 async function renderAll() {
-    console.log('[SWARM] renderAll called');
     if (loadingEl) setVisible(loadingEl, true, 'flex');
     if (listEl) setVisible(listEl, false);
     const [c, v, my, cfg, blacklists] = await Promise.all([
         swarmList(), swarmGetVotes(), swarmGetMyVotes(), swarmGetConfig(),
         getPublicBlacklists(),
     ]);
-    console.log('[SWARM] renderAll raw data:', {
-        listCount: Array.isArray(c) ? c.length : 'not-array',
-        votesCount: v ? Object.keys(v).length : 0,
-    });
     convoys = (Array.isArray(c) ? c : []).filter(validateConvoy);
-    console.log('[SWARM] After validateConvoy filter:', convoys.length, 'convoys remain');
     if (convoys.length === 0 && Array.isArray(c) && c.length > 0) {
-        console.warn('[SWARM] All convoys rejected by validateConvoy! First convoy:', JSON.stringify(c[0]).slice(0, 500));
+        console.warn('[SWARM] All convoys rejected by validateConvoy');
     }
     votes = v || {};
     myVotes = my || {};
@@ -512,7 +435,6 @@ async function renderAll() {
     }
 
     updateChannelFilter();
-    updateLanguageFilter();
     if (loadingEl) setVisible(loadingEl, false);
     renderList();
 }
@@ -524,8 +446,6 @@ export function initSwarm() {
     listEl = document.getElementById('swarm-list');
     emptyEl = document.getElementById('swarm-empty');
     emptyFilteredEl = document.getElementById('swarm-empty-filtered');
-    statusEl = document.getElementById('swarm-node-status');
-    dayBarEl = document.getElementById('swarm-daybar');
     loadingEl = document.getElementById('swarm-loading');
     if (!listEl || !emptyEl) return () => {};
 
@@ -533,23 +453,16 @@ export function initSwarm() {
 
     document.querySelectorAll('#swarm-filters select').forEach(sel => sel.addEventListener('change', renderAll));
 
-    const toggleEl = document.getElementById('swarm-range-toggle');
-    if (toggleEl) toggleEl.addEventListener('click', () => { showAllDays = !showAllDays; renderAll(); });
-
     window.addEventListener('languageChanged', (e) => {
         lang = e.detail.lang || 'en';
         populateFilterLabels();
-        setStatusLabel();
         renderAll();
     });
 
     (async () => {
-        console.log('[SWARM] Initializing P2P...');
         const s = await swarmInit();
-        console.log('[SWARM] P2P init result:', s);
         nodeMode = s.mode;
         myPeerId = s.peerId || '';
-        setStatusLabel();
         await renderAll();
     })();
 
@@ -560,7 +473,6 @@ export function initSwarm() {
             const s = await swarmInit();
             nodeMode = s.mode;
             myPeerId = s.peerId || '';
-            setStatusLabel();
             if (nodeMode === 'online') clearInterval(_retryInterval);
         } catch { /* retry later */ }
     }, 30000);
@@ -573,7 +485,6 @@ export function initSwarm() {
             const s = await swarmInit();
             nodeMode = s.mode;
             myPeerId = s.peerId || '';
-            setStatusLabel();
         } catch { /* keep current status */ }
         await renderAll();
     }, 60000);

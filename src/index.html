@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -50,7 +50,6 @@
                 <div class="swarm-topbar">
                     <h3 data-i18n="swarm_title">Calendario de Convoys</h3>
                     <div class="swarm-topbar-actions">
-                        <span class="node-status" id="swarm-node-status" data-mode="local" data-i18n-title="swarm_status_title" title="Estado del nodo">Demo local</span>
                         <button type="button" id="swarm-publish-btn" class="swarm-publish-btn" data-i18n="swarm_publish_btn">Publicar convoy</button>
                     </div>
                 </div>
@@ -103,19 +102,6 @@
                             <option value="all" data-i18n="swarm_channel_filter_all">Todos los canales</option>
                         </select>
                     </div>
-                    <div class="swarm-filter-group">
-                        <label class="swarm-filter-label" for="filter-language" data-i18n="swarm_filter_language">Idioma</label>
-                        <select id="filter-language">
-                            <option value="all" data-i18n="swarm_filter_all">Todos</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="swarm-daybar" id="swarm-daybar"></div>
-
-                <div class="swarm-range-bar">
-                    <button type="button" id="swarm-range-toggle" class="swarm-range-toggle" hidden data-i18n="swarm_range_more">Ver próximos días</button>
-                    <p id="swarm-range-hint" class="swarm-range-hint" hidden data-i18n="swarm_range_hint">No hay convoys para hoy o mañana. Tocá "Ver próximos días".</p>
                 </div>
 
                 <div class="swarm-list" id="swarm-list"></div>
@@ -524,7 +510,7 @@
             <div class="about-panel">
                 <img src="./images/branding/logotext.png" alt="ConvoyRun" class="about-logo">
                 <div class="about-tagline" data-i18n="app_tagline">Convoy & Event Manager</div>
-                <div class="about-version">v<span id="about-version">0.2.3</span></div>
+                <div class="about-version">v<span id="about-version">0.3.2</span></div>
                 <p class="about-credit"><span data-i18n="about_credit">Developed by</span> <span class="architect">dr.will</span> for <strong>CONVOYRAMA</strong></p>
                 <div class="about-links">
                     <a href="https://discord.gg/hjJcyREthH" target="_blank" data-i18n="about_link_discord">Discord de CONVOYRAMA</a>

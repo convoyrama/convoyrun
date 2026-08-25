@@ -176,7 +176,6 @@ function initTabs() {
 }
 
 async function init() {
-    console.log('[MAIN] init() called');
     initI18n();
 
     initTabs();
@@ -273,18 +272,18 @@ async function init() {
             statusEl.dataset.mode = mode;
             if (mode === 'online') {
                 statusEl.textContent = state.currentLangData.discovery_connected?.replace('{count}', nc) || `${nc} peers`;
-                peersEl.textContent = nc + ' peers';
+                peersEl.textContent = nc + (state.currentLangData.footer_peers_suffix || ' peers');
             } else if (mode === 'searching') {
                 statusEl.textContent = state.currentLangData.discovery_searching || 'P2P active — searching for peers...';
-                peersEl.textContent = '0 peers';
+                peersEl.textContent = '0' + (state.currentLangData.footer_peers_suffix || ' peers');
             } else {
                 statusEl.textContent = state.currentLangData.discovery_offline || 'P2P offline';
-                peersEl.textContent = '0 peers';
+                peersEl.textContent = '0' + (state.currentLangData.footer_peers_suffix || ' peers');
             }
             if (p2pDot) p2pDot.dataset.status = mode === 'online' ? 'online' : (mode === 'searching' ? 'searching' : 'offline');
             if (p2pCount) p2pCount.textContent = nc;
         } catch {
-            statusEl.textContent = 'Offline';
+            statusEl.textContent = state.currentLangData.discovery_offline || 'P2P offline';
             peersEl.textContent = '';
             if (p2pDot) p2pDot.dataset.status = 'offline';
             if (p2pCount) p2pCount.textContent = '0';

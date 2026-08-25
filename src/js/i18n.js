@@ -1,4 +1,6 @@
 // Standalone (el sitio usa main-i18n.js aparte); dispara 'languageChanged'.
+import * as state from './core/state.js';
+
 let _loading = false;
 async function loadLanguage(lang) {
     if (_loading) return;
@@ -24,6 +26,7 @@ async function loadLanguage(lang) {
         document.title = translations.page_title || document.title;
         document.documentElement.lang = lang;
         localStorage.setItem('preferred-lang', lang);
+        state.setCurrentLang(lang);
 
         document.querySelectorAll('.lang-btn').forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);

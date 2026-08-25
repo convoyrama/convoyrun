@@ -451,11 +451,14 @@ impl ConvoyStore {
         }
     }
 
-    /// Guarda el store a disco
+    /// Guarda el store a disco (write atómico: temp file + rename)
     pub fn save(&self, data_dir: &Path) -> Result<()> {
         let store_path = data_dir.join("convoy_store.json");
-        std::fs::write(&store_path, serde_json::to_string_pretty(self)?)
+        let tmp_path = data_dir.join("convoy_store.json.tmp");
+        std::fs::write(&tmp_path, serde_json::to_string_pretty(self)?)
             .context("Failed to write convoy store")?;
+        std::fs::rename(&tmp_path, &store_path)
+            .context("Failed to rename convoy store")?;
         Ok(())
     }
 
@@ -534,11 +537,14 @@ impl ChannelStore {
         }
     }
 
-    /// Guarda el store a disco
+    /// Guarda el store a disco (write atómico: temp file + rename)
     pub fn save(&self, data_dir: &Path) -> Result<()> {
         let store_path = data_dir.join("channel_store.json");
-        std::fs::write(&store_path, serde_json::to_string_pretty(self)?)
+        let tmp_path = data_dir.join("channel_store.json.tmp");
+        std::fs::write(&tmp_path, serde_json::to_string_pretty(self)?)
             .context("Failed to write channel store")?;
+        std::fs::rename(&tmp_path, &store_path)
+            .context("Failed to rename channel store")?;
         Ok(())
     }
 
@@ -701,8 +707,11 @@ impl BlacklistStore {
 
     pub fn save(&self, data_dir: &Path) -> Result<()> {
         let store_path = data_dir.join("blacklist_store.json");
-        std::fs::write(&store_path, serde_json::to_string_pretty(self)?)
+        let tmp_path = data_dir.join("blacklist_store.json.tmp");
+        std::fs::write(&tmp_path, serde_json::to_string_pretty(self)?)
             .context("Failed to write blacklist store")?;
+        std::fs::rename(&tmp_path, &store_path)
+            .context("Failed to rename blacklist store")?;
         Ok(())
     }
 

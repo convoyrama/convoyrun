@@ -1,6 +1,6 @@
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::ImageEncoder;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
@@ -22,7 +22,6 @@ struct AppState {
     channel_store: Arc<RwLock<ChannelStore>>,
     blacklist_store: Arc<RwLock<BlacklistStore>>,
     config: Arc<RwLock<UserConfig>>,
-    reports: Arc<RwLock<Vec<serde_json::Value>>>,
 }
 
 /// Helper: flush convoy store a disco (llamar con lock ya adquirido)
@@ -68,9 +67,10 @@ async fn process_gossip_receiver(
     channel_store: Arc<RwLock<ChannelStore>>,
     blacklist_store: Arc<RwLock<BlacklistStore>>,
     neighbor_count: Arc<AtomicUsize>,
-    reports: Arc<RwLock<Vec<serde_json::Value>>>,
 ) {
     eprintln!("[P2P] Gossip receiver started");
+    let mut seen: HashSet<String> = HashSet::new();
+    const MAX_SEEN: usize = 10_000;
     loop {
         match receiver.next().await {
             Ok(event) => {
@@ -81,11 +81,8 @@ async fn process_gossip_receiver(
                         continue;
                     }
                     iroh_gossip::api::Event::NeighborDown(ref peer) => {
-                        let prev = neighbor_count.load(Ordering::Relaxed);
-                        if prev > 0 {
-                            neighbor_count.store(prev - 1, Ordering::Relaxed);
-                        }
-                        let count = neighbor_count.load(Ordering::Relaxed);
+                        neighbor_count.fetch_sub(1, Ordering::SeqCst);
+                        let count = neighbor_count.load(Ordering::SeqCst);
                         eprintln!("[P2P] NeighborDown: {} (neighbors: {})", peer, count);
                         continue;
                     }
@@ -95,6 +92,34 @@ async fn process_gossip_receiver(
                     continue;
                 }
                 if let Ok(gossip_msg) = serde_json::from_slice::<GossipMessage>(&message.content) {
+                    // Deduplicación: generar key única por mensaje
+                    let dedup_key = match &gossip_msg {
+                        GossipMessage::Convoy { data } => {
+                            serde_json::from_str::<ConvoyRecord>(data).ok().map(|r| format!("convoy:{}", r.id))
+                        }
+                        GossipMessage::Vote { data } => {
+                            serde_json::from_str::<VoteRecord>(data).ok().map(|r| format!("vote:{}:{}", r.convoy_id, r.voter_peer_id))
+                        }
+                        GossipMessage::DeleteConvoy { convoy_id, peer_id, .. } => {
+                            Some(format!("delete:{}:{}", convoy_id, peer_id))
+                        }
+                        GossipMessage::Channel { data } => {
+                            serde_json::from_str::<ChannelRecord>(data).ok().map(|r| format!("channel:{}", r.name))
+                        }
+                        GossipMessage::Blacklist { data } => {
+                            serde_json::from_str::<BlacklistRecord>(data).ok().map(|r| format!("blacklist:{}:{}", r.author_peer_id, r.updated_at))
+                        }
+                    };
+                    if let Some(ref key) = dedup_key {
+                        if seen.contains(key) {
+                            continue;
+                        }
+                        seen.insert(key.clone());
+                        if seen.len() > MAX_SEEN {
+                            seen.clear();
+                        }
+                    }
+
                     // Verificar si el autor está bloqueado
                     let author_peer_id = match &gossip_msg {
                         GossipMessage::Convoy { data } => {
@@ -110,11 +135,6 @@ async fn process_gossip_receiver(
                         GossipMessage::Blacklist { data } => {
                             serde_json::from_str::<BlacklistRecord>(data).ok().map(|r| r.author_peer_id)
                         }
-                        GossipMessage::Report { data } => {
-                            serde_json::from_str::<serde_json::Value>(data)
-                                .ok()
-                                .and_then(|v| v.get("reporterPeerId").and_then(|id| id.as_str()).map(String::from))
-                        }
                     };
                     if let Some(ref pid) = author_peer_id {
                         let config = config_cache.read().await;
@@ -126,6 +146,11 @@ async fn process_gossip_receiver(
                     match gossip_msg {
                         GossipMessage::Convoy { data } => {
                             if let Ok(record) = serde_json::from_str::<ConvoyRecord>(&data) {
+                                // Validar expiración antes de almacenar
+                                let now = chrono::Utc::now().timestamp();
+                                if !record.is_retained(now) || !record.is_within_publish_window(now) {
+                                    continue;
+                                }
                                 match record.verify() {
                                     Ok(true) => {
                                         let mut store = convoy_store.write().await;
@@ -242,13 +267,6 @@ async fn process_gossip_receiver(
                                 flush_blacklist_store(&store, &data_dir);
                             }
                         }
-                        GossipMessage::Report { data } => {
-                            eprintln!("[P2P] Received report: {}", data);
-                            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&data) {
-                                let mut r = reports.write().await;
-                                r.push(val);
-                            }
-                        }
                     }
                 } else {
                     eprintln!("[P2P] Received malformed gossip message ({} bytes), ignoring", message.content.len());
@@ -325,11 +343,10 @@ async fn p2p_init(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<N
             let chs = state.channel_store.clone();
             let bls = state.blacklist_store.clone();
             let nc = p2p.neighbor_count.clone();
-            let rp = state.reports.clone();
             let cc = state.config.clone();
             let ah = app.clone();
             tokio::spawn(async move {
-                process_gossip_receiver(receiver, data_dir, cc, ah, cs, chs, bls, nc, rp).await;
+                process_gossip_receiver(receiver, data_dir, cc, ah, cs, chs, bls, nc).await;
             });
             eprintln!("[P2P] Joined gossip topic successfully");
         }
@@ -425,37 +442,35 @@ async fn set_config(
 
 #[tauri::command]
 async fn block_author(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
-    let mut config = load_config_cached(&state.config).await;
-    if !config.blocked_authors.contains(&peer_id) {
-        config.blocked_authors.insert(peer_id);
-        save_config_cached(&state.data_dir, &state.config, &config).await?;
+    let mut config = state.config.write().await;
+    if config.blocked_authors.insert(peer_id) {
+        p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
 
 #[tauri::command]
 async fn unblock_author(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
-    let mut config = load_config_cached(&state.config).await;
+    let mut config = state.config.write().await;
     config.blocked_authors.remove(&peer_id);
-    save_config_cached(&state.data_dir, &state.config, &config).await?;
+    p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
 async fn add_friend(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
-    let mut config = load_config_cached(&state.config).await;
-    if !config.friends.contains(&peer_id) {
-        config.friends.insert(peer_id);
-        save_config_cached(&state.data_dir, &state.config, &config).await?;
+    let mut config = state.config.write().await;
+    if config.friends.insert(peer_id) {
+        p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
 
 #[tauri::command]
 async fn remove_friend(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
-    let mut config = load_config_cached(&state.config).await;
+    let mut config = state.config.write().await;
     config.friends.remove(&peer_id);
-    save_config_cached(&state.data_dir, &state.config, &config).await?;
+    p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -493,19 +508,19 @@ async fn publish_blacklist(state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 async fn import_blacklist(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
-    let mut config = load_config_cached(&state.config).await;
+    let mut config = state.config.write().await;
     if !config.followed_blacklists.contains(&peer_id) {
         config.followed_blacklists.push(peer_id);
-        save_config_cached(&state.data_dir, &state.config, &config).await?;
+        p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
 
 #[tauri::command]
 async fn stop_following_blacklist(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
-    let mut config = load_config_cached(&state.config).await;
+    let mut config = state.config.write().await;
     config.followed_blacklists.retain(|id| id != &peer_id);
-    save_config_cached(&state.data_dir, &state.config, &config).await?;
+    p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -513,20 +528,6 @@ async fn stop_following_blacklist(state: State<'_, AppState>, peer_id: String) -
 async fn get_public_blacklists(state: State<'_, AppState>) -> Result<Vec<BlacklistRecord>, String> {
     let store = state.blacklist_store.read().await;
     Ok(store.blacklists.values().cloned().collect())
-}
-
-#[tauri::command]
-async fn get_mutual_friends(state: State<'_, AppState>, _peer_id: String) -> Result<Vec<String>, String> {
-    let config = load_config_cached(&state.config).await;
-    let store = state.convoy_store.read().await;
-
-    // Return friends who have published convoys (active authors)
-    let mutual: Vec<String> = config.friends.iter()
-        .filter(|friend| store.convoys.values().any(|c| &c.peer_id == *friend))
-        .cloned()
-        .collect();
-
-    Ok(mutual)
 }
 
 // --- Comandos de discovery ---
@@ -549,43 +550,6 @@ async fn get_discovery_state(state: State<'_, AppState>) -> Result<serde_json::V
             "dhtStatus": "inactive",
         })),
     }
-}
-
-#[tauri::command]
-async fn report_event(
-    state: State<'_, AppState>,
-    convoy_id: String,
-    author_peer_id: String,
-    reason: String,
-) -> Result<(), String> {
-    let peer_id = {
-        let p2p_guard = state.p2p.read().await;
-        match p2p_guard.as_ref() {
-            Some(p2p) => p2p.peer_id(),
-            None => return Err("P2P not initialized".to_string()),
-        }
-    };
-
-    let report = serde_json::json!({
-        "schema": "convoyrun/report/v1",
-        "reporterPeerId": peer_id,
-        "convoyId": convoy_id,
-        "authorPeerId": author_peer_id,
-        "reason": reason,
-        "timestamp": chrono::Utc::now().timestamp(),
-    });
-
-    eprintln!("[MOD] Report filed by {} against convoy {}: {}", peer_id, convoy_id, reason);
-
-    if let Some(p2p_guard) = state.p2p.read().await.as_ref() {
-        if let Some(sender) = &p2p_guard.gossip_sender {
-            if let Err(e) = P2pState::publish_report_gossip(sender, &report.to_string()).await {
-                eprintln!("[MOD] Failed to publish report via gossip: {}", e);
-            }
-        }
-    }
-
-    Ok(())
 }
 
 #[tauri::command]
@@ -735,36 +699,6 @@ async fn list_convoys(
     let store = state.convoy_store.read().await;
     let convoys = store.list_convoys(from_date, to_date);
     Ok(convoys.into_iter().cloned().collect())
-}
-
-#[tauri::command]
-async fn get_convoy(
-    state: State<'_, AppState>,
-    convoy_id: String,
-) -> Result<Option<ConvoyRecord>, String> {
-    let store = state.convoy_store.read().await;
-    Ok(store.convoys.get(&convoy_id).cloned())
-}
-
-#[tauri::command]
-async fn get_convoy_votes(
-    state: State<'_, AppState>,
-    convoy_id: String,
-) -> Result<Vec<VoteRecord>, String> {
-    let store = state.convoy_store.read().await;
-    let votes = store.votes.get(&convoy_id)
-        .map(|v| v.values().cloned().collect())
-        .unwrap_or_default();
-    Ok(votes)
-}
-
-#[tauri::command]
-async fn get_convoy_score(
-    state: State<'_, AppState>,
-    convoy_id: String,
-) -> Result<i32, String> {
-    let store = state.convoy_store.read().await;
-    Ok(store.compute_score(&convoy_id))
 }
 
 #[tauri::command]
@@ -990,7 +924,6 @@ pub fn run() {
                 channel_store: channel_store.clone(),
                 blacklist_store: blacklist_store.clone(),
                 config: Arc::new(RwLock::new(config)),
-                reports: Arc::new(RwLock::new(Vec::new())),
             });
 
             // Purge expired convoys every hour
@@ -1112,14 +1045,10 @@ pub fn run() {
             import_blacklist,
             stop_following_blacklist,
             get_public_blacklists,
-            get_mutual_friends,
             get_author_profile,
             get_discovery_state,
             publish_convoy,
             list_convoys,
-            get_convoy,
-            get_convoy_votes,
-            get_convoy_score,
             vote_convoy,
             get_my_votes,
             get_all_votes,
@@ -1128,7 +1057,6 @@ pub fn run() {
             create_channel,
             delete_channel,
             delete_convoy,
-            report_event,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,5 +1,6 @@
 // Reference timezone for slot definitions (slots are defined in this timezone)
 const SOURCE_TIMEZONE = 'America/Montevideo';
+const { DateTime } = luxon;
 
 const slots = [
     { inicio: { h: 0, m: 30 }, fin: { h: 2, m: 0 } },

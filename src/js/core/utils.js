@@ -6,6 +6,7 @@ export function setVisible(el, show, display) {
     if (!el) return;
     el.hidden = !show;
     if (show && display) el.style.display = display;
+    if (!show) el.style.display = '';
 }
 
 let _copyMessageTimeout = null;

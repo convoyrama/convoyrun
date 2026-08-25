@@ -1,3 +1,27 @@
+export const AVAILABLE_LANGUAGES = [
+    { code: 'es', key: 'swarm_lang_es' },
+    { code: 'en', key: 'swarm_lang_en' },
+    { code: 'pt', key: 'swarm_lang_pt' },
+    { code: 'fr', key: 'swarm_lang_fr' },
+    { code: 'de', key: 'swarm_lang_de' },
+    { code: 'it', key: 'swarm_lang_it' },
+    { code: 'nl', key: 'swarm_lang_nl' },
+    { code: 'pl', key: 'swarm_lang_pl' },
+    { code: 'ru', key: 'swarm_lang_ru' },
+    { code: 'tr', key: 'swarm_lang_tr' },
+    { code: 'cs', key: 'swarm_lang_cs' },
+    { code: 'ro', key: 'swarm_lang_ro' },
+    { code: 'sv', key: 'swarm_lang_sv' },
+    { code: 'da', key: 'swarm_lang_da' },
+    { code: 'fi', key: 'swarm_lang_fi' },
+    { code: 'no', key: 'swarm_lang_no' },
+    { code: 'hu', key: 'swarm_lang_hu' },
+    { code: 'bg', key: 'swarm_lang_bg' },
+    { code: 'ko', key: 'swarm_lang_ko' },
+    { code: 'zh', key: 'swarm_lang_zh' },
+    { code: 'ja', key: 'swarm_lang_ja' },
+];
+
 export const timezoneRegions = {
     hispano: {
         name: 'region_hispano',

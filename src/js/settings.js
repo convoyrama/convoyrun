@@ -1,3 +1,4 @@
+import * as state from './core/state.js';
 import {
     swarmStatus, swarmGetConfig, swarmSetConfig,
     blockAuthor, unblockAuthor, addFriend, removeFriend,
@@ -7,6 +8,7 @@ import {
     swarmListChannels, createChannel, deleteChannel,
 } from './native/tauri-bridge.js';
 import { setVisible } from './core/utils.js';
+import { AVAILABLE_LANGUAGES } from './core/config.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -14,23 +16,13 @@ const $$ = (sel) => document.querySelectorAll(sel);
 const overlay = () => $('#settings-overlay');
 
 function t(key, fallback) {
-    return (window.__convoyrunLangData && window.__convoyrunLangData[key]) || fallback;
+    return state.currentLangData[key] || fallback;
 }
 
 function truncPeer(id) {
     if (!id || id.length < 16) return id || '—';
     return id.slice(0, 8) + '…' + id.slice(-6);
 }
-
-const AVAILABLE_LANGUAGES = [
-    { code: 'es', key: 'swarm_lang_es' },
-    { code: 'en', key: 'swarm_lang_en' },
-    { code: 'pt', key: 'swarm_lang_pt' },
-    { code: 'fr', key: 'swarm_lang_fr' },
-    { code: 'de', key: 'swarm_lang_de' },
-    { code: 'it', key: 'swarm_lang_it' },
-    { code: 'nl', key: 'swarm_lang_nl' },
-];
 
 function renderDefaultLanguages(langs) {
     const container = $('#settings-default-languages');
@@ -62,7 +54,11 @@ async function loadSettingsData() {
         $('#settings-peer-id').textContent = status.peerId || '—';
         $('#settings-nickname').value = config.nickname || '';
 
-        renderDefaultLanguages(config.defaultLanguages || ['es']);
+        // Por defecto todos los idiomas seleccionados (primera vez)
+        const savedLangs = config.defaultLanguages && config.defaultLanguages.length > 0
+            ? config.defaultLanguages
+            : AVAILABLE_LANGUAGES.map(l => l.code);
+        renderDefaultLanguages(savedLangs);
         renderBlocked(config.blockedAuthors || []);
         renderFriends(config.friends || []);
         renderFollowed(config.followedBlacklists || []);
@@ -385,7 +381,3 @@ if (document.readyState === 'loading') {
     initSettings();
 }
 
-// Escuchar cambios de idioma para mantener traducciones disponibles
-window.addEventListener('languageChanged', (e) => {
-    window.__convoyrunLangData = e.detail.translations;
-});

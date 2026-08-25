@@ -519,21 +519,6 @@ select option {
     gap: 12px;
 }
 
-.node-status {
-    font-size: 0.68rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    padding: 5px 12px;
-    border-radius: 50px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #888;
-    white-space: nowrap;
-}
-.node-status[data-mode="online"]  { color: #4ade80; border-color: rgba(74, 222, 128, 0.4); }
-.node-status[data-mode="offline"] { color: #f87171; border-color: rgba(248, 113, 113, 0.4); }
-.node-status[data-mode="local"]   { color: #eab308; border-color: rgba(234, 179, 8, 0.4); }
-
 /* Pestaña SWARM — filtros */
 .swarm-filters {
     display: flex;
@@ -579,34 +564,6 @@ select option {
 }
 
 /* Pestaña SWARM — selector de día (chips) */
-.swarm-daybar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    margin-bottom: 16px;
-}
-.swarm-day-chip {
-    padding: 7px 16px;
-    font-size: 0.72rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: rgba(255, 255, 255, 0.6);
-    background: #1a1a1a;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 50px;
-    cursor: pointer;
-    transition: all 0.15s;
-}
-.swarm-day-chip:hover { border-color: rgba(0, 170, 255, 0.4); color: #fff; }
-.swarm-day-chip.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-    box-shadow: 0 0 10px rgba(0, 170, 255, 0.25);
-}
-
 /* Pestaña SWARM — lista y días */
 .swarm-list { display: none; }
 .swarm-day {
@@ -618,6 +575,13 @@ select option {
     color: var(--accent);
 }
 .swarm-day:first-child { margin-top: 0; }
+
+.swarm-day-today { color: #4ade80; }
+.swarm-day-tomorrow { color: #60a5fa; }
+
+.swarm-event-today .swarm-row { border-left: 3px solid #4ade80; }
+.swarm-event-tomorrow .swarm-row { border-left: 3px solid #60a5fa; }
+.swarm-event-past { opacity: 0.5; }
 
 /* Pestaña SWARM — fila colapsada de convoy (una línea por evento) */
 .swarm-event { margin-bottom: 4px; }
@@ -864,27 +828,6 @@ select option {
 .swarm-report-btn:hover { opacity: 1; }
 
 /* Pestaña SWARM — rango por defecto (hoy y mañana) */
-.swarm-range-bar { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 2px 0 14px; }
-.swarm-range-toggle {
-    background: none;
-    border: 1px solid rgba(0, 170, 255, 0.35);
-    color: var(--accent);
-    font-size: 0.72rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 6px 14px;
-    border-radius: 50px;
-    cursor: pointer;
-}
-.swarm-range-toggle:hover { background: rgba(0, 170, 255, 0.1); color: #fff; }
-.swarm-range-hint {
-    text-align: center;
-    font-size: 0.78rem;
-    color: #888;
-    padding: 10px 16px;
-    margin: 0;
-}
 
 /* Pestaña SWARM — wizard de publicación */
 .swarm-wizard-overlay {

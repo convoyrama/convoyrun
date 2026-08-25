@@ -59,14 +59,11 @@ export async function uploadToCatbox(arrayBuffer) {
 
 export async function swarmInit() {
     try {
-        console.log('[BRIDGE] Calling p2p_init...');
         const s = await tauri().core.invoke('p2p_init');
-        console.log('[BRIDGE] p2p_init result:', s);
         if (s && s.mode) return s;
     } catch (err) {
         console.warn('[BRIDGE] p2p_init failed:', err);
     }
-    console.log('[BRIDGE] Falling back to local mode');
     return { mode: 'local', online: false, peerId: '' };
 }
 
@@ -79,10 +76,7 @@ export async function swarmStatus() {
 }
 
 export async function swarmPublish(convoy, channel, channelPassword) {
-    console.log('[BRIDGE] swarmPublish called', { id: convoy.id, peerId: convoy.peerId });
-
     try {
-        console.log('[BRIDGE] Calling backend publish_convoy...');
         const result = await tauri().core.invoke('publish_convoy', {
             event: convoy.event,
             schedule: convoy.schedule,
@@ -90,15 +84,13 @@ export async function swarmPublish(convoy, channel, channelPassword) {
             channel: channel || null,
             channelPassword: channelPassword || null,
         });
-        console.log('[BRIDGE] Backend publish_convoy succeeded');
-        // Only cache locally AFTER backend confirms success
+        return { backend: true, result };
+    } catch (err) {
+        console.warn('[BRIDGE] Backend publish_convoy failed, caching locally:', err);
         const local = { ...convoy, peerId: convoy.peerId || 'local-user' };
         const cache = localRead(SWARM_CACHE_KEY, []);
         cache.push(local);
         localWrite(SWARM_CACHE_KEY, cache);
-        return { backend: true, result };
-    } catch (err) {
-        console.warn('[BRIDGE] Backend publish_convoy failed:', err);
         throw err;
     }
 }
@@ -108,22 +100,17 @@ export async function swarmList() {
     const deleted = localRead(SWARM_DELETED_KEY, []);
     const deletedSet = new Set(deleted);
     const localFiltered = local.filter(c => !deletedSet.has(c.id));
-    console.log('[BRIDGE] swarmList: localStorage has', local.length, 'convoys,', localFiltered.length, 'after delete filter');
     try {
         const rows = await tauri().core.invoke('list_convoys');
-        console.log('[BRIDGE] Backend list_convoys returned', Array.isArray(rows) ? rows.length : 'non-array', 'rows');
         if (Array.isArray(rows)) {
             const byId = new Map();
             rows.filter(c => !deletedSet.has(c.id)).forEach(c => byId.set(c.id, c));
             localFiltered.forEach(c => { if (!byId.has(c.id)) byId.set(c.id, c); });
-            const merged = Array.from(byId.values());
-            console.log('[BRIDGE] Merged result:', merged.length, 'convoys');
-            return merged;
+            return Array.from(byId.values());
         }
     } catch (err) {
         console.warn('[BRIDGE] Backend list_convoys failed:', err);
     }
-    console.log('[BRIDGE] Returning localStorage only:', localFiltered.length, 'convoys');
     return localFiltered;
 }
 
@@ -174,17 +161,17 @@ export async function swarmSetConfig(config) {
 }
 
 export async function swarmDelete(convoyId) {
+    try {
+        await tauri().core.invoke('delete_convoy', { convoyId });
+    } catch (err) {
+        console.warn('[BRIDGE] delete_convoy failed:', err);
+        throw err;
+    }
     const cache = localRead(SWARM_CACHE_KEY, []);
     localWrite(SWARM_CACHE_KEY, cache.filter(c => c.id !== convoyId));
     const deleted = localRead(SWARM_DELETED_KEY, []);
     if (!deleted.includes(convoyId)) { deleted.push(convoyId); localWrite(SWARM_DELETED_KEY, deleted); }
-
-    try {
-        await tauri().core.invoke('delete_convoy', { convoyId });
-        return { backend: true };
-    } catch {
-        return { backend: false };
-    }
+    return { backend: true };
 }
 
 export async function swarmListChannels() {
@@ -316,13 +303,6 @@ export async function getPublicBlacklists() {
     return [];
 }
 
-export async function getMutualFriends(peerId) {
-    try {
-        const friends = await tauri().core.invoke('get_mutual_friends', { peerId });
-        if (Array.isArray(friends)) return friends;
-    } catch { /* sin backend */ }
-    return [];
-}
 
 export async function getAuthorProfile(peerId) {
     try {
@@ -342,8 +322,3 @@ export async function getDiscoveryState() {
     return { online: false, neighborCount: 0, dhtStatus: 'inactive' };
 }
 
-// ---- Report ----------------------------------------------------------------
-
-export async function swarmReport(convoyId, authorPeerId, reason) {
-    return tauri().core.invoke('report_event', { convoyId, authorPeerId, reason });
-}

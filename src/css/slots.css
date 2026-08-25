@@ -40,7 +40,7 @@
     transform: translateX(-50%);
     width: 60px;
     height: 3px;
-    background: linear-gradient(90deg, transparent, #2ecc71, transparent);
+    background: linear-gradient(90deg, transparent, #00aaff, transparent);
     border-radius: 2px;
 }
 
@@ -60,7 +60,7 @@
 }
 
 .current-slot-info strong {
-    color: #2ecc71;
+    color: #00aaff;
     font-weight: 600;
 }
 
@@ -165,12 +165,12 @@
 }
 
 .slot.current {
-    background: linear-gradient(180deg, rgba(46, 204, 113, 0.12) 0%, rgba(46, 204, 113, 0.02) 100%);
+    background: linear-gradient(180deg, rgba(0, 170, 255, 0.12) 0%, rgba(0, 170, 255, 0.02) 100%);
 }
 
 .slot.current::before {
-    background: #2ecc71;
-    box-shadow: 0 0 12px rgba(46, 204, 113, 0.6);
+    background: #00aaff;
+    box-shadow: 0 0 12px rgba(0, 170, 255, 0.6);
     width: 8px;
     height: 8px;
 }
@@ -201,7 +201,7 @@
 }
 
 .slot.current .slot-start {
-    color: #2ecc71;
+    color: #00aaff;
 }
 
 .slot-number {
@@ -216,8 +216,8 @@
 }
 
 .slot.current .slot-number {
-    background: rgba(46, 204, 113, 0.15);
-    color: #2ecc71;
+    background: rgba(0, 170, 255, 0.15);
+    color: #00aaff;
 }
 
 .legend {
@@ -245,8 +245,8 @@
 }
 
 .legend-dot.current {
-    background: #2ecc71;
-    box-shadow: 0 0 8px rgba(46, 204, 113, 0.5);
+    background: #00aaff;
+    box-shadow: 0 0 8px rgba(0, 170, 255, 0.5);
 }
 
 .legend-dot.past {
@@ -295,8 +295,8 @@
 }
 
 .grid-slot.current {
-    background: rgba(46, 204, 113, 0.1);
-    border-color: rgba(46, 204, 113, 0.3);
+    background: rgba(0, 170, 255, 0.1);
+    border-color: rgba(0, 170, 255, 0.3);
 }
 
 .grid-slot-number {
@@ -308,7 +308,7 @@
 }
 
 .grid-slot.current .grid-slot-number {
-    color: #2ecc71;
+    color: #00aaff;
 }
 
 .grid-slot-times {
@@ -324,7 +324,7 @@
 }
 
 .grid-slot.current .grid-slot-start {
-    color: #2ecc71;
+    color: #00aaff;
 }
 
 .grid-slot-end {

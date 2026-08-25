@@ -20,6 +20,7 @@ export let speedIndicators = [
 export let startX, startY;
 
 export let currentLangData = {};
+export let currentLang = 'en';
 
 const ORIENTATION_KEY = 'convoyrun-is-vertical';
 let isVertical = localStorage.getItem(ORIENTATION_KEY) === 'true';
@@ -101,6 +102,7 @@ export function setStartX(val) { startX = val; }
 export function setStartY(val) { startY = val; }
 
 export function setCurrentLangData(data) { currentLangData = data; }
+export function setCurrentLang(lang) { currentLang = lang; }
 export function setIsWaypointVisible(val) { isWaypointVisible = val; }
 export function setIsDepartureVisible(val) { isDepartureVisible = val; }
 export function setIsDestinationVisible(val) { isDestinationVisible = val; }

@@ -52,19 +52,24 @@ jobs:
       - name: Install JS dependencies
         run: npm install
 
-      - name: Build
-        run: npm run tauri build
+      - name: Build (Windows: NSIS installer)
+        if: matrix.platform == 'windows-latest'
+        run: npm run tauri build -- --bundles nsis
 
-      # bundle.active=false en tauri.conf.json — sin instaladores, solo el
-      # binario crudo que compila cargo.
+      - name: Build (Linux: raw binary)
+        if: matrix.platform == 'ubuntu-latest'
+        run: npm run tauri build -- --bundles none
+
       - name: Collect binaries
         shell: bash
         run: |
           mkdir -p final-binaries
 
           if [ "${{ matrix.platform }}" == "windows-latest" ]; then
-            cp src-tauri/target/release/convoyrun.exe final-binaries/ConvoyRun-windows-x64.exe
+            # NSIS installer generado por Tauri
+            cp src-tauri/target/release/bundle/nsis/*.exe final-binaries/
           else
+            # Linux: binario crudo (sin bundle)
             cp src-tauri/target/release/convoyrun final-binaries/ConvoyRun-linux-x64
           fi
 

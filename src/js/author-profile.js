@@ -11,7 +11,7 @@ import {
 const { DateTime } = luxon;
 
 function t(key, fallback) {
-    return (window.__convoyrunLangData && window.__convoyrunLangData[key]) || fallback;
+    return state.currentLangData[key] || fallback;
 }
 
 function truncPeer(id) {
@@ -47,11 +47,15 @@ function buildOverlay() {
     modal.appendChild(closeBtn);
 
     const header = el('div', 'author-profile-header');
-    header.innerHTML = `
-        <div class="author-profile-nick" id="ap-nick"></div>
-        <div class="author-profile-peer" id="ap-peer"></div>
-        <div class="author-profile-rep" id="ap-rep"></div>
-    `;
+    const nickDiv = el('div', 'author-profile-nick');
+    nickDiv.id = 'ap-nick';
+    const peerDiv = el('div', 'author-profile-peer');
+    peerDiv.id = 'ap-peer';
+    const repDiv = el('div', 'author-profile-rep');
+    repDiv.id = 'ap-rep';
+    header.appendChild(nickDiv);
+    header.appendChild(peerDiv);
+    header.appendChild(repDiv);
     modal.appendChild(header);
 
     const actions = el('div', 'author-profile-actions');
