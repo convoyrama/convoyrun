@@ -51,7 +51,7 @@ export function createConvoy({
         schedule: { meetingTimestamp, ianaTimeZone },
     };
     if (channel) record.channel = channel;
-    if (flyer && flyer.thumb) record.flyer = flyer;
+    if (flyer) record.flyer = flyer;
     return record;
 }
 

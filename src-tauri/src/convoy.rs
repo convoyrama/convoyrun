@@ -96,19 +96,12 @@ pub struct Schedule {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FlyerData {
-    /// Thumbnail base64 (256px)
-    pub thumb: String,
-    /// URL de la imagen original subida a catbox.moe
-    #[serde(default)]
-    pub original_url: Option<String>,
+    /// URL de la imagen (catbox o externa). Alias "thumb" para compatibilidad con datos viejos.
+    #[serde(alias = "thumb")]
+    pub url: String,
     /// Tamaño en bytes
+    #[serde(default)]
     pub size: u64,
-    /// Hash blake3 del PNG completo (optionnel, pour usage futur blob)
-    #[serde(default)]
-    pub blob_hash: Option<String>,
-    /// MIME type (optionnel)
-    #[serde(default)]
-    pub mime: Option<String>,
 }
 
 /// Registro de convoy (publicado por un autor)
@@ -455,7 +448,7 @@ impl ConvoyStore {
     pub fn save(&self, data_dir: &Path) -> Result<()> {
         let store_path = data_dir.join("convoy_store.json");
         let tmp_path = data_dir.join("convoy_store.json.tmp");
-        std::fs::write(&tmp_path, serde_json::to_string_pretty(self)?)
+        std::fs::write(&tmp_path, serde_json::to_string(self)?)
             .context("Failed to write convoy store")?;
         std::fs::rename(&tmp_path, &store_path)
             .context("Failed to rename convoy store")?;
@@ -541,7 +534,7 @@ impl ChannelStore {
     pub fn save(&self, data_dir: &Path) -> Result<()> {
         let store_path = data_dir.join("channel_store.json");
         let tmp_path = data_dir.join("channel_store.json.tmp");
-        std::fs::write(&tmp_path, serde_json::to_string_pretty(self)?)
+        std::fs::write(&tmp_path, serde_json::to_string(self)?)
             .context("Failed to write channel store")?;
         std::fs::rename(&tmp_path, &store_path)
             .context("Failed to rename channel store")?;
@@ -708,7 +701,7 @@ impl BlacklistStore {
     pub fn save(&self, data_dir: &Path) -> Result<()> {
         let store_path = data_dir.join("blacklist_store.json");
         let tmp_path = data_dir.join("blacklist_store.json.tmp");
-        std::fs::write(&tmp_path, serde_json::to_string_pretty(self)?)
+        std::fs::write(&tmp_path, serde_json::to_string(self)?)
             .context("Failed to write blacklist store")?;
         std::fs::rename(&tmp_path, &store_path)
             .context("Failed to rename blacklist store")?;

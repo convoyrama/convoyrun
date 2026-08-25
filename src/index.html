@@ -28,7 +28,6 @@
                 <span class="p2p-dot" data-status="offline"></span>
                 <span class="p2p-count" id="p2p-count">0</span>
             </div>
-            <button type="button" id="settings-btn" class="settings-btn" data-i18n-title="settings_title" title="Settings">⚙</button>
             <div class="lang-selector">
                 <button class="lang-btn" data-lang="en" aria-label="English">EN</button>
                 <button class="lang-btn" data-lang="es" aria-label="Español">ES</button>
@@ -42,6 +41,7 @@
             <button type="button" class="app-tab active" data-tab="swarm" data-i18n="tab_swarm">Eventos</button>
             <button type="button" class="app-tab" data-tab="flyer" data-i18n="tab_flyer">Flyer</button>
             <button type="button" class="app-tab" data-tab="slots" data-i18n="tab_slots">Slots</button>
+            <button type="button" class="app-tab" data-tab="settings" data-i18n="tab_settings">Settings</button>
             <button type="button" class="app-tab" data-tab="about" data-i18n="tab_about">Acerca de</button>
         </nav>
 
@@ -510,7 +510,7 @@
             <div class="about-panel">
                 <img src="./images/branding/logotext.png" alt="ConvoyRun" class="about-logo">
                 <div class="about-tagline" data-i18n="app_tagline">Convoy & Event Manager</div>
-                <div class="about-version">v<span id="about-version">0.3.2</span></div>
+                <div class="about-version">v<span id="about-version">0.3.3</span></div>
                 <p class="about-credit"><span data-i18n="about_credit">Developed by</span> <span class="architect">dr.will</span> for <strong>CONVOYRAMA</strong></p>
                 <div class="about-links">
                     <a href="https://discord.gg/hjJcyREthH" target="_blank" data-i18n="about_link_discord">Discord de CONVOYRAMA</a>
@@ -540,9 +540,13 @@
                     <input type="text" id="swarm-w-name" maxlength="80" data-i18n-placeholder="swarm_wizard_event_name_ph" placeholder="Ej: Cumbre del Desierto">
                 </label>
                 <label class="swarm-field swarm-field-full">
-                    <span data-i18n="swarm_wizard_image">Imagen del flyer (PNG, máx 2 MB)</span>
+                    <span data-i18n="swarm_wizard_image">Imagen del flyer (opcional)</span>
                     <input type="file" id="swarm-w-flyer" accept="image/png">
                     <span class="swarm-flyer-btn" data-i18n="swarm_wizard_image_btn">Seleccionar PNG</span>
+                </label>
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_wizard_image_url">O pegá una URL de imagen</span>
+                    <input type="url" id="swarm-w-image-url" placeholder="https://..." class="swarm-url-input">
                 </label>
                 <div class="swarm-flyer-preview-wrap">
                     <img id="swarm-w-flyer-preview" class="swarm-flyer-preview" alt="" hidden>
@@ -642,21 +646,19 @@
         </div>
     </div>
 
-    <!-- Settings Modal -->
-    <div id="settings-overlay" class="about-overlay" hidden>
-        <div class="about-modal settings-modal">
-            <button type="button" id="settings-close" class="about-close" aria-label="Close settings">×</button>
+    <!-- Settings Tab -->
+    <section class="tab-panel" id="panel-settings">
+        <div class="settings-container">
             <h3 data-i18n="settings_title">Settings</h3>
 
             <div class="settings-tabs">
                 <button type="button" class="settings-tab active" data-settings-tab="profile" data-i18n="settings_tab_profile">Profile</button>
                 <button type="button" class="settings-tab" data-settings-tab="blacklist" data-i18n="settings_tab_blacklist">Blacklist</button>
-                <button type="button" class="settings-tab" data-settings-tab="friends" data-i18n="settings_tab_friends">Friends</button>
                 <button type="button" class="settings-tab" data-settings-tab="channels" data-i18n="settings_tab_channels">Channels</button>
             </div>
 
             <!-- Profile Tab -->
-            <div class="settings-panel active" id="settings-panel-profile">
+            <div class="settings-panel visible" id="settings-panel-profile">
                 <div class="settings-section">
                     <h4 data-i18n="settings_identity">Identity</h4>
                     <div class="settings-field">
@@ -700,7 +702,7 @@
             </div>
 
             <!-- Blacklist Tab -->
-            <div class="settings-panel" id="settings-panel-blacklist">
+            <div class="settings-panel" id="settings-panel-blacklist" style="display:none">
                 <div class="settings-section">
                     <h4 data-i18n="settings_blocked_list">Blocked Authors</h4>
                     <div class="settings-add-friend-row">
@@ -724,21 +726,8 @@
                 </div>
             </div>
 
-            <!-- Friends Tab -->
-            <div class="settings-panel" id="settings-panel-friends">
-                <div class="settings-section">
-                    <h4 data-i18n="settings_friends_list">Friends</h4>
-                    <div class="settings-add-friend-row">
-                        <input type="text" id="settings-add-friend-input" data-i18n-placeholder="settings_add_friend_ph" placeholder="Paste peer ID">
-                        <button type="button" id="settings-add-friend-btn" class="settings-small-btn" data-i18n="settings_add_friend" aria-label="Add friend">Add</button>
-                    </div>
-                    <div id="settings-friends-list" class="settings-list"></div>
-                    <p id="settings-friends-empty" class="settings-empty" data-i18n="settings_friends_empty">No friends yet.</p>
-                </div>
-            </div>
-
             <!-- Channels Tab -->
-            <div class="settings-panel" id="settings-panel-channels">
+            <div class="settings-panel" id="settings-panel-channels" style="display:none">
                 <div class="settings-section">
                     <h4 data-i18n="settings_create_channel">Create Channel</h4>
                     <div class="settings-add-friend-row">
@@ -756,7 +745,7 @@
                 </div>
             </div>
         </div>
-    </div>
+    </section>
 
     <script src="./js/lib/luxon.min.js"></script>
     <script type="module" src="./js/main.js"></script>

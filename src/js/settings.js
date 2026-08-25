@@ -1,7 +1,7 @@
 import * as state from './core/state.js';
 import {
     swarmStatus, swarmGetConfig, swarmSetConfig,
-    blockAuthor, unblockAuthor, addFriend, removeFriend,
+    blockAuthor, unblockAuthor,
     exportIdentity, importIdentity,
     publishBlacklist, importBlacklist, stopFollowingBlacklist,
     getPublicBlacklists,
@@ -60,7 +60,6 @@ async function loadSettingsData() {
             : AVAILABLE_LANGUAGES.map(l => l.code);
         renderDefaultLanguages(savedLangs);
         renderBlocked(config.blockedAuthors || []);
-        renderFriends(config.friends || []);
         renderFollowed(config.followedBlacklists || []);
         await renderChannels(status.peerId || '');
 
@@ -97,31 +96,6 @@ function renderBlocked(blocked) {
     });
 }
 
-function renderFriends(friends) {
-    const container = $('#settings-friends-list');
-    const empty = $('#settings-friends-empty');
-    container.replaceChildren();
-    if (!friends.length) { setVisible(empty, true); return; }
-    setVisible(empty, false);
-    friends.forEach(peerId => {
-        const item = document.createElement('div');
-        item.className = 'settings-list-item';
-        const code = document.createElement('code');
-        code.title = peerId;
-        code.textContent = truncPeer(peerId);
-        item.appendChild(code);
-        const btn = document.createElement('button');
-        btn.className = 'settings-remove-btn';
-        btn.textContent = '✕';
-        btn.title = t('settings_remove_friend', 'Remove friend');
-        btn.onclick = async () => {
-            await removeFriend(peerId);
-            await loadSettingsData();
-        };
-        item.appendChild(btn);
-        container.appendChild(item);
-    });
-}
 
 function renderFollowed(followed) {
     const container = $('#settings-followed-lists');
@@ -218,32 +192,28 @@ async function renderChannels(myPeerId) {
     });
 }
 
-function openSettings() {
-    const o = overlay();
-    setVisible(o, true);
-    o.classList.add('open');
-    loadSettingsData();
-}
-
-function closeSettings() {
-    const o = overlay();
-    o.classList.remove('open');
-    setVisible(o, false);
-    setVisible($('#settings-export-options'), false);
-    setVisible($('#settings-import-options'), false);
-}
 
 function switchTab(tabName) {
     $$('.settings-tab').forEach(t => t.classList.toggle('active', t.dataset.settingsTab === tabName));
-    $$('.settings-panel').forEach(p => p.classList.toggle('active', p.id === `settings-panel-${tabName}`));
+    $$('.settings-panel').forEach(p => {
+        p.style.display = (p.id === `settings-panel-${tabName}`) ? 'block' : 'none';
+    });
 }
 
-// Init — usar requestAnimationFrame para asegurar que el DOM está listo
+// Init — cargar datos cuando se activa la tab de settings
 function initSettings() {
-    const btn = $('#settings-btn');
-    if (btn) {
-        btn.addEventListener('click', openSettings);
-        $('#settings-close')?.addEventListener('click', closeSettings);
+    // Cargar datos cuando se muestra la tab de settings
+    const settingsTab = document.querySelector('.app-tab[data-tab="settings"]');
+    if (settingsTab) {
+        const observer = new MutationObserver(() => {
+            const panel = $('#panel-settings');
+            if (panel && panel.classList.contains('active')) {
+                loadSettingsData();
+            }
+        });
+        const panel = $('#panel-settings');
+        if (panel) observer.observe(panel, { attributes: true, attributeFilter: ['class'] });
+    }
 
     $$('.settings-tab').forEach(tab => {
         tab.addEventListener('click', () => switchTab(tab.dataset.settingsTab));
@@ -323,15 +293,6 @@ function initSettings() {
         }
     });
 
-    $('#settings-add-friend-btn')?.addEventListener('click', async () => {
-        const input = $('#settings-add-friend-input');
-        const peerId = input.value.trim();
-        if (!peerId) return;
-        await addFriend(peerId);
-        input.value = '';
-        await loadSettingsData();
-    });
-
     $('#settings-add-blocked-btn')?.addEventListener('click', async () => {
         const input = $('#settings-add-blocked-input');
         const peerId = input.value.trim();
@@ -371,7 +332,6 @@ function initSettings() {
             alert(t('settings_publish_blacklist_error', 'Failed to publish blacklist. Is P2P initialized?'));
         }
     });
-    }
 }
 
 // Llamar init cuando el DOM esté listo

@@ -1,8 +1,8 @@
 // Asistente de publicación de convoy (pestaña SWARM).
 // El creador elige día y hora en SU zona local; se guarda unix UTC + ianaTimeZone
 // y cada lector lo ve en su propio huso (docs/04_SWARM_CALENDAR.md §4.2).
-// El flyer PNG es obligatorio (máx 2 MB): se leen sus metadatos incrustados
-// ("convoyrama-event-data") para autocompletar, y se embebe un thumb 128px.
+// El flyer es opcional. Se puede subir un PNG (máx 2 MB) o pegar una URL directa.
+// Si se sube PNG, se leen metadatos incrustados para autocompletar y se sube a catbox.
 import * as state from './core/state.js';
 import { showCopyMessage } from './core/utils.js';
 import { readMetadataFromPNG } from './core/png-metadata.js';
@@ -17,30 +17,6 @@ function label(key, fallback) {
     return state.currentLangData[key] || fallback;
 }
 
-function makeThumb(buffer) {
-    return new Promise((resolve) => {
-        try {
-            const blob = new Blob([buffer], { type: 'image/png' });
-            const url = URL.createObjectURL(blob);
-            const img = new Image();
-            img.onload = () => {
-                const scale = 256 / img.width;
-                const canvas = document.createElement('canvas');
-                canvas.width = 256;
-                canvas.height = Math.max(1, Math.round(img.height * scale));
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                const thumb = canvas.toDataURL('image/png');
-                URL.revokeObjectURL(url);
-                resolve(thumb);
-            };
-            img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
-            img.src = url;
-        } catch {
-            resolve(null);
-        }
-    });
-}
 
 let _publishInitialized = false;
 export function initSwarmPublish(onPublished) {
@@ -76,8 +52,8 @@ export function initSwarmPublish(onPublished) {
     const languagesGroup = document.getElementById('swarm-w-languages');
     const statusEl = document.getElementById('swarm-w-status');
 
-    let currentThumb = null;
-    let currentOriginalUrl = null;
+    const imageUrlInput = document.getElementById('swarm-w-image-url');
+    let currentImageUrl = null;
     let currentFlyerSize = 0;
 
     function populateLanguages(defaultLangs) {
@@ -150,10 +126,10 @@ export function initSwarmPublish(onPublished) {
     function handleFlyerFile(file) {
         flyerStatus.textContent = '';
         flyerStatus.classList.remove('ok');
-        currentThumb = null;
-        currentOriginalUrl = null;
+        currentImageUrl = null;
         currentFlyerSize = 0;
         flyerPreview.hidden = true;
+        if (imageUrlInput) imageUrlInput.value = '';
 
         if (!file) return;
         if (!/\.png$/i.test(file.name) && file.type !== 'image/png') {
@@ -205,24 +181,38 @@ export function initSwarmPublish(onPublished) {
             }
 
             currentFlyerSize = u8.byteLength;
-            currentThumb = await makeThumb(u8);
-            if (currentThumb) {
-                flyerPreview.src = currentThumb;
-                flyerPreview.hidden = false;
-            }
             flyerStatus.textContent = state.currentLangData.swarm_wizard_image_uploading || 'Subiendo imagen...';
             try {
-                currentOriginalUrl = await uploadToCatbox(buffer);
+                currentImageUrl = await uploadToCatbox(buffer);
+                flyerPreview.src = currentImageUrl;
+                flyerPreview.hidden = false;
                 flyerStatus.textContent = state.currentLangData.swarm_wizard_image_uploaded || 'Imagen subida correctamente.';
                 flyerStatus.classList.add('ok');
             } catch (err) {
                 console.error('[SWARM-FLYER-UPLOAD] Failed:', err);
-                flyerStatus.textContent = state.currentLangData.swarm_wizard_image_upload_fail || 'No se pudo subir la imagen. Se usará la miniatura.';
+                flyerStatus.textContent = state.currentLangData.swarm_wizard_image_upload_fail || 'No se pudo subir la imagen.';
             }
         }).catch((err) => {
             console.error('[SWARM-FLYER-READ] Failed:', err);
             showCopyMessage(state.currentLangData.swarm_wizard_error_image || 'No se pudo leer la imagen.');
         });
+    }
+
+    function handleImageUrl() {
+        const url = imageUrlInput ? imageUrlInput.value.trim() : '';
+        if (!url) {
+            currentImageUrl = null;
+            flyerPreview.hidden = true;
+            return;
+        }
+        // Limpiar input de archivo si habia algo
+        flyerInput.value = '';
+        currentFlyerSize = 0;
+        currentImageUrl = url;
+        flyerPreview.src = url;
+        flyerPreview.hidden = false;
+        flyerStatus.textContent = state.currentLangData.swarm_wizard_image_url_ok || 'URL de imagen cargada.';
+        flyerStatus.classList.add('ok');
     }
 
     async function openWizard() {
@@ -239,10 +229,10 @@ export function initSwarmPublish(onPublished) {
 
     function closeWizard() {
         overlay.classList.remove('open');
-        currentThumb = null;
-        currentOriginalUrl = null;
+        currentImageUrl = null;
         currentFlyerSize = 0;
         flyerInput.value = '';
+        if (imageUrlInput) imageUrlInput.value = '';
         flyerPreview.hidden = true;
         flyerPreview.removeAttribute('src');
         flyerStatus.textContent = '';
@@ -257,10 +247,6 @@ export function initSwarmPublish(onPublished) {
 
         hideStatus();
 
-        if (!currentThumb) {
-            showStatus(state.currentLangData.swarm_wizard_error_image || 'Adjuntá una imagen (PNG) del convoy.');
-            return;
-        }
         if (!name || !dateVal || !timeVal) {
             showStatus(state.currentLangData.swarm_wizard_error_required || 'Completá nombre, juego, modo, fecha y hora.');
             return;
@@ -287,7 +273,7 @@ export function initSwarmPublish(onPublished) {
             description: descEl.value.trim(),
             languages: getSelectedLanguages(),
             nickname: nicknameEl.value.trim() || undefined,
-            flyer: { thumb: currentThumb, originalUrl: currentOriginalUrl, size: currentFlyerSize, mime: 'image/png' },
+            flyer: currentImageUrl ? { url: currentImageUrl, size: currentFlyerSize } : null,
         });
 
         // Agregar canal al convoy
@@ -333,6 +319,7 @@ export function initSwarmPublish(onPublished) {
     if (cancelBtn) cancelBtn.addEventListener('click', closeWizard);
     submitBtn.addEventListener('click', () => submit().catch(e => console.error('[SWARM-PUBLISH] submit error:', e)));
     flyerInput.addEventListener('change', (e) => handleFlyerFile(e.target.files[0]));
+    if (imageUrlInput) imageUrlInput.addEventListener('input', handleImageUrl);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) closeWizard(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && overlay.classList.contains('open')) closeWizard(); });
     window.addEventListener('languageChanged', updateZoneLabel);

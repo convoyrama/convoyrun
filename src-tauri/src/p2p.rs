@@ -61,7 +61,6 @@ pub struct NodeStatus {
 pub struct UserConfig {
     pub nickname: Option<String>,
     pub blocked_authors: HashSet<String>,
-    pub friends: HashSet<String>,
     pub followed_blacklists: Vec<String>,
     #[serde(default)]
     pub trusted_peers: Vec<String>,

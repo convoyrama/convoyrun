@@ -975,24 +975,20 @@ select option {
 }
 .swarm-wizard-cancel:hover { color: #fff; border-color: rgba(255, 255, 255, 0.5); }
 
-/* ---- Settings Modal -------------------------------------------------------- */
+/* ---- Settings Tab ---------------------------------------------------------- */
 
-.settings-btn {
-    background: none;
-    border: none;
-    font-size: 1.3rem;
-    cursor: pointer;
-    color: rgba(255,255,255,0.6);
-    padding: 4px 8px;
-    transition: color 0.15s;
+.settings-container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
 }
-.settings-btn:hover { color: #fff; }
-
-.settings-modal {
-    max-width: 560px;
-    width: 90vw;
-    max-height: 80vh;
-    overflow-y: auto;
+.settings-container h3 {
+    color: var(--accent);
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 20px;
+    text-align: center;
 }
 
 .settings-tabs {
@@ -1021,7 +1017,7 @@ select option {
 }
 
 .settings-panel { display: none; }
-.settings-panel.active { display: block; }
+.settings-panel.visible { display: block; }
 
 .settings-section {
     margin-bottom: 20px;
@@ -1282,10 +1278,6 @@ select option {
         height: auto;
         aspect-ratio: 16/9;
         max-height: 60vh;
-    }
-    .settings-modal {
-        max-width: 95vw;
-        width: 95vw;
     }
     .settings-tabs {
         gap: 0;

@@ -457,23 +457,6 @@ async fn unblock_author(state: State<'_, AppState>, peer_id: String) -> Result<(
     Ok(())
 }
 
-#[tauri::command]
-async fn add_friend(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
-    let mut config = state.config.write().await;
-    if config.friends.insert(peer_id) {
-        p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-async fn remove_friend(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
-    let mut config = state.config.write().await;
-    config.friends.remove(&peer_id);
-    p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
 // --- Comandos de blacklists públicas ---
 
 #[tauri::command]
@@ -565,7 +548,7 @@ async fn get_author_profile(
 
     let nickname = convoys.first().map(|c| c.nickname.as_str()).unwrap_or("");
 
-    let is_friend = config.friends.contains(&peer_id);
+    let is_friend = config.trusted_peers.contains(&peer_id);
     let is_blocked = config.blocked_authors.contains(&peer_id);
 
     let convoy_list: Vec<serde_json::Value> = convoys.iter().map(|c| {
@@ -1039,8 +1022,6 @@ pub fn run() {
             set_config,
             block_author,
             unblock_author,
-            add_friend,
-            remove_friend,
             publish_blacklist,
             import_blacklist,
             stop_following_blacklist,

@@ -237,15 +237,15 @@ function buildEvent(c) {
     const details = el('div', 'swarm-row-details');
     details.hidden = true;
 
-    if (c.flyer && c.flyer.thumb) {
+    if (c.flyer && c.flyer.url) {
         const img = el('img', 'swarm-flyer-thumb');
-        img.src = c.flyer.thumb;
+        img.src = c.flyer.url;
         img.alt = c.event.name;
         img.style.cursor = 'pointer';
         img.title = label('swarm_flyer_zoom', 'Click para ver en grande');
         img.addEventListener('click', (e) => {
             e.stopPropagation();
-            showFlyerLightbox(c.flyer.originalUrl || c.flyer.thumb, c.event.name);
+            showFlyerLightbox(c.flyer.url, c.event.name);
         });
         details.appendChild(img);
     }
@@ -333,7 +333,7 @@ function buildEvent(c) {
         info.appendChild(langLabel);
         const langList = el('div', 'swarm-detail-languages');
         for (const l of c.event.languages) {
-            langList.appendChild(el('span', 'swarm-badge swarm-badge-lang', label(LANG_LABELS[l] || '', l.toUpperCase())));
+            langList.appendChild(el('span', 'swarm-badge swarm-badge-lang', l.toUpperCase()));
         }
         info.appendChild(langList);
     }

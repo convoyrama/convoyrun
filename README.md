@@ -30,17 +30,21 @@
 - **Publicación de convoys** con firma criptográfica ed25519.
 - **Sistema de votos** (positivo/negativo) propagado por gossip epidémico.
 - **Canales temáticos** con password opcional para organizar eventos por tema.
+- **Sistema de confianza** — marca autores de confianza desde el Swarm, filtra eventos solo de peers confiables.
 - **Eliminación de convoys** por el autor con firma verificable.
 - **Listas negras públicas** — publicar, seguir y explorar blocklists comunitarias.
-- **Sistema de amigos** — agregar/quitar por peer ID, ver amigos mutuos.
 - **Bloqueo directo** desde el detalle de cada evento del Swarm.
+- **Filtros** por juego, modo, autor, calidad, orden y canal.
+- **Idiomas configurables** — selecciona qué idiomas de eventos quieres ver desde Settings.
 
 ### Moderación y Seguridad
 
 - **Identidad P2P** con clave ed25519 persistente.
-- **Backup de identidad** exportable/importable con encriptación AES-256-GCM + Argon2id.
-- **Firma criptográfica** en todos los mensajes: convoys, votos, deletes, canales.
+- **Backup de identidad** exportable/importable con encriptación AES-256-GCM + Argon2id (v2) o XOR-cycle (v1 legacy).
+- **Firma criptográfica** en todos los mensajes: convoys, votos, deletes, canales, blacklists.
 - **Filtro de autores bloqueados** — los mensajes de autores bloqueados se descartan antes de procesar.
+- **Deduplicación de mensajes** gossip para evitar procesamiento redundante.
+- **Validación de expiración** — no se aceptan convoys caducados ni demasiado futuros.
 
 ### Gestión de Tiempo
 
@@ -50,12 +54,15 @@
 
 ### Configuración
 
-- **Settings modal** con 3 tabs: Profile (peer ID, nickname, backup), Blacklist (block/unblock, blacklists públicas), Friends.
-- **Disponible en español, inglés y portugués** (176 keys de traducción con paridad total).
+- **Settings como pestaña** con 3 secciones: Profile (peer ID, nickname, backup, idiomas), Blacklist (block/unblock, blacklists públicas), Channels (crear/explorar canales).
+- **System tray** — la app se minimiza al tray al cerrar la ventana.
+- **Disponible en español, inglés y portugués** (394 keys de traducción con paridad total).
 
 ## Descargar
 
-Buscá la última versión en [Releases](https://github.com/convoyrama/convoyrun/releases) — hay un ejecutable único para Windows y otro para Linux, sin instaladores.
+Buscá la última versión en [Releases](https://github.com/convoyrama/convoyrun/releases):
+- **Windows**: instalador `.exe` (NSIS)
+- **Linux**: binario ejecutable
 
 ## Cómo funciona la red P2P
 
@@ -82,7 +89,7 @@ Si querés compilar ConvoyRun vos mismo:
 ```bash
 npm install
 npm run tauri dev      # build de desarrollo con hot reload
-npm run tauri build    # build de release (binario único, sin instalador)
+npm run tauri build    # build de release
 ```
 
 Requiere Rust (stable) y Node.js. En Linux hacen falta los paquetes de desarrollo de WebKitGTK/GTK — ver `.github/workflows/release.yml` para la lista exacta de `apt` que usa CI.

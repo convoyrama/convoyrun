@@ -4,8 +4,8 @@ import { showCopyMessage, setVisible } from './core/utils.js';
 import { reputationBadge, computeScore } from './core/convoy.js';
 import {
     getAuthorProfile, blockAuthor, unblockAuthor,
-    addFriend, removeFriend, importBlacklist,
-    copyToClipboard,
+    importBlacklist, copyToClipboard,
+    swarmGetConfig, swarmSetConfig,
 } from './native/tauri-bridge.js';
 
 const { DateTime } = luxon;
@@ -129,17 +129,18 @@ async function openProfile(peerId) {
         });
         actionsEl.appendChild(blockBtn);
 
-        const friendBtn = el('button', 'settings-action-btn' + (profile.isFriend ? ' active' : ''),
-            profile.isFriend ? t('ap_remove_friend', 'Quitar amigo') : t('ap_add_friend', 'Agregar amigo'));
-        friendBtn.addEventListener('click', async () => {
-            if (profile.isFriend) {
-                await removeFriend(peerId);
-            } else {
-                await addFriend(peerId);
-            }
+        const trustBtn = el('button', 'settings-action-btn' + (profile.isFriend ? ' active' : ''),
+            profile.isFriend ? t('swarm_trust_remove', 'Quitar confianza') : t('swarm_trust_add', 'Confiar'));
+        trustBtn.addEventListener('click', async () => {
+            const config = await swarmGetConfig();
+            const list = config.trustedPeers || [];
+            const next = profile.isFriend
+                ? list.filter(id => id !== peerId)
+                : [...list, peerId];
+            await swarmSetConfig({ ...config, trustedPeers: next });
             await openProfile(peerId);
         });
-        actionsEl.appendChild(friendBtn);
+        actionsEl.appendChild(trustBtn);
 
         const mergeBtn = el('button', 'settings-action-btn', t('ap_merge_blacklist', 'Importar bloqueos'));
         mergeBtn.title = t('ap_merge_blacklist_title', 'Agregar los bloqueos de este usuario a mi lista');

@@ -228,23 +228,6 @@ export async function unblockAuthor(peerId) {
     }
 }
 
-export async function addFriend(peerId) {
-    try {
-        await tauri().core.invoke('add_friend', { peerId });
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-export async function removeFriend(peerId) {
-    try {
-        await tauri().core.invoke('remove_friend', { peerId });
-        return true;
-    } catch {
-        return false;
-    }
-}
 
 // ---- Identity backup ---------------------------------------------------------
 
