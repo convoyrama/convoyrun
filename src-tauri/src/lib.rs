@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
-use tauri::{Manager, State};
+use tauri::{Manager, State, Emitter};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 use tokio::sync::RwLock;
@@ -63,6 +63,7 @@ async fn process_gossip_receiver(
     mut receiver: distributed_topic_tracker::GossipReceiver,
     data_dir: PathBuf,
     config_cache: Arc<RwLock<UserConfig>>,
+    app_handle: tauri::AppHandle,
     convoy_store: Arc<RwLock<ConvoyStore>>,
     channel_store: Arc<RwLock<ChannelStore>>,
     blacklist_store: Arc<RwLock<BlacklistStore>>,
@@ -130,6 +131,7 @@ async fn process_gossip_receiver(
                                         let mut store = convoy_store.write().await;
                                         store.upsert_convoy(record);
                                         flush_convoy_store(&store, &data_dir);
+                                        let _ = app_handle.emit("convoy-new", serde_json::Value::Null);
                                     }
                                     Ok(false) => {
                                         eprintln!("[P2P] Received convoy with invalid signature, ignoring");
@@ -160,6 +162,7 @@ async fn process_gossip_receiver(
                                 let mut store = convoy_store.write().await;
                                 store.upsert_vote(record);
                                 flush_convoy_store(&store, &data_dir);
+                                let _ = app_handle.emit("vote-new", serde_json::Value::Null);
                             }
                         }
                         GossipMessage::DeleteConvoy { convoy_id, peer_id, signature } => {
@@ -247,6 +250,8 @@ async fn process_gossip_receiver(
                             }
                         }
                     }
+                } else {
+                    eprintln!("[P2P] Received malformed gossip message ({} bytes), ignoring", message.content.len());
                 }
                     }
                     iroh_gossip::api::Event::Lagged => {
@@ -276,7 +281,12 @@ async fn save_file(state: State<'_, AppState>, path: String, contents: Vec<u8>) 
     if path.contains("..") {
         return Err("Path traversal not allowed".to_string());
     }
-    let full_path = state.data_dir.join(&path);
+    // If path is absolute (from dialog), use it directly; otherwise join with data_dir
+    let full_path = if Path::new(&path).is_absolute() {
+        PathBuf::from(&path)
+    } else {
+        state.data_dir.join(&path)
+    };
     tokio::fs::write(&full_path, contents).await.map_err(|e| e.to_string())
 }
 
@@ -295,7 +305,7 @@ fn optimize_png(bytes: Vec<u8>) -> Result<Vec<u8>, String> {
 // --- Comandos P2P ---
 
 #[tauri::command]
-async fn p2p_init(state: State<'_, AppState>) -> Result<NodeStatus, String> {
+async fn p2p_init(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<NodeStatus, String> {
     let mut p2p_guard = state.p2p.write().await;
 
     if let Some(p2p) = p2p_guard.as_ref() {
@@ -317,8 +327,9 @@ async fn p2p_init(state: State<'_, AppState>) -> Result<NodeStatus, String> {
             let nc = p2p.neighbor_count.clone();
             let rp = state.reports.clone();
             let cc = state.config.clone();
+            let ah = app.clone();
             tokio::spawn(async move {
-                process_gossip_receiver(receiver, data_dir, cc, cs, chs, bls, nc, rp).await;
+                process_gossip_receiver(receiver, data_dir, cc, ah, cs, chs, bls, nc, rp).await;
             });
             eprintln!("[P2P] Joined gossip topic successfully");
         }
@@ -509,12 +520,11 @@ async fn get_mutual_friends(state: State<'_, AppState>, _peer_id: String) -> Res
     let config = load_config_cached(&state.config).await;
     let store = state.convoy_store.read().await;
 
-    let mut mutual: Vec<String> = Vec::new();
-    for friend in &config.friends {
-        if store.convoys.values().any(|c| &c.peer_id == friend) {
-            mutual.push(friend.clone());
-        }
-    }
+    // Return friends who have published convoys (active authors)
+    let mutual: Vec<String> = config.friends.iter()
+        .filter(|friend| store.convoys.values().any(|c| &c.peer_id == *friend))
+        .cloned()
+        .collect();
 
     Ok(mutual)
 }
@@ -1041,9 +1051,6 @@ pub fn run() {
                     match event.id().as_ref() {
                         "quit" => {
                             quitting_for_menu.store(true, Ordering::Relaxed);
-                            if let Some(win) = app.get_webview_window("main") {
-                                let _ = win.destroy();
-                            }
                             app.exit(0);
                         }
                         "show" => {

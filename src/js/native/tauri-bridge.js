@@ -80,15 +80,10 @@ export async function swarmStatus() {
 
 export async function swarmPublish(convoy, channel, channelPassword) {
     console.log('[BRIDGE] swarmPublish called', { id: convoy.id, peerId: convoy.peerId });
-    const local = { ...convoy, peerId: convoy.peerId || 'local-user' };
-    const cache = localRead(SWARM_CACHE_KEY, []);
-    cache.push(local);
-    localWrite(SWARM_CACHE_KEY, cache);
-    console.log('[BRIDGE] Saved to localStorage, cache size:', cache.length);
 
     try {
         console.log('[BRIDGE] Calling backend publish_convoy...');
-        await tauri().core.invoke('publish_convoy', {
+        const result = await tauri().core.invoke('publish_convoy', {
             event: convoy.event,
             schedule: convoy.schedule,
             flyer: convoy.flyer || null,
@@ -96,10 +91,15 @@ export async function swarmPublish(convoy, channel, channelPassword) {
             channelPassword: channelPassword || null,
         });
         console.log('[BRIDGE] Backend publish_convoy succeeded');
-        return { backend: true };
+        // Only cache locally AFTER backend confirms success
+        const local = { ...convoy, peerId: convoy.peerId || 'local-user' };
+        const cache = localRead(SWARM_CACHE_KEY, []);
+        cache.push(local);
+        localWrite(SWARM_CACHE_KEY, cache);
+        return { backend: true, result };
     } catch (err) {
         console.warn('[BRIDGE] Backend publish_convoy failed:', err);
-        return { backend: false };
+        throw err;
     }
 }
 

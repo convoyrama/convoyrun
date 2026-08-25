@@ -203,7 +203,7 @@ function buildVoteBtn(c, dir) {
     b.title = label(dir === 1 ? 'swarm_vote_up_title' : 'swarm_vote_down_title', dir === 1 ? 'Votar a favor' : 'Votar en contra');
     b.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (c.peerId === 'local-user') {
+        if (c.peerId === myPeerId) {
             showCopyMessage(label('swarm_vote_self', 'No podés votar tu propio convoy.'));
             return;
         }
@@ -553,13 +553,37 @@ export function initSwarm() {
         await renderAll();
     })();
 
+    // Retry P2P init every 30s if not yet online
+    let _retryInterval = setInterval(async () => {
+        if (nodeMode === 'online') { clearInterval(_retryInterval); return; }
+        try {
+            const s = await swarmInit();
+            nodeMode = s.mode;
+            myPeerId = s.peerId || '';
+            setStatusLabel();
+            if (nodeMode === 'online') clearInterval(_retryInterval);
+        } catch { /* retry later */ }
+    }, 30000);
+
     // Auto-refresh cada 60 segundos cuando el nodo está online
     if (_autoRefreshInterval) clearInterval(_autoRefreshInterval);
     _autoRefreshInterval = setInterval(async () => {
-        if (nodeMode === 'online') {
-            await renderAll();
-        }
+        // Re-query node status to detect state changes (searching → online)
+        try {
+            const s = await swarmInit();
+            nodeMode = s.mode;
+            myPeerId = s.peerId || '';
+            setStatusLabel();
+        } catch { /* keep current status */ }
+        await renderAll();
     }, 60000);
+
+    // Listen for real-time events from Rust backend
+    const tauri = window.__TAURI__;
+    if (tauri?.event) {
+        tauri.event.listen('convoy-new', () => renderAll());
+        tauri.event.listen('vote-new', () => renderAll());
+    }
 
     return renderAll;
 }

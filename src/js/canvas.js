@@ -105,8 +105,8 @@ export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
     if (def.border) borderColor = def.border;
     if (def.shadow) shadowColor = def.shadow;
     if (def.blur) ctx.shadowBlur = def.blur;
-    if (def.shadowOffsetX !== undefined) ctx.shadowOffsetX = def.shadowOffsetX;
-    if (def.shadowOffsetY !== undefined) ctx.shadowOffsetY = def.shadowOffsetY;
+    ctx.shadowOffsetX = def.shadowOffsetX || 0;
+    ctx.shadowOffsetY = def.shadowOffsetY || 0;
     if (def.gradient) {
         const grad = def.horizontal
             ? ctx.createLinearGradient(0, 0, logicalWidth, 0)
@@ -329,7 +329,7 @@ export function initCanvasEventListeners() {
             const ind = state.speedIndicators[i];
             if (ind.visible) {
                 const ctx = canvas.getContext("2d");
-                ctx.font = `bold ${textSize + 10}px ${dom.textFont.value}`;
+                ctx.font = `bold ${textSize + 8}px ${dom.textFont.value}`;
                 const metrics = ctx.measureText(`${ind.value} ${ind.unit}`);
                 const bgWidth = metrics.width + 30;
                 const bgHeight = textSize + 20;
@@ -355,12 +355,14 @@ export function initCanvasEventListeners() {
     });
     canvas.addEventListener("mousemove", (e) => {
         const pos = getMousePos(e);
+        const isV = state.getIsVertical();
+        const cW = isV ? 720 : 1280, cH = isV ? 1280 : 720;
 
         let handled = false;
         state.isDraggingSpeed.forEach((isDragging, i) => {
             if (isDragging) {
-                state.speedIndicators[i].x = pos.x - state.startX;
-                state.speedIndicators[i].y = pos.y - state.startY;
+                state.speedIndicators[i].x = Math.max(0, Math.min(cW, pos.x - state.startX));
+                state.speedIndicators[i].y = Math.max(0, Math.min(cH, pos.y - state.startY));
                 handled = true;
             }
         });
@@ -368,12 +370,16 @@ export function initCanvasEventListeners() {
         if (handled) { scheduleRedraw(); return; }
 
         if (state.isDraggingDetail && state.detailImage) {
-            state.setDetailImageX(pos.x - state.startX);
-            state.setDetailImageY(pos.y - state.startY);
+            const w = state.detailImage.width * state.detailImageScale;
+            const h = state.detailImage.height * state.detailImageScale;
+            state.setDetailImageX(Math.max(-w, Math.min(cW, pos.x - state.startX)));
+            state.setDetailImageY(Math.max(-h, Math.min(cH, pos.y - state.startY)));
             scheduleRedraw();
         } else if (state.isDragging && state.mapImage) {
-            state.setImageX(pos.x - state.startX);
-            state.setImageY(pos.y - state.startY);
+            const w = state.mapImage.width * state.imageScale;
+            const h = state.mapImage.height * state.imageScale;
+            state.setImageX(Math.max(-w, Math.min(cW, pos.x - state.startX)));
+            state.setImageY(Math.max(-h, Math.min(cH, pos.y - state.startY)));
             scheduleRedraw();
         }
     });
@@ -414,15 +420,15 @@ export function initCanvasEventListeners() {
     dom.detailUpload.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const url = URL.createObjectURL(file); setObjectUrl('detail', url); const img = new Image(); img.onload = () => { state.setDetailImage(img); state.setDetailImageX(0); state.setDetailImageY(0); state.setDetailImageScale(1); drawCanvas(); }; img.src = url; } else { state.setDetailImage(null); drawCanvas(); } });
     dom.waypointUpload.addEventListener("change", (e) => { const file = e.target.files[0]; if (file) { const url = URL.createObjectURL(file); setObjectUrl('waypoint', url); const img = new Image(); img.onload = () => { state.setCircleImageWaypoint(img); state.setCircleImageXWaypoint(0); state.setCircleImageYWaypoint(0); state.setCircleImageScaleWaypoint(1); drawCanvas(); }; img.src = url; } else { state.setCircleImageWaypoint(null); drawCanvas(); } });
 
-    dom.zoomIn.addEventListener("click", () => { if (state.mapImage) { state.setImageScale(state.imageScale * 1.2); drawCanvas(); } });
-    dom.zoomOut.addEventListener("click", () => { if (state.mapImage) { state.setImageScale(state.imageScale / 1.2); drawCanvas(); } });
-    dom.zoomInTop.addEventListener("click", () => { if (state.circleImageTop) { state.setCircleImageScaleTop(state.circleImageScaleTop * 1.2); drawCanvas(); } });
-    dom.zoomOutTop.addEventListener("click", () => { if (state.circleImageTop) { state.setCircleImageScaleTop(state.circleImageScaleTop / 1.2); drawCanvas(); } });
-    dom.zoomInBottom.addEventListener("click", () => { if (state.circleImageBottom) { state.setCircleImageScaleBottom(state.circleImageScaleBottom * 1.2); drawCanvas(); } });
-    dom.zoomOutBottom.addEventListener("click", () => { if (state.circleImageBottom) { state.setCircleImageScaleBottom(state.circleImageScaleBottom / 1.2); drawCanvas(); } });
-    dom.zoomInDetail.addEventListener("click", () => { if (state.detailImage) { state.setDetailImageScale(state.detailImageScale * 1.2); drawCanvas(); } });
-    dom.zoomOutDetail.addEventListener("click", () => { if (state.detailImage) { state.setDetailImageScale(state.detailImageScale / 1.2); drawCanvas(); } });
+    dom.zoomIn.addEventListener("click", () => { if (state.mapImage) { state.setImageScale(Math.min(10, state.imageScale * 1.2)); drawCanvas(); } });
+    dom.zoomOut.addEventListener("click", () => { if (state.mapImage) { state.setImageScale(Math.max(0.1, state.imageScale / 1.2)); drawCanvas(); } });
+    dom.zoomInTop.addEventListener("click", () => { if (state.circleImageTop) { state.setCircleImageScaleTop(Math.min(10, state.circleImageScaleTop * 1.2)); drawCanvas(); } });
+    dom.zoomOutTop.addEventListener("click", () => { if (state.circleImageTop) { state.setCircleImageScaleTop(Math.max(0.1, state.circleImageScaleTop / 1.2)); drawCanvas(); } });
+    dom.zoomInBottom.addEventListener("click", () => { if (state.circleImageBottom) { state.setCircleImageScaleBottom(Math.min(10, state.circleImageScaleBottom * 1.2)); drawCanvas(); } });
+    dom.zoomOutBottom.addEventListener("click", () => { if (state.circleImageBottom) { state.setCircleImageScaleBottom(Math.max(0.1, state.circleImageScaleBottom / 1.2)); drawCanvas(); } });
+    dom.zoomInDetail.addEventListener("click", () => { if (state.detailImage) { state.setDetailImageScale(Math.min(10, state.detailImageScale * 1.2)); drawCanvas(); } });
+    dom.zoomOutDetail.addEventListener("click", () => { if (state.detailImage) { state.setDetailImageScale(Math.max(0.1, state.detailImageScale / 1.2)); drawCanvas(); } });
 
-    dom.zoomInWaypoint.addEventListener("click", () => { if (state.circleImageWaypoint) { state.setCircleImageScaleWaypoint(state.circleImageScaleWaypoint * 1.2); drawCanvas(); } });
-    dom.zoomOutWaypoint.addEventListener("click", () => { if (state.circleImageWaypoint) { state.setCircleImageScaleWaypoint(state.circleImageScaleWaypoint / 1.2); drawCanvas(); } });
+    dom.zoomInWaypoint.addEventListener("click", () => { if (state.circleImageWaypoint) { state.setCircleImageScaleWaypoint(Math.min(10, state.circleImageScaleWaypoint * 1.2)); drawCanvas(); } });
+    dom.zoomOutWaypoint.addEventListener("click", () => { if (state.circleImageWaypoint) { state.setCircleImageScaleWaypoint(Math.max(0.1, state.circleImageScaleWaypoint / 1.2)); drawCanvas(); } });
 }

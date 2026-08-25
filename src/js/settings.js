@@ -35,7 +35,7 @@ const AVAILABLE_LANGUAGES = [
 function renderDefaultLanguages(langs) {
     const container = $('#settings-default-languages');
     if (!container) return;
-    container.innerHTML = '';
+    container.replaceChildren();
     for (const lang of AVAILABLE_LANGUAGES) {
         const lbl = document.createElement('label');
         lbl.className = 'settings-lang-option';
@@ -56,19 +56,23 @@ function getDefaultLanguages() {
 }
 
 async function loadSettingsData() {
-    const [status, config] = await Promise.all([swarmStatus(), swarmGetConfig()]);
+    try {
+        const [status, config] = await Promise.all([swarmStatus(), swarmGetConfig()]);
 
-    $('#settings-peer-id').textContent = status.peerId || '—';
-    $('#settings-nickname').value = config.nickname || '';
+        $('#settings-peer-id').textContent = status.peerId || '—';
+        $('#settings-nickname').value = config.nickname || '';
 
-    renderDefaultLanguages(config.defaultLanguages || ['es']);
-    renderBlocked(config.blockedAuthors || []);
-    renderFriends(config.friends || []);
-    renderFollowed(config.followedBlacklists || []);
-    await renderChannels(status.peerId || '');
+        renderDefaultLanguages(config.defaultLanguages || ['es']);
+        renderBlocked(config.blockedAuthors || []);
+        renderFriends(config.friends || []);
+        renderFollowed(config.followedBlacklists || []);
+        await renderChannels(status.peerId || '');
 
-    const lists = await getPublicBlacklists();
-    renderExplore(lists, config.followedBlacklists || []);
+        const lists = await getPublicBlacklists();
+        renderExplore(lists, config.followedBlacklists || []);
+    } catch (err) {
+        console.error('[SETTINGS] Failed to load data:', err);
+    }
 }
 
 function renderBlocked(blocked) {
@@ -243,13 +247,13 @@ function initSettings() {
     const btn = $('#settings-btn');
     if (btn) {
         btn.addEventListener('click', openSettings);
-        $('#settings-close').addEventListener('click', closeSettings);
+        $('#settings-close')?.addEventListener('click', closeSettings);
 
     $$('.settings-tab').forEach(tab => {
         tab.addEventListener('click', () => switchTab(tab.dataset.settingsTab));
     });
 
-    $('#settings-copy-peer-id').addEventListener('click', async () => {
+    $('#settings-copy-peer-id')?.addEventListener('click', async () => {
         const peerId = $('#settings-peer-id').textContent;
         if (peerId && peerId !== '—') {
             try {
@@ -261,7 +265,7 @@ function initSettings() {
         }
     });
 
-    $('#settings-save-nick').addEventListener('click', async () => {
+    $('#settings-save-nick')?.addEventListener('click', async () => {
         const nick = $('#settings-nickname').value.trim();
         const config = await swarmGetConfig();
         config.nickname = nick || null;
@@ -270,7 +274,7 @@ function initSettings() {
         setTimeout(() => { $('#settings-save-nick').textContent = t('settings_nickname_save', 'Save'); }, 1500);
     });
 
-    $('#settings-save-languages').addEventListener('click', async () => {
+    $('#settings-save-languages')?.addEventListener('click', async () => {
         const langs = getDefaultLanguages();
         const config = await swarmGetConfig();
         config.defaultLanguages = langs;
@@ -279,19 +283,19 @@ function initSettings() {
         setTimeout(() => { $('#settings-save-languages').textContent = t('settings_nickname_save', 'Save'); }, 1500);
     });
 
-    $('#settings-export-btn').addEventListener('click', () => {
+    $('#settings-export-btn')?.addEventListener('click', () => {
         const opts = $('#settings-export-options');
         setVisible(opts, opts.hidden);
         setVisible($('#settings-import-options'), false);
     });
 
-    $('#settings-import-btn').addEventListener('click', () => {
+    $('#settings-import-btn')?.addEventListener('click', () => {
         const opts = $('#settings-import-options');
         setVisible(opts, opts.hidden);
         setVisible($('#settings-export-options'), false);
     });
 
-    $('#settings-export-confirm').addEventListener('click', async () => {
+    $('#settings-export-confirm')?.addEventListener('click', async () => {
         const tauri = window.__TAURI__;
         if (!tauri) return;
         const password = $('#settings-export-password').value || null;
@@ -307,7 +311,7 @@ function initSettings() {
         }
     });
 
-    $('#settings-import-confirm').addEventListener('click', async () => {
+    $('#settings-import-confirm')?.addEventListener('click', async () => {
         const tauri = window.__TAURI__;
         if (!tauri) return;
         const path = await tauri.dialog.open({
@@ -323,7 +327,7 @@ function initSettings() {
         }
     });
 
-    $('#settings-add-friend-btn').addEventListener('click', async () => {
+    $('#settings-add-friend-btn')?.addEventListener('click', async () => {
         const input = $('#settings-add-friend-input');
         const peerId = input.value.trim();
         if (!peerId) return;
@@ -332,7 +336,7 @@ function initSettings() {
         await loadSettingsData();
     });
 
-    $('#settings-add-blocked-btn').addEventListener('click', async () => {
+    $('#settings-add-blocked-btn')?.addEventListener('click', async () => {
         const input = $('#settings-add-blocked-input');
         const peerId = input.value.trim();
         if (!peerId) return;
@@ -341,7 +345,7 @@ function initSettings() {
         await loadSettingsData();
     });
 
-    $('#settings-create-channel-btn').addEventListener('click', async () => {
+    $('#settings-create-channel-btn')?.addEventListener('click', async () => {
         const nameInput = $('#settings-channel-name-input');
         const pwdInput = $('#settings-channel-password-input');
         const name = nameInput.value.trim();
@@ -358,14 +362,17 @@ function initSettings() {
         }
     });
 
-    $('#settings-publish-blacklist').addEventListener('click', async () => {
-        const ok = await publishBlacklist();
-        if (ok) {
+    $('#settings-publish-blacklist')?.addEventListener('click', async () => {
+        try {
+            await publishBlacklist();
             $('#settings-publish-blacklist').textContent = `✓ ${t('settings_published', 'Published')}`;
             setTimeout(() => {
                 const el = $('#settings-publish-blacklist');
                 if (el) el.textContent = t('settings_publish_blacklist', 'Publish my blacklist');
             }, 2000);
+        } catch (err) {
+            console.error('[SETTINGS] publishBlacklist failed:', err);
+            alert(t('settings_publish_blacklist_error', 'Failed to publish blacklist. Is P2P initialized?'));
         }
     });
     }

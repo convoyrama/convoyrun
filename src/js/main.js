@@ -58,6 +58,9 @@ async function performDownload() {
     drawCanvas(exportCanvas, scale);
     try {
         exportCanvas.toBlob(async (blob) => {
+            // Release canvas memory after blob is created
+            exportCanvas.width = 0;
+            exportCanvas.height = 0;
             try {
             const arrayBuffer = await blob.arrayBuffer();
 
@@ -71,7 +74,7 @@ async function performDownload() {
 
             const departureOffsetMinutes = parseInt(dom.departureTimeOffset.value, 10);
             const departureDateTime = meetingDateTime.plus({ minutes: departureOffsetMinutes });
-            const arrivalDateTime = departureDateTime.plus({ minutes: 45 });
+            const arrivalDateTime = departureDateTime.plus({ minutes: 50 });
 
             const meetingGameTime = getGameTime(meetingDateTime.toUTC());
             const arrivalGameTime = getGameTime(arrivalDateTime.toUTC());
@@ -270,13 +273,13 @@ async function init() {
             statusEl.dataset.mode = mode;
             if (mode === 'online') {
                 statusEl.textContent = state.currentLangData.discovery_connected?.replace('{count}', nc) || `${nc} peers`;
-                peersEl.textContent = '';
+                peersEl.textContent = nc + ' peers';
             } else if (mode === 'searching') {
                 statusEl.textContent = state.currentLangData.discovery_searching || 'P2P active — searching for peers...';
-                peersEl.textContent = '';
+                peersEl.textContent = '0 peers';
             } else {
                 statusEl.textContent = state.currentLangData.discovery_offline || 'P2P offline';
-                peersEl.textContent = '';
+                peersEl.textContent = '0 peers';
             }
             if (p2pDot) p2pDot.dataset.status = mode === 'online' ? 'online' : (mode === 'searching' ? 'searching' : 'offline');
             if (p2pCount) p2pCount.textContent = nc;
@@ -551,6 +554,12 @@ async function init() {
         revokeAllObjectUrls();
         state.setMapImage(null); state.setCircleImageTop(null); state.setCircleImageBottom(null);
         state.setLogoImage(null); state.setBackgroundImage(null); state.setDetailImage(null); state.setCircleImageWaypoint(null);
+        // Reset positions and scales
+        state.imageX = 0; state.imageY = 0; state.imageScale = 1;
+        state.circleImageX = 20; state.circleImageY = 20; state.circleImageScale = 1;
+        state.circleImageXBottom = 20; state.circleImageYBottom = 20; state.circleImageScaleBottom = 1;
+        state.circleImageXWaypoint = 20; state.circleImageYWaypoint = 20; state.circleImageScaleWaypoint = 1;
+        state.detailImageX = 20; state.detailImageY = 20; state.detailImageScale = 1;
         dom.mapUpload.value = ""; dom.circleUploadTop.value = ""; dom.circleUploadBottom.value = "";
         dom.logoUpload.value = ""; dom.backgroundUpload.value = ""; dom.detailUpload.value = ""; dom.waypointUpload.value = "";
         drawCanvas();

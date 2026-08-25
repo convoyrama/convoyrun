@@ -61,11 +61,11 @@ function getCurrentSlotIndex() {
 }
 
 function convertTime(time, fromTz, toTz) {
-    const now = new Date();
-    const dateFrom = new Date(now.toLocaleString('en-US', { timeZone: fromTz }));
-    dateFrom.setHours(time.h, time.m, 0, 0);
-    const dateTo = new Date(dateFrom.toLocaleString('en-US', { timeZone: toTz }));
-    return { h: dateTo.getHours(), m: dateTo.getMinutes() };
+    // Use Luxon for DST-safe conversion
+    const now = DateTime.now().setZone(fromTz);
+    const dt = now.set({ hour: time.h, minute: time.m, second: 0, millisecond: 0 });
+    const converted = dt.setZone(toTz);
+    return { h: converted.hour, m: converted.minute };
 }
 
 function renderTimeline() {
@@ -76,7 +76,7 @@ function renderTimeline() {
 
     if (!timeline || !currentTimeEl || !currentSlotInfoEl || !slotsGrid) return;
 
-    timeline.innerHTML = '';
+    timeline.replaceChildren();
 
     const currentSlotIndex = getCurrentSlotIndex();
     const current = getCurrentTime();
@@ -148,7 +148,7 @@ function renderGrid() {
     const currentSlotIndex = getCurrentSlotIndex();
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-    slotsGrid.innerHTML = '';
+    slotsGrid.replaceChildren();
 
     for (let i = 0; i < slots.length; i++) {
         const s = slots[i];
@@ -164,7 +164,7 @@ function renderGrid() {
 
         const gridNumber = document.createElement('div');
         gridNumber.className = 'grid-slot-number';
-        gridNumber.textContent = `SLOT ${i + 1}`;
+        gridNumber.textContent = `#${i + 1}`;
         const gridTimes = document.createElement('div');
         gridTimes.className = 'grid-slot-times';
         const gridStart = document.createElement('span');
