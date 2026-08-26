@@ -47,3 +47,34 @@ export function getZoneLabel(tz, langData) {
     if (tz.key === null) return tz.label;
     return langData[tz.key] || (timezoneCountryCodes[tz.key] || [tz.key.replace('tz_', '').toUpperCase()]).join(', ');
 }
+
+/**
+ * Markdown renderer for event descriptions.
+ * Supports: bold, italic, strikethrough, inline code, links, unordered lists, line breaks.
+ * Sanitizes HTML to prevent XSS.
+ */
+export function renderMarkdown(text) {
+    if (!text) return '';
+    // Sanitize: strip HTML tags
+    let s = text.replace(/<[^>]*>/g, '');
+    // Escape HTML entities
+    s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Inline code `code` (before bold/italic to avoid inner parsing)
+    s = s.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>');
+    // Bold: **text** or __text__
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/__(.+?)__/g, '<strong>$1</strong>');
+    // Italic: *text* or _text_
+    s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    s = s.replace(/_(.+?)_/g, '<em>$1</em>');
+    // Strikethrough: ~~text~~
+    s = s.replace(/~~(.+?)~~/g, '<del>$1</del>');
+    // Links: [text](url)
+    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    // Unordered list lines: "- " or "* " at line start
+    s = s.replace(/^[\s]*[-*]\s+(.+)$/gm, '<li>$1</li>');
+    s = s.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+    // Line breaks (but not inside lists)
+    s = s.replace(/\n/g, '<br>');
+    return s;
+}

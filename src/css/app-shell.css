@@ -706,6 +706,21 @@ select option {
     border-left: 2px solid rgba(0, 170, 255, 0.35);
     border-radius: 0 8px 8px 0;
 }
+.swarm-detail-desc strong { color: #ddd; font-weight: 700; }
+.swarm-detail-desc em { color: #bbb; }
+.swarm-detail-desc del { color: #666; }
+.swarm-detail-desc a { color: var(--accent); text-decoration: none; }
+.swarm-detail-desc a:hover { text-decoration: underline; }
+.swarm-detail-desc ul { margin: 4px 0; padding-left: 16px; list-style: disc; }
+.swarm-detail-desc li { margin: 2px 0; }
+.swarm-detail-desc .md-inline-code {
+    background: rgba(0,170,255,0.12);
+    color: #7cc4ff;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.75rem;
+}
 .swarm-detail-published {
     margin-top: 12px;
     font-size: 0.68rem;
@@ -804,6 +819,23 @@ select option {
     text-decoration: underline dotted;
 }
 .swarm-delete-btn:hover { color: #ff6666; }
+
+.swarm-copy-discord-btn {
+    background: rgba(88, 101, 242, 0.15);
+    border: 1px solid rgba(88, 101, 242, 0.3);
+    color: #5865F2;
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 4px;
+    margin-top: 10px;
+    transition: all 0.2s;
+}
+.swarm-copy-discord-btn:hover {
+    background: rgba(88, 101, 242, 0.25);
+    border-color: rgba(88, 101, 242, 0.5);
+}
 
 .swarm-block-btn {
     background: none;
@@ -974,6 +1006,79 @@ select option {
     cursor: pointer;
 }
 .swarm-wizard-cancel:hover { color: #fff; border-color: rgba(255, 255, 255, 0.5); }
+
+/* ---- Markdown description editor ------------------------------------------ */
+
+.description-editor {
+    margin-bottom: 15px;
+}
+
+.description-editor textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 10px;
+    background: #252525;
+    border: 1px solid #444;
+    color: #fff;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    resize: vertical;
+    margin-bottom: 4px;
+}
+
+.description-editor textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.md-syntax-hint {
+    font-size: 0.65rem;
+    color: rgba(255,255,255,0.3);
+    margin-bottom: 6px;
+    letter-spacing: 0.3px;
+}
+
+.md-preview {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 0.82rem;
+    color: #ccc;
+    line-height: 1.55;
+    min-height: 20px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.md-preview:empty::before {
+    content: 'Vista previa...';
+    color: rgba(255,255,255,0.2);
+    font-style: italic;
+}
+
+.md-preview p { margin: 0 0 6px; }
+.md-preview p:last-child { margin-bottom: 0; }
+.md-preview strong { color: #fff; font-weight: 700; }
+.md-preview em { font-style: italic; color: #ddd; }
+.md-preview del { text-decoration: line-through; color: #888; }
+.md-preview a { color: var(--accent); text-decoration: none; }
+.md-preview a:hover { text-decoration: underline; }
+.md-preview ul {
+    margin: 4px 0;
+    padding-left: 18px;
+    list-style: disc;
+}
+.md-preview li { margin: 2px 0; }
+.md-preview .md-inline-code {
+    background: rgba(0,170,255,0.12);
+    color: #7cc4ff;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.8rem;
+}
 
 /* ---- Settings Tab ---------------------------------------------------------- */
 

@@ -4,7 +4,8 @@
 // los convoys de HOY y MAÑANA; se puede ampliar a todos los días. En modo demo
 // (sin backend iroh) sirve la caché local.
 import * as state from './core/state.js';
-import { showCopyMessage, setVisible } from './core/utils.js';
+import { showCopyMessage, setVisible, renderMarkdown } from './core/utils.js';
+import { getGameTime, getDetailedDayNightIcon } from './core/time.js';
 import {
     dayKeyUTC, computeScore, authorReputation, reputationBadge,
     validateConvoy, nowUnix,
@@ -12,7 +13,7 @@ import {
 import {
     swarmInit, swarmList, swarmGetVotes, swarmGetMyVotes, swarmVote,
     swarmGetConfig, swarmSetConfig, swarmStatus, swarmPublish,
-    swarmDelete, blockAuthor, getPublicBlacklists,
+    swarmDelete, blockAuthor, getPublicBlacklists, copyToClipboard,
 } from './native/tauri-bridge.js';
 
 const { DateTime } = luxon;
@@ -160,6 +161,41 @@ function creatorZoneLabel(c) {
     const zt = DateTime.fromSeconds(c.schedule.meetingTimestamp, { zone: c.schedule.ianaTimeZone });
     const zoneName = zt.offsetNameShort || c.schedule.ianaTimeZone;
     return `${zt.toFormat('HH:mm')} (${zoneName})`;
+}
+
+function formatForDiscord(c) {
+    const name = c.event.name || 'Evento';
+    const link = c.event.link || 'https://convoyrama.github.io';
+    const server = c.event.server || 'Sin especificar';
+    const startCity = c.event.route?.startCity || c.event.startPlace || '';
+    const startLocation = c.event.route?.startLocation || '';
+    const destCity = c.event.route?.destCity || c.event.destination || '';
+    const destLocation = c.event.route?.destLocation || '';
+    const partida = startCity ? (startLocation ? `${startCity} — ${startLocation}` : startCity) : 'Sin especificar';
+    const destino = destCity ? (destLocation ? `${destCity} — ${destLocation}` : destCity) : 'Sin especificar';
+    const description = c.event.description || 'Sin descripción';
+
+    const meetingTs = c.schedule.meetingTimestamp;
+    const departureOffset = 15;
+    const departureTs = meetingTs + departureOffset * 60;
+    const arrivalTs = departureTs + 50 * 60;
+
+    const meetingGameTime = getGameTime(DateTime.fromSeconds(meetingTs).toUTC());
+    const meetingEmoji = getDetailedDayNightIcon(meetingGameTime.hours);
+    const departureGameTime = getGameTime(DateTime.fromSeconds(departureTs).toUTC());
+    const departureEmoji = getDetailedDayNightIcon(departureGameTime.hours);
+    const arrivalGameTime = getGameTime(DateTime.fromSeconds(arrivalTs).toUTC());
+    const arrivalEmoji = getDetailedDayNightIcon(arrivalGameTime.hours);
+
+    const itKey = state.currentLangData.ingame_time_title || 'Hora ingame';
+    const mKey = state.currentLangData.meeting_label || 'Reunión';
+    const sKey = state.currentLangData.departure_label || 'Salida';
+    const aKey = state.currentLangData.arrival_label || 'Llegada aprox';
+    const dtKey = state.currentLangData.discord_arrival_time || 'Llegada Aprox.:';
+
+    const ingameTimeLine = `**${itKey}:** ${mKey}: ${meetingEmoji} ${sKey}: ${departureEmoji} ${aKey}: ${arrivalEmoji}`;
+
+    return `[**${name}**](${link})\nServidor: ${server}\nPartida: ${partida}\nDestino: ${destino}\n\n**Reunión:** <t:${meetingTs}:F> (<t:${meetingTs}:R>)\n**Salida:** <t:${departureTs}:t> (<t:${departureTs}:R>)\n**${dtKey}** <t:${arrivalTs}:t> (<t:${arrivalTs}:R>)\n${ingameTimeLine}\n\nDescripción: ${description}`;
 }
 
 function buildVoteBtn(c, dir) {
@@ -318,15 +354,23 @@ function buildEvent(c) {
     const line = [];
     if (c.event.server) line.push(c.event.server);
     const startCity = c.event.route?.startCity || c.event.startPlace || '';
+    const startLocation = c.event.route?.startLocation || '';
     const destCity = c.event.route?.destCity || c.event.destination || '';
-    if (startCity && destCity) line.push(`${startCity} → ${destCity}`);
-    else if (startCity) line.push(startCity);
-    else if (destCity) line.push(`→ ${destCity}`);
+    const destLocation = c.event.route?.destLocation || '';
+    const startFull = startCity ? (startLocation ? `${startCity} — ${startLocation}` : startCity) : '';
+    const destFull = destCity ? (destLocation ? `${destCity} — ${destLocation}` : destCity) : '';
+    if (startFull && destFull) line.push(`${startFull} → ${destFull}`);
+    else if (startFull) line.push(startFull);
+    else if (destFull) line.push(`→ ${destFull}`);
     if (line.length) {
         info.appendChild(el('div', 'swarm-detail-kicker', label('swarm_detail_route', 'Ruta')));
         info.appendChild(el('div', 'swarm-detail-line', line.join(' · ')));
     }
-    if (c.event.description) info.appendChild(el('p', 'swarm-detail-desc', c.event.description));
+    if (c.event.description) {
+        const descEl = el('p', 'swarm-detail-desc');
+        descEl.innerHTML = renderMarkdown(c.event.description);
+        info.appendChild(descEl);
+    }
 
     if (c.event.languages && c.event.languages.length) {
         const langLabel = el('div', 'swarm-detail-kicker', label('swarm_wizard_languages', 'Idiomas'));
@@ -340,6 +384,19 @@ function buildEvent(c) {
 
     info.appendChild(el('div', 'swarm-detail-published',
         `${label('swarm_detail_published', 'Publicado')}: ${DateTime.fromSeconds(c.publishedAt).toLocaleString(DateTime.DATE_FULL, { locale: lang })}`));
+
+    const copyDiscordBtn = el('button', 'swarm-copy-discord-btn', label('swarm_copy_discord', 'Copiar para Discord'));
+    copyDiscordBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+            const text = formatForDiscord(c);
+            await copyToClipboard(text);
+            showCopyMessage(label('swarm_copy_discord_ok', 'Copiado al portapapeles'));
+        } catch (err) {
+            console.error('[SWARM] Copy Discord failed:', err);
+        }
+    });
+    info.appendChild(copyDiscordBtn);
 
     details.appendChild(info);
     wrap.appendChild(details);
@@ -412,30 +469,35 @@ function updateChannelFilter() {
 async function renderAll() {
     if (loadingEl) setVisible(loadingEl, true, 'flex');
     if (listEl) setVisible(listEl, false);
-    const [c, v, my, cfg, blacklists] = await Promise.all([
-        swarmList(), swarmGetVotes(), swarmGetMyVotes(), swarmGetConfig(),
-        getPublicBlacklists(),
-    ]);
-    convoys = (Array.isArray(c) ? c : []).filter(validateConvoy);
-    if (convoys.length === 0 && Array.isArray(c) && c.length > 0) {
-        console.warn('[SWARM] All convoys rejected by validateConvoy');
-    }
-    votes = v || {};
-    myVotes = my || {};
-    config = cfg || {};
+    try {
+        const [c, v, my, cfg, blacklists] = await Promise.all([
+            swarmList(), swarmGetVotes(), swarmGetMyVotes(), swarmGetConfig(),
+            getPublicBlacklists(),
+        ]);
+        convoys = (Array.isArray(c) ? c : []).filter(validateConvoy);
+        if (convoys.length === 0 && Array.isArray(c) && c.length > 0) {
+            console.warn('[SWARM] All convoys rejected by validateConvoy');
+        }
+        votes = v || {};
+        myVotes = my || {};
+        config = cfg || {};
 
-    const followed = new Set(config.followedBlacklists || []);
-    blockedAuthorsSet = new Set();
-    if (followed.size > 0 && Array.isArray(blacklists)) {
-        for (const bl of blacklists) {
-            if (followed.has(bl.authorPeerId) && Array.isArray(bl.blocked)) {
-                for (const pid of bl.blocked) blockedAuthorsSet.add(pid);
+        const followed = new Set(config.followedBlacklists || []);
+        blockedAuthorsSet = new Set();
+        if (followed.size > 0 && Array.isArray(blacklists)) {
+            for (const bl of blacklists) {
+                if (followed.has(bl.authorPeerId) && Array.isArray(bl.blocked)) {
+                    for (const pid of bl.blocked) blockedAuthorsSet.add(pid);
+                }
             }
         }
-    }
 
-    updateChannelFilter();
-    if (loadingEl) setVisible(loadingEl, false);
+        updateChannelFilter();
+    } catch (err) {
+        console.error('[SWARM] renderAll failed:', err);
+    } finally {
+        if (loadingEl) setVisible(loadingEl, false);
+    }
     renderList();
 }
 

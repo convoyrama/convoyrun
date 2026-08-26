@@ -4,7 +4,7 @@
 // El flyer es opcional. Se puede subir un PNG (máx 2 MB) o pegar una URL directa.
 // Si se sube PNG, se leen metadatos incrustados para autocompletar y se sube a catbox.
 import * as state from './core/state.js';
-import { showCopyMessage } from './core/utils.js';
+import { showCopyMessage, renderMarkdown } from './core/utils.js';
 import { readMetadataFromPNG } from './core/png-metadata.js';
 import { createConvoy, isWithinPublishWindow } from './core/convoy.js';
 import { swarmPublish, swarmGetConfig, swarmSetConfig, swarmValidateChannel, uploadToCatbox } from './native/tauri-bridge.js';
@@ -51,8 +51,16 @@ export function initSwarmPublish(onPublished) {
     const channelPasswordGroup = document.getElementById('swarm-w-password-group');
     const languagesGroup = document.getElementById('swarm-w-languages');
     const statusEl = document.getElementById('swarm-w-status');
+    const descPreview = document.getElementById('swarm-description-preview');
 
     const imageUrlInput = document.getElementById('swarm-w-image-url');
+
+    // Markdown preview for description
+    if (descEl && descPreview) {
+        descEl.addEventListener('input', () => {
+            descPreview.innerHTML = renderMarkdown(descEl.value);
+        });
+    }
     let currentImageUrl = null;
     let currentFlyerSize = 0;
 
@@ -149,18 +157,18 @@ export function initSwarmPublish(onPublished) {
                 const raw = readMetadataFromPNG(buffer, 'convoyrun-event-v1') || readMetadataFromPNG(buffer, 'convoyrama-event-data');
                 if (raw) {
                     const m = JSON.parse(raw);
-                    fillEmpty(nameEl, m.eventName || m.name);
-                    fillEmpty(serverEl, m.server);
+                    if (m.eventName || m.name) nameEl.value = m.eventName || m.name;
+                    if (m.server) serverEl.value = m.server;
                     if (m.route) {
-                        fillEmpty(startEl, m.route.startCity);
-                        fillEmpty(startLocEl, m.route.startLocation);
-                        fillEmpty(destEl, m.route.destCity);
-                        fillEmpty(destLocEl, m.route.destLocation);
+                        if (m.route.startCity) startEl.value = m.route.startCity;
+                        if (m.route.startLocation && startLocEl) startLocEl.value = m.route.startLocation;
+                        if (m.route.destCity) destEl.value = m.route.destCity;
+                        if (m.route.destLocation && destLocEl) destLocEl.value = m.route.destLocation;
                     }
                     if (m.eventType && typeEl) {
                         typeEl.value = m.eventType;
                     }
-                    fillEmpty(descEl, m.description);
+                    if (m.description) { descEl.value = m.description; if (descPreview) descPreview.innerHTML = renderMarkdown(descEl.value); }
                     const meetingTs = m.meetingTimestamp || (m.schedule && m.schedule.meetingTimestamp);
                     const tz = m.ianaTimeZone || (m.schedule && m.schedule.ianaTimeZone);
                     if (meetingTs && tz) {
@@ -217,13 +225,14 @@ export function initSwarmPublish(onPublished) {
 
     async function openWizard() {
         const cfg = await swarmGetConfig();
-        if (cfg.nickname && !nicknameEl.value) nicknameEl.value = cfg.nickname;
+        if (cfg.nickname) nicknameEl.value = cfg.nickname;
         populateLanguages(cfg.defaultLanguages || ['es']);
         const now = DateTime.local();
         if (!dateEl.value) dateEl.value = now.toISODate();
         if (!timeEl.value) timeEl.value = now.plus({ hours: 2 }).toFormat('HH:mm');
         updateZoneLabel();
         overlay.classList.add('open');
+        if (descPreview) descPreview.innerHTML = renderMarkdown(descEl.value);
         nameEl.focus();
     }
 
@@ -289,14 +298,14 @@ export function initSwarmPublish(onPublished) {
         submitBtn.textContent = label('swarm_wizard_publishing', 'Publicando...');
 
         try {
-            const channelPassword = channelPasswordEl ? channelPasswordEl.value : '';
-            const result = await swarmPublish(convoy, channelName, channelPassword);
-
             const nick = nicknameEl.value.trim();
             if (nick) {
                 const cfg = await swarmGetConfig();
                 if (cfg.nickname !== nick) await swarmSetConfig({ ...cfg, nickname: nick });
             }
+
+            const channelPassword = channelPasswordEl ? channelPasswordEl.value : '';
+            const result = await swarmPublish(convoy, channelName, channelPassword);
 
             closeWizard();
             showCopyMessage(state.currentLangData.swarm_published_ok || 'Convoy publicado en el Swarm.');

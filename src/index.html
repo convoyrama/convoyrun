@@ -522,130 +522,6 @@
 
         <div id="copy-message" data-i18n="copy_message_text">¡Información copiada al portapapeles!</div>
 
-    </main>
-
-    <footer class="app-footer" id="app-footer">
-        <span class="footer-status" id="footer-status" data-i18n="discovery_offline">P2P offline (modo local)</span>
-        <span class="footer-sep">·</span>
-        <span class="footer-peers" id="footer-peers" data-i18n="footer_peers">0 peers</span>
-        <span class="footer-action" id="footer-action"></span>
-    </footer>
-
-    <div class="swarm-wizard-overlay" id="swarm-wizard">
-        <div class="swarm-wizard" role="dialog" aria-modal="true" aria-labelledby="swarm-wizard-title">
-            <h3 id="swarm-wizard-title" data-i18n="swarm_wizard_title">Publicar convoy</h3>
-            <div class="swarm-wizard-grid">
-                <label class="swarm-field swarm-field-full">
-                    <span data-i18n="swarm_wizard_event_name">Nombre del evento</span>
-                    <input type="text" id="swarm-w-name" maxlength="80" data-i18n-placeholder="swarm_wizard_event_name_ph" placeholder="Ej: Cumbre del Desierto">
-                </label>
-                <label class="swarm-field swarm-field-full">
-                    <span data-i18n="swarm_wizard_image">Imagen del flyer (opcional)</span>
-                    <input type="file" id="swarm-w-flyer" accept="image/png">
-                    <span class="swarm-flyer-btn" data-i18n="swarm_wizard_image_btn">Seleccionar PNG</span>
-                </label>
-                <label class="swarm-field swarm-field-full">
-                    <span data-i18n="swarm_wizard_image_url">O pegá una URL de imagen</span>
-                    <input type="url" id="swarm-w-image-url" placeholder="https://..." class="swarm-url-input">
-                </label>
-                <div class="swarm-flyer-preview-wrap">
-                    <img id="swarm-w-flyer-preview" class="swarm-flyer-preview" alt="" hidden>
-                    <p id="swarm-w-flyer-status" class="swarm-flyer-status"></p>
-                </div>
-                <div class="swarm-field-row">
-                    <label class="swarm-field">
-                        <span data-i18n="swarm_wizard_game">Juego</span>
-                        <select id="swarm-w-game">
-                            <option value="ATS">ATS</option>
-                            <option value="ETS2">ETS2</option>
-                            <option value="other" data-i18n="swarm_filter_other">Otro</option>
-                        </select>
-                    </label>
-                    <label class="swarm-field">
-                        <span data-i18n="swarm_wizard_mode">Modo</span>
-                        <select id="swarm-w-mode">
-                            <option value="simulation" data-i18n="swarm_mode_simulation">Simulación</option>
-                            <option value="realistic" data-i18n="swarm_mode_realistic">Realista</option>
-                            <option value="arcade" data-i18n="swarm_mode_arcade">Libre</option>
-                            <option value="other" data-i18n="swarm_filter_other">Otro</option>
-                        </select>
-                    </label>
-                    <label class="swarm-field">
-                        <span data-i18n="swarm_wizard_event_type">Tipo de evento</span>
-                        <select id="swarm-w-type">
-                            <option value="convoy" data-i18n="event_type_convoy">Convoy</option>
-                            <option value="truck_show" data-i18n="event_type_truck_show">Expo de Camiones</option>
-                            <option value="exploration" data-i18n="event_type_exploration">Exploración</option>
-                            <option value="competition" data-i18n="event_type_competition">Competencia</option>
-                            <option value="cruise" data-i18n="event_type_cruise">Cruce</option>
-                            <option value="other" data-i18n="event_type_other">Otro</option>
-                        </select>
-                    </label>
-                </div>
-                <div class="swarm-field-row">
-                    <label class="swarm-field">
-                        <span data-i18n="swarm_wizard_date">Fecha</span>
-                        <input type="date" id="swarm-w-date">
-                    </label>
-                    <label class="swarm-field">
-                        <span data-i18n="swarm_wizard_time">Hora</span>
-                        <input type="time" id="swarm-w-time">
-                    </label>
-                </div>
-                <p class="swarm-wizard-zone" id="swarm-w-zone"></p>
-                <label class="swarm-field swarm-field-full">
-                    <span data-i18n="swarm_wizard_server">Servidor (opcional)</span>
-                    <input type="text" id="swarm-w-server" maxlength="40" data-i18n-placeholder="swarm_wizard_server_ph" placeholder="Ej: Simulation 1">
-                </label>
-                <div class="swarm-field-row">
-                    <label class="swarm-field">
-                        <span data-i18n="swarm_wizard_start_place">Ciudad de inicio (opcional)</span>
-                        <input type="text" id="swarm-w-start" maxlength="60" data-i18n-placeholder="swarm_wizard_start_place_ph" placeholder="Ej: Las Vegas">
-                    </label>
-                    <label class="swarm-field">
-                        <span data-i18n="swarm_wizard_start_location">Ubicación de salida</span>
-                        <input type="text" id="swarm-w-start-location" maxlength="60" data-i18n-placeholder="swarm_wizard_start_location_ph" placeholder="Ej: Gasolinera">
-                    </label>
-                </div>
-                <div class="swarm-field-row">
-                    <label class="swarm-field">
-                        <span data-i18n="swarm_wizard_destination">Destino (opcional)</span>
-                        <input type="text" id="swarm-w-dest" maxlength="60" data-i18n-placeholder="swarm_wizard_destination_ph" placeholder="Ej: Los Angeles">
-                    </label>
-                    <label class="swarm-field">
-                        <span data-i18n="swarm_wizard_dest_location">Ubicación de llegada</span>
-                        <input type="text" id="swarm-w-dest-location" maxlength="60" data-i18n-placeholder="swarm_wizard_dest_location_ph" placeholder="Ej: Puerto">
-                    </label>
-                </div>
-                <label class="swarm-field swarm-field-full">
-                    <span data-i18n="swarm_wizard_description">Descripción (opcional)</span>
-                    <textarea id="swarm-w-desc" rows="3" maxlength="400" data-i18n-placeholder="swarm_wizard_description_ph" placeholder="Ruta, normas, puntos..."></textarea>
-                </label>
-                <label class="swarm-field swarm-field-full">
-                    <span data-i18n="swarm_wizard_nickname">Tu nickname</span>
-                    <input type="text" id="swarm-w-nickname" maxlength="32" data-i18n-placeholder="swarm_wizard_nickname_ph" placeholder="Cómo te llamarán (opcional)">
-                </label>
-                <label class="swarm-field swarm-field-full">
-                    <span data-i18n="swarm_channel">Canal</span>
-                    <input type="text" id="swarm-w-channel" maxlength="32" data-i18n-placeholder="swarm_channel_placeholder_ph" placeholder="General">
-                </label>
-                <label class="swarm-field swarm-field-full" id="swarm-w-password-group" hidden>
-                    <span data-i18n="swarm_channel_password">Contraseña del canal</span>
-                    <input type="password" id="swarm-w-channel-password" maxlength="64" aria-label="Channel password">
-                </label>
-                <label class="swarm-field swarm-field-full">
-                    <span data-i18n="swarm_wizard_languages">Idiomas del evento</span>
-                    <div id="swarm-w-languages" class="swarm-languages-group"></div>
-                </label>
-            </div>
-            <p id="swarm-w-status" class="swarm-wizard-status" hidden></p>
-            <div class="swarm-wizard-actions">
-                <button type="button" class="swarm-wizard-cancel" id="swarm-w-cancel" data-i18n="swarm_wizard_cancel" aria-label="Cancel publishing">Cancelar</button>
-                <button type="button" class="swarm-publish-btn" id="swarm-w-submit" data-i18n="swarm_wizard_publish" aria-label="Publish convoy">Publicar</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Settings Tab -->
     <section class="tab-panel" id="panel-settings">
         <div class="settings-container">
@@ -746,6 +622,134 @@
             </div>
         </div>
     </section>
+
+    </main>
+
+    <footer class="app-footer" id="app-footer">
+        <span class="footer-status" id="footer-status" data-i18n="discovery_offline">P2P offline (modo local)</span>
+        <span class="footer-sep">·</span>
+        <span class="footer-peers" id="footer-peers" data-i18n="footer_peers">0 peers</span>
+        <span class="footer-action" id="footer-action"></span>
+    </footer>
+
+    <div class="swarm-wizard-overlay" id="swarm-wizard">
+        <div class="swarm-wizard" role="dialog" aria-modal="true" aria-labelledby="swarm-wizard-title">
+            <h3 id="swarm-wizard-title" data-i18n="swarm_wizard_title">Publicar convoy</h3>
+            <div class="swarm-wizard-grid">
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_wizard_event_name">Nombre del evento</span>
+                    <input type="text" id="swarm-w-name" maxlength="80" data-i18n-placeholder="swarm_wizard_event_name_ph" placeholder="Ej: Cumbre del Desierto">
+                </label>
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_wizard_image">Imagen del flyer</span>
+                    <input type="file" id="swarm-w-flyer" accept="image/png">
+                    <span class="swarm-flyer-btn" data-i18n="swarm_wizard_image_btn">Seleccionar PNG</span>
+                </label>
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_wizard_image_url">O pegá una URL de imagen</span>
+                    <input type="url" id="swarm-w-image-url" placeholder="https://..." class="swarm-url-input">
+                </label>
+                <div class="swarm-flyer-preview-wrap">
+                    <img id="swarm-w-flyer-preview" class="swarm-flyer-preview" alt="" hidden>
+                    <p id="swarm-w-flyer-status" class="swarm-flyer-status"></p>
+                </div>
+                <div class="swarm-field-row">
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_game">Juego</span>
+                        <select id="swarm-w-game">
+                            <option value="ATS">ATS</option>
+                            <option value="ETS2">ETS2</option>
+                            <option value="other" data-i18n="swarm_filter_other">Otro</option>
+                        </select>
+                    </label>
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_mode">Modo</span>
+                        <select id="swarm-w-mode">
+                            <option value="simulation" data-i18n="swarm_mode_simulation">Simulación</option>
+                            <option value="realistic" data-i18n="swarm_mode_realistic">Realista</option>
+                            <option value="arcade" data-i18n="swarm_mode_arcade">Libre</option>
+                            <option value="other" data-i18n="swarm_filter_other">Otro</option>
+                        </select>
+                    </label>
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_event_type">Tipo de evento</span>
+                        <select id="swarm-w-type">
+                            <option value="convoy" data-i18n="event_type_convoy">Convoy</option>
+                            <option value="truck_show" data-i18n="event_type_truck_show">Expo de Camiones</option>
+                            <option value="exploration" data-i18n="event_type_exploration">Exploración</option>
+                            <option value="competition" data-i18n="event_type_competition">Competencia</option>
+                            <option value="cruise" data-i18n="event_type_cruise">Cruce</option>
+                            <option value="other" data-i18n="event_type_other">Otro</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="swarm-field-row">
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_date">Fecha</span>
+                        <input type="date" id="swarm-w-date">
+                    </label>
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_time">Hora</span>
+                        <input type="time" id="swarm-w-time">
+                    </label>
+                </div>
+                <p class="swarm-wizard-zone" id="swarm-w-zone"></p>
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_wizard_server">Servidor</span>
+                    <input type="text" id="swarm-w-server" maxlength="40" data-i18n-placeholder="swarm_wizard_server_ph" placeholder="Ej: Simulation 1">
+                </label>
+                <div class="swarm-field-row">
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_start_place">Ciudad de inicio</span>
+                        <input type="text" id="swarm-w-start" maxlength="60" data-i18n-placeholder="swarm_wizard_start_place_ph" placeholder="Ej: Las Vegas">
+                    </label>
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_start_location">Ubicación de salida</span>
+                        <input type="text" id="swarm-w-start-location" maxlength="60" data-i18n-placeholder="swarm_wizard_start_location_ph" placeholder="Ej: Gasolinera">
+                    </label>
+                </div>
+                <div class="swarm-field-row">
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_destination">Destino</span>
+                        <input type="text" id="swarm-w-dest" maxlength="60" data-i18n-placeholder="swarm_wizard_destination_ph" placeholder="Ej: Los Angeles">
+                    </label>
+                    <label class="swarm-field">
+                        <span data-i18n="swarm_wizard_dest_location">Ubicación de llegada</span>
+                        <input type="text" id="swarm-w-dest-location" maxlength="60" data-i18n-placeholder="swarm_wizard_dest_location_ph" placeholder="Ej: Puerto">
+                    </label>
+                </div>
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_wizard_description">Descripción</span>
+                    <div class="description-editor">
+                        <textarea id="swarm-w-desc" rows="3" maxlength="400" data-i18n-placeholder="swarm_wizard_description_ph" placeholder="Ruta, normas, puntos..."></textarea>
+                        <div class="md-syntax-hint">**negrita** · *cursiva* · ~~tachado~~ · `código` · [enlace](url) · - lista</div>
+                        <div class="md-preview" id="swarm-description-preview"></div>
+                    </div>
+                </label>
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_wizard_nickname">Tu nickname</span>
+                    <input type="text" id="swarm-w-nickname" maxlength="32" data-i18n-placeholder="swarm_wizard_nickname_ph" placeholder="Cómo te llamarán (opcional)">
+                </label>
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_channel">Canal</span>
+                    <input type="text" id="swarm-w-channel" maxlength="32" data-i18n-placeholder="swarm_channel_placeholder_ph" placeholder="General">
+                </label>
+                <label class="swarm-field swarm-field-full" id="swarm-w-password-group" hidden>
+                    <span data-i18n="swarm_channel_password">Contraseña del canal</span>
+                    <input type="password" id="swarm-w-channel-password" maxlength="64" aria-label="Channel password">
+                </label>
+                <label class="swarm-field swarm-field-full">
+                    <span data-i18n="swarm_wizard_languages">Idiomas del evento</span>
+                    <div id="swarm-w-languages" class="swarm-languages-group"></div>
+                </label>
+            </div>
+            <p id="swarm-w-status" class="swarm-wizard-status" hidden></p>
+            <div class="swarm-wizard-actions">
+                <button type="button" class="swarm-wizard-cancel" id="swarm-w-cancel" data-i18n="swarm_wizard_cancel" aria-label="Cancel publishing">Cancelar</button>
+                <button type="button" class="swarm-publish-btn" id="swarm-w-submit" data-i18n="swarm_wizard_publish" aria-label="Publish convoy">Publicar</button>
+            </div>
+        </div>
+    </div>
 
     <script src="./js/lib/luxon.min.js"></script>
     <script type="module" src="./js/main.js"></script>
