@@ -69,8 +69,9 @@
                         <label class="swarm-filter-label" for="filter-mode" data-i18n="swarm_filter_mode">Modo</label>
                         <select id="filter-mode">
                             <option value="all" data-i18n="swarm_filter_all">Todos</option>
-                            <option value="simulation" data-i18n="swarm_mode_simulation">Simulación</option>
+                            <option value="race" data-i18n="swarm_mode_race">Carrera</option>
                             <option value="realistic" data-i18n="swarm_mode_realistic">Realista</option>
+                            <option value="simulation" data-i18n="swarm_mode_simulation">Simulación</option>
                             <option value="arcade" data-i18n="swarm_mode_arcade">Libre</option>
                             <option value="other" data-i18n="swarm_filter_other">Otro</option>
                         </select>
@@ -558,6 +559,18 @@
                     </div>
                 </div>
                 <div class="settings-section">
+                    <h4 data-i18n="settings_p2p_connection">P2P Connection</h4>
+                    <p class="settings-hint" data-i18n="settings_restart_p2p_hint">Restart the P2P node if you have connection issues.</p>
+                    <button type="button" id="settings-restart-p2p" class="settings-action-btn" data-i18n="settings_restart_p2p">Restart P2P</button>
+                    <div class="settings-autostart-row">
+                        <label class="settings-autostart-label">
+                            <input type="checkbox" id="settings-autostart">
+                            <span data-i18n="settings_autostart">Start with system</span>
+                        </label>
+                        <p class="settings-hint" data-i18n="settings_autostart_hint">Keep events synced in the background by launching ConvoyRun on system startup.</p>
+                    </div>
+                </div>
+                <div class="settings-section">
                     <h4 data-i18n="settings_identity_backup">Identity Backup</h4>
                     <p class="settings-hint" data-i18n="settings_backup_hint">Export your identity to a file. You can protect it with a password.</p>
                     <div class="settings-backup-row">
@@ -665,8 +678,9 @@
                     <label class="swarm-field">
                         <span data-i18n="swarm_wizard_mode">Modo</span>
                         <select id="swarm-w-mode">
-                            <option value="simulation" data-i18n="swarm_mode_simulation">Simulación</option>
+                            <option value="race" data-i18n="swarm_mode_race">Carrera</option>
                             <option value="realistic" data-i18n="swarm_mode_realistic">Realista</option>
+                            <option value="simulation" data-i18n="swarm_mode_simulation">Simulación</option>
                             <option value="arcade" data-i18n="swarm_mode_arcade">Libre</option>
                             <option value="other" data-i18n="swarm_filter_other">Otro</option>
                         </select>
@@ -721,6 +735,14 @@
                 <label class="swarm-field swarm-field-full">
                     <span data-i18n="swarm_wizard_description">Descripción</span>
                     <div class="description-editor">
+                        <div class="md-toolbar" id="md-toolbar">
+                            <button type="button" class="md-btn" data-md="bold" title="Bold">B</button>
+                            <button type="button" class="md-btn" data-md="italic" title="Italic"><i>I</i></button>
+                            <button type="button" class="md-btn" data-md="strike" title="Strikethrough"><s>S</s></button>
+                            <button type="button" class="md-btn" data-md="code" title="Code">&lt;/&gt;</button>
+                            <button type="button" class="md-btn" data-md="link" title="Link">🔗</button>
+                            <button type="button" class="md-btn" data-md="list" title="List">•</button>
+                        </div>
                         <textarea id="swarm-w-desc" rows="3" maxlength="400" data-i18n-placeholder="swarm_wizard_description_ph" placeholder="Ruta, normas, puntos..."></textarea>
                         <div class="md-syntax-hint">**negrita** · *cursiva* · ~~tachado~~ · `código` · [enlace](url) · - lista</div>
                         <div class="md-preview" id="swarm-description-preview"></div>

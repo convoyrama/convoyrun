@@ -61,8 +61,51 @@ export function initSwarmPublish(onPublished) {
             descPreview.innerHTML = renderMarkdown(descEl.value);
         });
     }
+
+    // Markdown toolbar
+    const mdToolbar = document.getElementById('md-toolbar');
+    if (mdToolbar && descEl) {
+        mdToolbar.addEventListener('click', (e) => {
+            const btn = e.target.closest('.md-btn');
+            if (!btn) return;
+            const action = btn.dataset.md;
+            const start = descEl.selectionStart;
+            const end = descEl.selectionEnd;
+            const sel = descEl.value.substring(start, end);
+            let before = '', after = '', replacement = '';
+            switch (action) {
+                case 'bold': before = '**'; after = '**'; break;
+                case 'italic': before = '*'; after = '*'; break;
+                case 'strike': before = '~~'; after = '~~'; break;
+                case 'code': before = '`'; after = '`'; break;
+                case 'link': before = '['; after = '](url)'; break;
+                case 'list': before = '\n- '; after = ''; break;
+            }
+            replacement = before + (sel || (action === 'link' ? 'texto' : action === 'list' ? 'item' : '...')) + after;
+            descEl.value = descEl.value.substring(0, start) + replacement + descEl.value.substring(end);
+            const newCursorPos = start + before.length + (sel ? sel.length : (action === 'link' ? 5 : 3));
+            descEl.setSelectionRange(newCursorPos, newCursorPos);
+            descEl.focus();
+            descEl.dispatchEvent(new Event('input'));
+        });
+    }
     let currentImageUrl = null;
     let currentFlyerSize = 0;
+
+    function clearValidation() {
+        [nameEl, dateEl, timeEl].forEach(el => {
+            if (el) el.classList.remove('field-error');
+        });
+    }
+
+    function validateFields() {
+        clearValidation();
+        let valid = true;
+        if (!nameEl.value.trim()) { nameEl.classList.add('field-error'); valid = false; }
+        if (!dateEl.value) { dateEl.classList.add('field-error'); valid = false; }
+        if (!timeEl.value) { timeEl.classList.add('field-error'); valid = false; }
+        return valid;
+    }
 
     function populateLanguages(defaultLangs) {
         if (!languagesGroup) return;
@@ -223,13 +266,68 @@ export function initSwarmPublish(onPublished) {
         flyerStatus.classList.add('ok');
     }
 
+    const FLYER_STORAGE_KEY = 'convoyrun-flyer-draft';
+    const flyerFields = () => ({
+        name: nameEl?.value || '',
+        game: gameEl?.value || 'ATS',
+        mode: modeEl?.value || 'simulation',
+        type: typeEl?.value || 'convoy',
+        server: serverEl?.value || '',
+        start: startEl?.value || '',
+        startLocation: startLocEl?.value || '',
+        dest: destEl?.value || '',
+        destLocation: destLocEl?.value || '',
+        desc: descEl?.value || '',
+        date: dateEl?.value || '',
+        time: timeEl?.value || '',
+        nickname: nicknameEl?.value || '',
+        channel: channelEl?.value || '',
+        imageUrl: currentImageUrl || '',
+    });
+
+    function saveFlyerDraft() {
+        try { localStorage.setItem(FLYER_STORAGE_KEY, JSON.stringify(flyerFields())); } catch {}
+    }
+
+    function restoreFlyerDraft() {
+        try {
+            const raw = localStorage.getItem(FLYER_STORAGE_KEY);
+            if (!raw) return false;
+            const d = JSON.parse(raw);
+            if (d.name && nameEl) nameEl.value = d.name;
+            if (d.game && gameEl) gameEl.value = d.game;
+            if (d.mode && modeEl) modeEl.value = d.mode;
+            if (d.type && typeEl) typeEl.value = d.type;
+            if (d.server && serverEl) serverEl.value = d.server;
+            if (d.start && startEl) startEl.value = d.start;
+            if (d.startLocation && startLocEl) startLocEl.value = d.startLocation;
+            if (d.dest && destEl) destEl.value = d.dest;
+            if (d.destLocation && destLocEl) destLocEl.value = d.destLocation;
+            if (d.desc && descEl) descEl.value = d.desc;
+            if (d.date && dateEl) dateEl.value = d.date;
+            if (d.time && timeEl) timeEl.value = d.time;
+            if (d.channel && channelEl) channelEl.value = d.channel;
+            if (d.imageUrl) {
+                currentImageUrl = d.imageUrl;
+                flyerPreview.src = d.imageUrl;
+                flyerPreview.hidden = false;
+                flyerStatus.textContent = 'URL de imagen restaurada.';
+                flyerStatus.classList.add('ok');
+            }
+            return true;
+        } catch { return false; }
+    }
+
     async function openWizard() {
         const cfg = await swarmGetConfig();
-        if (cfg.nickname) nicknameEl.value = cfg.nickname;
-        populateLanguages(cfg.defaultLanguages || ['es']);
-        const now = DateTime.local();
-        if (!dateEl.value) dateEl.value = now.toISODate();
-        if (!timeEl.value) timeEl.value = now.plus({ hours: 2 }).toFormat('HH:mm');
+        const hasDraft = restoreFlyerDraft();
+        if (!hasDraft) {
+            if (cfg.nickname) nicknameEl.value = cfg.nickname;
+            populateLanguages(cfg.defaultLanguages || ['es']);
+            const now = DateTime.local();
+            if (!dateEl.value) dateEl.value = now.toISODate();
+            if (!timeEl.value) timeEl.value = now.plus({ hours: 2 }).toFormat('HH:mm');
+        }
         updateZoneLabel();
         overlay.classList.add('open');
         if (descPreview) descPreview.innerHTML = renderMarkdown(descEl.value);
@@ -250,16 +348,17 @@ export function initSwarmPublish(onPublished) {
     }
 
     async function submit() {
+        hideStatus();
+        clearValidation();
+
+        if (!validateFields()) {
+            showStatus(state.currentLangData.swarm_wizard_error_required || 'Completá nombre, fecha y hora.');
+            return;
+        }
+
         const name = nameEl.value.trim();
         const dateVal = dateEl.value;
         const timeVal = timeEl.value;
-
-        hideStatus();
-
-        if (!name || !dateVal || !timeVal) {
-            showStatus(state.currentLangData.swarm_wizard_error_required || 'Completá nombre, juego, modo, fecha y hora.');
-            return;
-        }
 
         const meeting = DateTime.fromISO(`${dateVal}T${timeVal}`);
         if (!meeting.isValid) {
@@ -295,7 +394,9 @@ export function initSwarmPublish(onPublished) {
         }
 
         submitBtn.disabled = true;
+        if (cancelBtn) cancelBtn.disabled = true;
         submitBtn.textContent = label('swarm_wizard_publishing', 'Publicando...');
+        submitBtn.classList.add('loading');
 
         try {
             const nick = nicknameEl.value.trim();
@@ -308,6 +409,7 @@ export function initSwarmPublish(onPublished) {
             const result = await swarmPublish(convoy, channelName, channelPassword);
 
             closeWizard();
+            try { localStorage.removeItem(FLYER_STORAGE_KEY); } catch {}
             showCopyMessage(state.currentLangData.swarm_published_ok || 'Convoy publicado en el Swarm.');
             if (onPublished) onPublished();
         } catch (err) {
@@ -320,6 +422,8 @@ export function initSwarmPublish(onPublished) {
             }
         } finally {
             submitBtn.disabled = false;
+            if (cancelBtn) cancelBtn.disabled = false;
+            submitBtn.classList.remove('loading');
             submitBtn.textContent = label('swarm_wizard_submit', 'Publicar');
         }
     }
@@ -332,6 +436,11 @@ export function initSwarmPublish(onPublished) {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) closeWizard(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && overlay.classList.contains('open')) closeWizard(); });
     window.addEventListener('languageChanged', updateZoneLabel);
+
+    // Auto-save flyer draft on field changes
+    [nameEl, gameEl, modeEl, typeEl, serverEl, startEl, startLocEl, destEl, destLocEl, descEl, dateEl, timeEl, nicknameEl, channelEl].forEach(el => {
+        if (el) el.addEventListener('input', saveFlyerDraft);
+    });
 
     // Prevenir que clicks en date/time picker propaguen al overlay
     [dateEl, timeEl].forEach(input => {

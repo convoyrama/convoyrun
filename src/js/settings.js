@@ -1,6 +1,7 @@
 import * as state from './core/state.js';
 import {
-    swarmStatus, swarmGetConfig, swarmSetConfig,
+    swarmStatus, swarmGetConfig, swarmSetConfig, swarmRestart,
+    getAutostart, setAutostart,
     blockAuthor, unblockAuthor,
     exportIdentity, importIdentity,
     publishBlacklist, importBlacklist, stopFollowingBlacklist,
@@ -239,6 +240,27 @@ function initSettings() {
         $('#settings-save-nick').textContent = '✓';
         setTimeout(() => { $('#settings-save-nick').textContent = t('settings_nickname_save', 'Save'); }, 1500);
     });
+
+    $('#settings-restart-p2p')?.addEventListener('click', async () => {
+        const btn = $('#settings-restart-p2p');
+        btn.disabled = true;
+        btn.textContent = '...';
+        await swarmRestart();
+        btn.textContent = '✓';
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = t('settings_restart_p2p', 'Restart P2P');
+        }, 1500);
+    });
+
+    // Autostart checkbox
+    const autostartEl = $('#settings-autostart');
+    if (autostartEl) {
+        getAutostart().then(enabled => { autostartEl.checked = !!enabled; });
+        autostartEl.addEventListener('change', () => {
+            setAutostart(autostartEl.checked);
+        });
+    }
 
     $('#settings-save-languages')?.addEventListener('click', async () => {
         const langs = getDefaultLanguages();

@@ -43,6 +43,8 @@ pub enum Mode {
     Realistic,
     #[serde(rename = "arcade")]
     Arcade,
+    #[serde(rename = "race")]
+    Race,
     #[serde(rename = "other")]
     Other,
 }

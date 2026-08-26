@@ -364,6 +364,19 @@ async fn p2p_init(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<N
 }
 
 #[tauri::command]
+async fn p2p_restart(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<NodeStatus, String> {
+    // Drop old P2P state
+    {
+        let mut p2p_guard = state.p2p.write().await;
+        *p2p_guard = None;
+    }
+    // Small delay to let old connections close
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    // Reinitialize
+    p2p_init(state, app).await
+}
+
+#[tauri::command]
 async fn p2p_status(state: State<'_, AppState>) -> Result<NodeStatus, String> {
     let p2p_guard = state.p2p.read().await;
 
@@ -889,6 +902,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some("--minimized")))
         .setup(|app| {
             let data_dir = app.path().app_data_dir().map_err(|e| format!("Failed to get app data dir: {}", e))?;
             let convoy_store = Arc::new(RwLock::new({
@@ -1015,6 +1029,7 @@ pub fn run() {
             save_file,
             optimize_png,
             p2p_init,
+            p2p_restart,
             p2p_status,
             export_identity,
             import_identity,

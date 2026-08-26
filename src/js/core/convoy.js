@@ -6,7 +6,7 @@ export const SCHEMA_EVENT = 'convoyrun/event/v1';
 
 export const EVENT_TYPES = ['convoy', 'truck_show', 'exploration', 'competition', 'cruise', 'other'];
 export const GAME_IDS = ['ATS', 'ETS2', 'other'];
-export const MODE_IDS = ['simulation', 'realistic', 'arcade', 'other'];
+export const MODE_IDS = ['simulation', 'realistic', 'arcade', 'race', 'other'];
 
 // Política de retención: un evento sobrevive hasta el 3er día
 // posterior al evento; solo se puede publicar hasta 3 meses adelante.

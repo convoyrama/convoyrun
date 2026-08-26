@@ -20,7 +20,7 @@ const { DateTime } = luxon;
 
 const FILTER_LABELS = {
     'filter-game':   { all: 'swarm_filter_all', ATS: 'swarm_game_ats', ETS2: 'swarm_game_ets2', other: 'swarm_filter_other' },
-    'filter-mode':   { all: 'swarm_filter_all', simulation: 'swarm_mode_simulation', realistic: 'swarm_mode_realistic', arcade: 'swarm_mode_arcade', other: 'swarm_filter_other' },
+    'filter-mode':   { all: 'swarm_filter_all', race: 'swarm_mode_race', simulation: 'swarm_mode_simulation', realistic: 'swarm_mode_realistic', arcade: 'swarm_mode_arcade', other: 'swarm_filter_other' },
     'filter-author': { all: 'swarm_filter_all', trusted: 'swarm_filter_trusted' },
     'filter-score':  { all: 'swarm_filter_all', positive: 'swarm_filter_positive' },
     'filter-order':  { time: 'swarm_filter_order_time', reputation: 'swarm_filter_order_rep' },
@@ -75,7 +75,7 @@ function showFlyerLightbox(src, alt) {
 }
 
 function modeLabel(mode) {
-    return label({ simulation: 'swarm_mode_simulation', realistic: 'swarm_mode_realistic', arcade: 'swarm_mode_arcade' }[mode], mode);
+    return label({ simulation: 'swarm_mode_simulation', realistic: 'swarm_mode_realistic', arcade: 'swarm_mode_arcade', race: 'swarm_mode_race' }[mode], mode);
 }
 
 function populateFilterLabels() {
@@ -476,7 +476,7 @@ async function renderAll() {
         ]);
         convoys = (Array.isArray(c) ? c : []).filter(validateConvoy);
         if (convoys.length === 0 && Array.isArray(c) && c.length > 0) {
-            console.warn('[SWARM] All convoys rejected by validateConvoy');
+            console.warn('[SWARM] All convoys rejected by validateConvoy. Received modes:', c.map(x => x?.event?.mode), 'schema:', c.map(x => x?.schema));
         }
         votes = v || {};
         myVotes = my || {};

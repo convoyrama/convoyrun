@@ -30,7 +30,7 @@ function el(tag, className, text) {
 }
 
 function modeLabel(mode) {
-    return t({ simulation: 'swarm_mode_simulation', realistic: 'swarm_mode_realistic', arcade: 'swarm_mode_arcade' }[mode], mode);
+    return t({ simulation: 'swarm_mode_simulation', realistic: 'swarm_mode_realistic', arcade: 'swarm_mode_arcade', race: 'swarm_mode_race' }[mode], mode);
 }
 
 function buildOverlay() {

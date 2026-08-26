@@ -67,6 +67,34 @@ export async function swarmInit() {
     return { mode: 'local', online: false, peerId: '' };
 }
 
+export async function swarmRestart() {
+    try {
+        const s = await tauri().core.invoke('p2p_restart');
+        if (s && s.mode) return s;
+    } catch (err) {
+        console.warn('[BRIDGE] p2p_restart failed:', err);
+    }
+    return { mode: 'local', online: false, peerId: '' };
+}
+
+export async function getAutostart() {
+    try {
+        return await tauri().core.invoke('plugin:autostart|is_enabled');
+    } catch { return false; }
+}
+
+export async function setAutostart(enabled) {
+    try {
+        if (enabled) {
+            await tauri().core.invoke('plugin:autostart|enable');
+        } else {
+            await tauri().core.invoke('plugin:autostart|disable');
+        }
+    } catch (err) {
+        console.warn('[BRIDGE] autostart failed:', err);
+    }
+}
+
 export async function swarmStatus() {
     try {
         const s = await tauri().core.invoke('p2p_status');
