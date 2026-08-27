@@ -91,13 +91,6 @@
                         </select>
                     </div>
                     <div class="swarm-filter-group">
-                        <label class="swarm-filter-label" for="filter-order" data-i18n="swarm_filter_order">Orden</label>
-                        <select id="filter-order">
-                            <option value="time" data-i18n="swarm_filter_order_time">Por hora de reunión</option>
-                            <option value="reputation" data-i18n="swarm_filter_order_rep">Por reputación</option>
-                        </select>
-                    </div>
-                    <div class="swarm-filter-group">
                         <label class="swarm-filter-label" for="filter-channel" data-i18n="swarm_channel">Canal</label>
                         <select id="filter-channel">
                             <option value="all" data-i18n="swarm_channel_filter_all">Todos los canales</option>
@@ -531,6 +524,7 @@
             <div class="settings-tabs">
                 <button type="button" class="settings-tab active" data-settings-tab="profile" data-i18n="settings_tab_profile">Profile</button>
                 <button type="button" class="settings-tab" data-settings-tab="blacklist" data-i18n="settings_tab_blacklist">Blacklist</button>
+                <button type="button" class="settings-tab" data-settings-tab="trust" data-i18n="settings_tab_trust">Trust</button>
                 <button type="button" class="settings-tab" data-settings-tab="channels" data-i18n="settings_tab_channels">Channels</button>
             </div>
 
@@ -612,6 +606,20 @@
                     <h5 data-i18n="settings_explore_lists">Explore community lists</h5>
                     <div id="settings-explore-lists" class="settings-list"></div>
                     <p id="settings-explore-empty" class="settings-empty" data-i18n="settings_explore_empty">No public blacklists available yet.</p>
+                </div>
+            </div>
+
+            <!-- Trust Tab -->
+            <div class="settings-panel" id="settings-panel-trust">
+                <div class="settings-section">
+                    <h4 data-i18n="settings_trusted_authors">Trusted Authors</h4>
+                    <p class="settings-hint" data-i18n="settings_trust_hint">Authors you trust will be highlighted and you can filter their events easily.</p>
+                    <div class="settings-input-row">
+                        <input type="text" id="settings-trust-peer-id-input" data-i18n-placeholder="settings_trust_peer_id_ph" placeholder="Peer ID to add">
+                        <button type="button" id="settings-add-trust-btn" class="settings-small-btn" data-i18n="settings_add_trust" aria-label="Add trusted author">Add</button>
+                    </div>
+                    <div id="settings-trusted-list" class="settings-list"></div>
+                    <p id="settings-trusted-empty" class="settings-empty" data-i18n="settings_trusted_empty">No trusted authors yet. Add from event cards or manually above.</p>
                 </div>
             </div>
 
@@ -754,12 +762,10 @@
                     </div>
                 </label>
                 <label class="swarm-field swarm-field-full">
-                    <span data-i18n="swarm_wizard_nickname">Tu nickname</span>
-                    <input type="text" id="swarm-w-nickname" maxlength="32" data-i18n-placeholder="swarm_wizard_nickname_ph" placeholder="Cómo te llamarán (opcional)">
-                </label>
-                <label class="swarm-field swarm-field-full">
                     <span data-i18n="swarm_channel">Canal</span>
-                    <input type="text" id="swarm-w-channel" maxlength="32" data-i18n-placeholder="swarm_channel_placeholder_ph" placeholder="general">
+                    <select id="swarm-w-channel">
+                        <option value="general" selected>#general</option>
+                    </select>
                 </label>
                 <label class="swarm-field swarm-field-full" id="swarm-w-password-group" hidden>
                     <span data-i18n="swarm_channel_password">Contraseña del canal</span>
@@ -775,6 +781,16 @@
                 <button type="button" class="swarm-wizard-cancel" id="swarm-w-cancel" data-i18n="swarm_wizard_cancel" aria-label="Cancel publishing">Cancelar</button>
                 <button type="button" class="swarm-publish-btn" id="swarm-w-submit" data-i18n="swarm_wizard_publish" aria-label="Publish convoy">Publicar</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal nick obligatorio -->
+    <div class="nick-required-overlay" id="nick-required-overlay">
+        <div class="nick-required-modal" role="dialog" aria-modal="true" aria-labelledby="nick-required-title">
+            <h3 id="nick-required-title" data-i18n="nick_required_title">Elegí un nickname</h3>
+            <p data-i18n="nick_required_hint">Para participar en la comunidad necesitás un nickname. Así te van a conocer los demás.</p>
+            <input type="text" id="nick-required-input" maxlength="32" data-i18n-placeholder="nick_required_ph" placeholder="Tu nickname">
+            <button type="button" id="nick-required-save" class="settings-small-btn" data-i18n="nick_required_save">Entrar</button>
         </div>
     </div>
 

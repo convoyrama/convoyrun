@@ -1,5 +1,6 @@
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::ImageEncoder;
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -12,11 +13,16 @@ use tokio::sync::RwLock;
 mod p2p;
 mod convoy;
 use p2p::{NodeStatus, P2pState, GossipMessage, UserConfig};
-use convoy::{ConvoyRecord, ConvoyStore, EventData, FlyerData, Schedule, VoteRecord, ChannelRecord, ChannelStore, BlacklistRecord, BlacklistStore, SYSTEM_CHANNELS};
+use convoy::{ConvoyRecord, ConvoyStore, EventData, FlyerData, Schedule, VoteRecord, ChannelRecord, ChannelStore, BlacklistRecord, BlacklistStore, KnownNicksStore, SYSTEM_CHANNELS};
 
 /// Upload de imagen PNG a Catbox.moe (multipart desde Rust, evita CORS del webview)
 #[tauri::command]
 async fn upload_to_catbox(bytes: Vec<u8>) -> Result<String, String> {
+    // Límite de tamaño (10 MB)
+    if bytes.len() > 10 * 1024 * 1024 {
+        return Err(format!("FILE_TOO_LARGE:{:.1}", bytes.len() as f64 / (1024.0 * 1024.0)));
+    }
+
     let client = reqwest::Client::builder()
         .user_agent("ConvoyRun/0.3.6")
         .timeout(std::time::Duration::from_secs(60))
@@ -70,6 +76,7 @@ struct AppState {
     convoy_store: Arc<RwLock<ConvoyStore>>,
     channel_store: Arc<RwLock<ChannelStore>>,
     blacklist_store: Arc<RwLock<BlacklistStore>>,
+    known_nicks: Arc<RwLock<KnownNicksStore>>,
     config: Arc<RwLock<UserConfig>>,
 }
 
@@ -115,6 +122,7 @@ async fn process_gossip_receiver(
     convoy_store: Arc<RwLock<ConvoyStore>>,
     channel_store: Arc<RwLock<ChannelStore>>,
     blacklist_store: Arc<RwLock<BlacklistStore>>,
+    known_nicks: Arc<RwLock<KnownNicksStore>>,
     neighbor_count: Arc<AtomicUsize>,
 ) {
     eprintln!("[P2P] Gossip receiver started");
@@ -125,12 +133,15 @@ async fn process_gossip_receiver(
             Ok(event) => {
                 match event {
                     iroh_gossip::api::Event::NeighborUp(ref peer) => {
-                        let count = neighbor_count.fetch_add(1, Ordering::Relaxed) + 1;
+                        let count = neighbor_count.fetch_add(1, Ordering::SeqCst) + 1;
                         eprintln!("[P2P] NeighborUp: {} (neighbors: {})", peer, count);
                         continue;
                     }
                     iroh_gossip::api::Event::NeighborDown(ref peer) => {
-                        neighbor_count.fetch_sub(1, Ordering::SeqCst);
+                        // Prevenir underflow del contador
+                        neighbor_count.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| {
+                            if n > 0 { Some(n - 1) } else { Some(0) }
+                        }).ok();
                         let count = neighbor_count.load(Ordering::SeqCst);
                         eprintln!("[P2P] NeighborDown: {} (neighbors: {})", peer, count);
                         continue;
@@ -164,8 +175,10 @@ async fn process_gossip_receiver(
                             continue;
                         }
                         seen.insert(key.clone());
+                        // Remover la mitad más antigua cuando se llena (no clear total)
                         if seen.len() > MAX_SEEN {
-                            seen.clear();
+                            let to_remove: Vec<_> = seen.iter().take(MAX_SEEN / 2).cloned().collect();
+                            for k in to_remove { seen.remove(&k); }
                         }
                     }
 
@@ -195,6 +208,12 @@ async fn process_gossip_receiver(
                     match gossip_msg {
                         GossipMessage::Convoy { data } => {
                             if let Ok(record) = serde_json::from_str::<ConvoyRecord>(&data) {
+                                // Validar longitud de campos para prevenir abuso
+                                if record.nickname.len() > 64 || record.event.name.len() > 200
+                                    || record.event.description.len() > 5000 || record.event.server.len() > 100 {
+                                    eprintln!("[P2P] Convoy fields too large, ignoring");
+                                    continue;
+                                }
                                 // Validar expiración antes de almacenar
                                 let now = chrono::Utc::now().timestamp();
                                 if !record.is_retained(now) || !record.is_within_publish_window(now) {
@@ -202,6 +221,12 @@ async fn process_gossip_receiver(
                                 }
                                 match record.verify() {
                                     Ok(true) => {
+                                        // Almacenar nick conocido
+                                        if !record.nickname.is_empty() {
+                                            let mut nicks = known_nicks.write().await;
+                                            nicks.update_nick(record.peer_id.clone(), record.nickname.clone());
+                                            nicks.save(&data_dir);
+                                        }
                                         let mut store = convoy_store.write().await;
                                         store.upsert_convoy(record);
                                         flush_convoy_store(&store, &data_dir);
@@ -281,7 +306,8 @@ async fn process_gossip_receiver(
                         GossipMessage::Channel { data } => {
                             if let Ok(channel) = serde_json::from_str::<ChannelRecord>(&data) {
                                 let mut store = channel_store.write().await;
-                                if !store.channels.contains_key(&channel.name) {
+                                // Solo actualizar canales ya conocidos (no crear nuevos desde gossip)
+                                if store.channels.contains_key(&channel.name) {
                                     store.channels.insert(channel.name.clone(), channel);
                                     flush_channel_store(&store, &data_dir);
                                 }
@@ -339,7 +365,17 @@ async fn save_file(state: State<'_, AppState>, path: String, contents: Vec<u8>) 
     }
     // If path is absolute (from dialog), use it directly; otherwise join with data_dir
     let full_path = if Path::new(&path).is_absolute() {
-        PathBuf::from(&path)
+        let p = PathBuf::from(&path);
+        // Bloquear escritura en ubicaciones sensibles del sistema
+        let path_str = p.to_string_lossy().to_lowercase();
+        let blocked = ["/etc/", "/proc/", "/sys/", "/dev/", "/boot/", "/root/",
+                       "\\windows\\", "\\programdata\\", "program files"];
+        for blocked_path in &blocked {
+            if path_str.contains(blocked_path) {
+                return Err("Cannot write to system directories".to_string());
+            }
+        }
+        p
     } else {
         state.data_dir.join(&path)
     };
@@ -380,11 +416,12 @@ async fn p2p_init(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<N
             let cs = state.convoy_store.clone();
             let chs = state.channel_store.clone();
             let bls = state.blacklist_store.clone();
+            let kn = state.known_nicks.clone();
             let nc = p2p.neighbor_count.clone();
             let cc = state.config.clone();
             let ah = app.clone();
             tokio::spawn(async move {
-                process_gossip_receiver(receiver, data_dir, cc, ah, cs, chs, bls, nc).await;
+                process_gossip_receiver(receiver, data_dir, cc, ah, cs, chs, bls, kn, nc).await;
             });
             eprintln!("[P2P] Joined gossip topic successfully");
         }
@@ -640,7 +677,15 @@ async fn publish_convoy(
     let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
 
     let config = load_config_cached(&state.config).await;
-    let nickname = config.nickname.unwrap_or_default();
+    let nickname = config.nickname.clone().unwrap_or_default();
+
+    // Nick obligatorio
+    if nickname.trim().is_empty() {
+        return Err("Definí un nickname en tu perfil antes de publicar.".to_string());
+    }
+    if nickname.len() > 32 {
+        return Err("El nickname no puede tener más de 32 caracteres.".to_string());
+    }
 
     // Rate limiting: máximo 1 convoy cada 60 segundos
     const PUBLISH_COOLDOWN: i64 = 60;
@@ -729,10 +774,56 @@ async fn get_all_votes(
 
 // --- Comandos de canales ---
 
+/// Info de canal para el frontend (con campos calculados)
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChannelInfo {
+    name: String,
+    display_name: String,
+    is_system: bool,
+    is_owner: bool,
+    has_password: bool,
+}
+
 #[tauri::command]
-async fn list_channels(state: State<'_, AppState>) -> Result<Vec<ChannelRecord>, String> {
+async fn list_channels(state: State<'_, AppState>) -> Result<Vec<ChannelInfo>, String> {
     let store = state.channel_store.read().await;
-    Ok(store.channels.values().cloned().collect())
+    let p2p = state.p2p.read().await;
+    let my_peer_id = p2p.as_ref().map(|p| p.peer_id()).unwrap_or_default();
+
+    let channels: Vec<ChannelInfo> = store.channels.values().map(|ch| {
+        ChannelInfo {
+            name: ch.name.clone(),
+            display_name: if ch.display_name.is_empty() { ch.name.clone() } else { ch.display_name.clone() },
+            is_system: ch.is_system(),
+            is_owner: ch.is_owner(&my_peer_id),
+            has_password: ch.password_hash.is_some(),
+        }
+    }).collect();
+
+    Ok(channels)
+}
+
+// --- Comandos de nicks conocidos ---
+
+#[tauri::command]
+async fn get_known_nicks(state: State<'_, AppState>) -> Result<KnownNicksStore, String> {
+    let store = state.known_nicks.read().await;
+    Ok(store.clone())
+}
+
+#[tauri::command]
+async fn set_nick_alias(state: State<'_, AppState>, peer_id: String, alias: String) -> Result<(), String> {
+    let mut store = state.known_nicks.write().await;
+    store.set_alias(peer_id, alias);
+    store.save(&state.data_dir);
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_display_name(state: State<'_, AppState>, peer_id: String) -> Result<String, String> {
+    let store = state.known_nicks.read().await;
+    Ok(store.display_name(&peer_id))
 }
 
 #[tauri::command]
@@ -929,6 +1020,7 @@ pub fn run() {
                 store
             }));
             let blacklist_store = Arc::new(RwLock::new(BlacklistStore::load(&data_dir).unwrap_or_default()));
+            let known_nicks = Arc::new(RwLock::new(KnownNicksStore::load(&data_dir)));
             let config = p2p::load_config(&data_dir).unwrap_or_default();
             app.manage(AppState {
                 p2p: RwLock::new(None),
@@ -936,6 +1028,7 @@ pub fn run() {
                 convoy_store: convoy_store.clone(),
                 channel_store: channel_store.clone(),
                 blacklist_store: blacklist_store.clone(),
+                known_nicks: known_nicks.clone(),
                 config: Arc::new(RwLock::new(config)),
             });
 
@@ -1072,6 +1165,9 @@ pub fn run() {
             delete_channel,
             delete_convoy,
             upload_to_catbox,
+            get_known_nicks,
+            set_nick_alias,
+            get_display_name,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

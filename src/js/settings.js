@@ -7,8 +7,10 @@ import {
     publishBlacklist, importBlacklist, stopFollowingBlacklist,
     getPublicBlacklists,
     swarmListChannels, getSystemChannels, activateChannel, changeChannelPassword, deleteChannel,
+    getKnownNicks, setNickAlias,
 } from './native/tauri-bridge.js';
 import { setVisible } from './core/utils.js';
+import { displayName, truncPeer } from './core/display-name.js';
 import { AVAILABLE_LANGUAGES } from './core/config.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -18,11 +20,6 @@ const overlay = () => $('#settings-overlay');
 
 function t(key, fallback) {
     return state.currentLangData[key] || fallback;
-}
-
-function truncPeer(id) {
-    if (!id || id.length < 16) return id || '—';
-    return id.slice(0, 8) + '…' + id.slice(-6);
 }
 
 function renderDefaultLanguages(langs) {
@@ -50,7 +47,7 @@ function getDefaultLanguages() {
 
 async function loadSettingsData() {
     try {
-        const [status, config] = await Promise.all([swarmStatus(), swarmGetConfig()]);
+        const [status, config, knownNicks] = await Promise.all([swarmStatus(), swarmGetConfig(), getKnownNicks()]);
 
         $('#settings-peer-id').textContent = status.peerId || '—';
         $('#settings-nickname').value = config.nickname || '';
@@ -60,7 +57,8 @@ async function loadSettingsData() {
             ? config.defaultLanguages
             : AVAILABLE_LANGUAGES.map(l => l.code);
         renderDefaultLanguages(savedLangs);
-        renderBlocked(config.blockedAuthors || []);
+        renderBlocked(config.blockedAuthors || [], knownNicks);
+        renderTrusted(config.trustedPeers || [], knownNicks);
         renderFollowed(config.followedBlacklists || []);
         await renderChannels(status.peerId || '');
 
@@ -71,7 +69,7 @@ async function loadSettingsData() {
     }
 }
 
-function renderBlocked(blocked) {
+function renderBlocked(blocked, knownNicks) {
     const container = $('#settings-blocked-list');
     const empty = $('#settings-blocked-empty');
     container.replaceChildren();
@@ -80,10 +78,17 @@ function renderBlocked(blocked) {
     blocked.forEach(peerId => {
         const item = document.createElement('div');
         item.className = 'settings-list-item';
-        const code = document.createElement('code');
-        code.title = peerId;
-        code.textContent = truncPeer(peerId);
-        item.appendChild(code);
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'settings-peer-name';
+        nameSpan.title = peerId;
+        nameSpan.textContent = displayName(peerId, null, knownNicks);
+        item.appendChild(nameSpan);
+        const aliasBtn = document.createElement('button');
+        aliasBtn.className = 'settings-small-btn';
+        aliasBtn.textContent = '✏️';
+        aliasBtn.title = t('settings_alias_edit', 'Set alias');
+        aliasBtn.onclick = () => promptAlias(peerId);
+        item.appendChild(aliasBtn);
         const btn = document.createElement('button');
         btn.className = 'settings-remove-btn';
         btn.textContent = '✕';
@@ -95,6 +100,51 @@ function renderBlocked(blocked) {
         item.appendChild(btn);
         container.appendChild(item);
     });
+}
+
+function renderTrusted(trusted, knownNicks) {
+    const container = $('#settings-trusted-list');
+    const empty = $('#settings-trusted-empty');
+    container.replaceChildren();
+    if (!trusted.length) { setVisible(empty, true); return; }
+    setVisible(empty, false);
+    trusted.forEach(peerId => {
+        const item = document.createElement('div');
+        item.className = 'settings-list-item';
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'settings-peer-name';
+        nameSpan.title = peerId;
+        nameSpan.textContent = displayName(peerId, null, knownNicks);
+        item.appendChild(nameSpan);
+        const aliasBtn = document.createElement('button');
+        aliasBtn.className = 'settings-small-btn';
+        aliasBtn.textContent = '✏️';
+        aliasBtn.title = t('settings_alias_edit', 'Set alias');
+        aliasBtn.onclick = () => promptAlias(peerId);
+        item.appendChild(aliasBtn);
+        const btn = document.createElement('button');
+        btn.className = 'settings-remove-btn';
+        btn.textContent = '✕';
+        btn.title = t('settings_trust_remove', 'Remove trust');
+        btn.onclick = async () => {
+            const config = await swarmGetConfig();
+            const next = (config.trustedPeers || []).filter(p => p !== peerId);
+            await swarmSetConfig({ ...config, trustedPeers: next });
+            await loadSettingsData();
+        };
+        item.appendChild(btn);
+        container.appendChild(item);
+    });
+}
+
+// Prompt para editar alias de un peer ID
+async function promptAlias(peerId) {
+    const knownNicks = await getKnownNicks();
+    const current = knownNicks?.aliases?.[peerId] || '';
+    const newAlias = prompt(t('settings_alias_prompt', 'Alias for this peer:'), current);
+    if (newAlias === null) return; // cancelado
+    await setNickAlias(peerId, newAlias.trim());
+    await loadSettingsData();
 }
 
 
@@ -366,6 +416,19 @@ function initSettings() {
         const peerId = input.value.trim();
         if (!peerId) return;
         await blockAuthor(peerId);
+        input.value = '';
+        await loadSettingsData();
+    });
+
+    $('#settings-add-trust-btn')?.addEventListener('click', async () => {
+        const input = $('#settings-trust-peer-id-input');
+        const peerId = input.value.trim();
+        if (!peerId) return;
+        const config = await swarmGetConfig();
+        const current = config.trustedPeers || [];
+        if (!current.includes(peerId)) {
+            await swarmSetConfig({ ...config, trustedPeers: [...current, peerId] });
+        }
         input.value = '';
         await loadSettingsData();
     });

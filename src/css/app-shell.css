@@ -1425,21 +1425,6 @@ button.loading::after {
     color: rgba(255,255,255,0.5);
 }
 
-.settings-action-btn {
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.15);
-    color: rgba(255,255,255,0.7);
-    border-radius: 4px;
-    padding: 2px 8px;
-    font-size: 0.75rem;
-    cursor: pointer;
-    margin-left: 4px;
-}
-.settings-action-btn:hover {
-    background: rgba(255,255,255,0.15);
-    color: #fff;
-}
-
 .settings-hint {
     font-size: 0.7rem;
     color: rgba(255,255,255,0.4);
@@ -1775,6 +1760,60 @@ button.loading::after {
     animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
+/* Modal nick obligatorio */
+.nick-required-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+.nick-required-overlay.visible {
+    display: flex;
+}
+.nick-required-modal {
+    background: #141414;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+}
+.nick-required-modal h3 {
+    margin: 0 0 12px;
+    font-size: 1.1rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+}
+.nick-required-modal p {
+    margin: 0 0 20px;
+    color: #aaa;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+.nick-required-modal input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    background: #1a1a1a;
+    color: #fff;
+    font-size: 1rem;
+    margin-bottom: 14px;
+    box-sizing: border-box;
+}
+.nick-required-modal input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.nick-required-modal button {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 0.95rem;
 }

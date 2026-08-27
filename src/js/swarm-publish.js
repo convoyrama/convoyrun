@@ -7,11 +7,11 @@ import * as state from './core/state.js';
 import { showCopyMessage, renderMarkdown } from './core/utils.js';
 import { readMetadataFromPNG } from './core/png-metadata.js';
 import { createConvoy, isWithinPublishWindow } from './core/convoy.js';
-import { swarmPublish, swarmGetConfig, swarmSetConfig, swarmValidateChannel, uploadToCatbox } from './native/tauri-bridge.js';
+import { swarmPublish, swarmGetConfig, swarmSetConfig, swarmValidateChannel, swarmListChannels, uploadToCatbox } from './native/tauri-bridge.js';
 import { AVAILABLE_LANGUAGES } from './core/config.js';
 
 const { DateTime } = luxon;
-const MAX_FLYER_BYTES = 2 * 1024 * 1024;
+const MAX_FLYER_BYTES = 10 * 1024 * 1024;
 
 function label(key, fallback) {
     return state.currentLangData[key] || fallback;
@@ -42,7 +42,6 @@ export function initSwarmPublish(onPublished) {
     const descEl = document.getElementById('swarm-w-desc');
     const dateEl = document.getElementById('swarm-w-date');
     const timeEl = document.getElementById('swarm-w-time');
-    const nicknameEl = document.getElementById('swarm-w-nickname');
     const flyerInput = document.getElementById('swarm-w-flyer');
     const flyerPreview = document.getElementById('swarm-w-flyer-preview');
     const flyerStatus = document.getElementById('swarm-w-flyer-status');
@@ -145,14 +144,74 @@ export function initSwarmPublish(onPublished) {
         if (statusEl) statusEl.hidden = true;
     }
 
+    // Cache de canales para evitar doble llamada IPC
+    let _cachedChannels = [];
+
+    // Poblamos el select de canales con los disponibles
+    async function populateChannelSelect() {
+        if (!channelEl) return;
+        _cachedChannels = await swarmListChannels();
+        const currentValue = channelEl.value || 'general';
+        channelEl.innerHTML = '';
+
+        // Canales del sistema primero (sin contraseña)
+        const systemChannels = _cachedChannels.filter(c => c.is_system);
+        for (const ch of systemChannels) {
+            const opt = document.createElement('option');
+            opt.value = ch.name;
+            opt.textContent = `#${ch.display_name || ch.name}`;
+            channelEl.appendChild(opt);
+        }
+
+        // Canales privados (requieren contraseña si no sos owner)
+        const privateChannels = _cachedChannels.filter(c => !c.is_system);
+        if (privateChannels.length > 0) {
+            const separator = document.createElement('option');
+            separator.disabled = true;
+            separator.textContent = '──────────';
+            channelEl.appendChild(separator);
+
+            for (const ch of privateChannels) {
+                const opt = document.createElement('option');
+                opt.value = ch.name;
+                const badge = ch.is_owner ? '🔑' : '🔒';
+                opt.textContent = `${badge} #${ch.display_name || ch.name}`;
+                channelEl.appendChild(opt);
+            }
+        }
+
+        // Restaurar selección previa si existe
+        channelEl.value = currentValue;
+        checkChannelPassword();
+    }
+
     async function checkChannelPassword() {
         const ch = channelEl.value.trim();
-        if (!ch || ch.toLowerCase() === 'general') {
+        if (!ch) return;
+
+        // Usamos el cache de canales (evita doble llamada IPC)
+        const channel = _cachedChannels.find(c => c.name === ch);
+
+        if (!channel) {
+            // Canal no encontrado (no debería pasar con select)
             channelPasswordGroup.hidden = true;
             return;
         }
-        const ok = await swarmValidateChannel(ch, '');
-        if (!ok) {
+
+        // Canales del sistema no requieren contraseña
+        if (channel.is_system) {
+            channelPasswordGroup.hidden = true;
+            return;
+        }
+
+        // Si es owner, no necesita contraseña
+        if (channel.is_owner) {
+            channelPasswordGroup.hidden = true;
+            return;
+        }
+
+        // Canal privado con contraseña
+        if (channel.has_password) {
             channelPasswordGroup.hidden = false;
         } else {
             channelPasswordGroup.hidden = true;
@@ -160,7 +219,6 @@ export function initSwarmPublish(onPublished) {
     }
 
     if (channelEl) {
-        channelEl.addEventListener('blur', checkChannelPassword);
         channelEl.addEventListener('change', checkChannelPassword);
     }
 
@@ -189,7 +247,7 @@ export function initSwarmPublish(onPublished) {
             return;
         }
         if (file.size > MAX_FLYER_BYTES) {
-            showCopyMessage(state.currentLangData.swarm_wizard_error_image_size || 'La imagen supera los 2 MB.');
+            showCopyMessage(state.currentLangData.swarm_wizard_error_image_size || 'La imagen supera los 10 MB.');
             flyerInput.value = '';
             return;
         }
@@ -293,7 +351,6 @@ export function initSwarmPublish(onPublished) {
         desc: descEl?.value || '',
         date: dateEl?.value || '',
         time: timeEl?.value || '',
-        nickname: nicknameEl?.value || '',
         channel: channelEl?.value || '',
         imageUrl: currentImageUrl || '',
     });
@@ -335,12 +392,12 @@ export function initSwarmPublish(onPublished) {
         const cfg = await swarmGetConfig();
         const hasDraft = restoreFlyerDraft();
         if (!hasDraft) {
-            if (cfg.nickname) nicknameEl.value = cfg.nickname;
             populateLanguages(cfg.defaultLanguages || ['es']);
             const now = DateTime.local();
             if (!dateEl.value) dateEl.value = now.toISODate();
             if (!timeEl.value) timeEl.value = now.plus({ hours: 2 }).toFormat('HH:mm');
         }
+        await populateChannelSelect();
         updateZoneLabel();
         overlay.classList.add('open');
         if (descPreview) descPreview.innerHTML = renderMarkdown(descEl.value);
@@ -393,7 +450,6 @@ export function initSwarmPublish(onPublished) {
             destLocation: destLocEl ? destLocEl.value.trim() : '',
             description: descEl.value.trim(),
             languages: getSelectedLanguages(),
-            nickname: nicknameEl.value.trim() || undefined,
             flyer: currentImageUrl ? { url: currentImageUrl, size: currentFlyerSize } : null,
         });
 
@@ -412,12 +468,6 @@ export function initSwarmPublish(onPublished) {
         submitBtn.classList.add('loading');
 
         try {
-            const nick = nicknameEl.value.trim();
-            if (nick) {
-                const cfg = await swarmGetConfig();
-                if (cfg.nickname !== nick) await swarmSetConfig({ ...cfg, nickname: nick });
-            }
-
             const channelPassword = channelPasswordEl ? channelPasswordEl.value : '';
             const result = await swarmPublish(convoy, channelName, channelPassword);
 
@@ -451,7 +501,7 @@ export function initSwarmPublish(onPublished) {
     window.addEventListener('languageChanged', updateZoneLabel);
 
     // Auto-save flyer draft on field changes
-    [nameEl, gameEl, modeEl, typeEl, serverEl, startEl, startLocEl, destEl, destLocEl, descEl, dateEl, timeEl, nicknameEl, channelEl].forEach(el => {
+    [nameEl, gameEl, modeEl, typeEl, serverEl, startEl, startLocEl, destEl, destLocEl, descEl, dateEl, timeEl, channelEl].forEach(el => {
         if (el) el.addEventListener('input', saveFlyerDraft);
     });
 

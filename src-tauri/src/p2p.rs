@@ -281,8 +281,8 @@ pub fn import_identity(
         .context("Failed to parse import file")?;
 
     let version = export["version"].as_u64().unwrap_or(0);
-    if version != 1 && version != 2 {
-        anyhow::bail!("Unsupported export version: {}", version);
+    if version != 2 {
+        anyhow::bail!("Unsupported export version: {}. Only v2 (Argon2id) is supported.", version);
     }
 
     let encrypted = export["encrypted"].as_bool().unwrap_or(false);
@@ -296,42 +296,29 @@ pub fn import_identity(
             .ok_or_else(|| anyhow::anyhow!("Missing nonce in encrypted backup"))?;
         let encrypted_b64 = export["encryptedKey"].as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing encryptedKey in encrypted backup"))?;
+        let salt_b64 = export["salt"].as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing salt in backup"))?;
 
         let nonce_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, nonce_b64)
             .context("Failed to decode nonce")?;
         let encrypted_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, encrypted_b64)
             .context("Failed to decode encrypted key")?;
+        let salt_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, salt_b64)
+            .context("Failed to decode salt")?;
 
-        // Derivar clave según versión del backup
-        let derived_key = if version == 2 {
-            // v2: Argon2id con salt
-            use argon2::Argon2;
-            let salt_b64 = export["salt"].as_str()
-                .ok_or_else(|| anyhow::anyhow!("Missing salt in v2 backup"))?;
-            let salt_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, salt_b64)
-                .context("Failed to decode salt")?;
-            let mut key = [0u8; 32];
-            Argon2::default()
-                .hash_password_into(pwd.as_bytes(), &salt_bytes, &mut key)
-                .map_err(|e| anyhow::anyhow!("KDF failed: {}", e))?;
-            key
-        } else {
-            // v1: XOR cycle (compatibilidad hacia atrás)
-            let mut key = [0u8; 32];
-            let pwd_bytes = pwd.as_bytes();
-            for (i, b) in pwd_bytes.iter().cycle().take(32).enumerate() {
-                key[i] = *b;
-            }
-            eprintln!("[P2P] ⚠️  SECURITY: v1 backup uses weak XOR-key KDF (low entropy). Re-export as v2 immediately after import.");
-            key
-        };
+        // v2: Argon2id con salt
+        use argon2::Argon2;
+        let mut key = [0u8; 32];
+        Argon2::default()
+            .hash_password_into(pwd.as_bytes(), &salt_bytes, &mut key)
+            .map_err(|e| anyhow::anyhow!("KDF failed: {}", e))?;
 
-        let cipher = Aes256Gcm::new_from_slice(&derived_key).context("Failed to create cipher")?;
+        let cipher = Aes256Gcm::new_from_slice(&key).context("Failed to create cipher")?;
         let nonce = Nonce::from_slice(&nonce_bytes);
 
         cipher
             .decrypt(nonce, encrypted_bytes.as_ref())
-            .map_err(|e| anyhow::anyhow!("Decryption failed: {}", e))?
+            .map_err(|_| anyhow::anyhow!("Decryption failed (wrong password?)"))?
     } else {
         // Sin encriptar
         let key_b64 = export["secretKey"].as_str()
@@ -400,11 +387,14 @@ pub fn load_config(data_dir: &Path) -> Result<UserConfig> {
     }
 }
 
-/// Guarda la configuración del usuario a disco.
+/// Guarda la configuración del usuario a disco (atómico: temp + rename).
 pub fn save_config(data_dir: &Path, config: &UserConfig) -> Result<()> {
     let config_path = data_dir.join("convoyrun_config.json");
-    std::fs::write(&config_path, serde_json::to_string_pretty(config)?)
-        .context("Failed to write config file")?;
+    let tmp_path = data_dir.join("convoyrun_config.json.tmp");
+    std::fs::write(&tmp_path, serde_json::to_string_pretty(config)?)
+        .context("Failed to write config temp file")?;
+    std::fs::rename(&tmp_path, &config_path)
+        .context("Failed to rename config temp file")?;
     Ok(())
 }
 

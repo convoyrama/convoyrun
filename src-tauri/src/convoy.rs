@@ -164,8 +164,11 @@ pub struct ChannelRecord {
     #[serde(default)]
     pub display_name: String,
     pub creator_peer_id: String,
-    /// blake3 hash del password (None = público)
+    /// blake3 hash del password con salt (None = público)
     pub password_hash: Option<String>,
+    /// Salt aleatorio para el hash del password
+    #[serde(default)]
+    pub password_salt: String,
     pub created_at: i64,
     /// Firma ed25519 del payload canónico
     #[serde(default)]
@@ -514,6 +517,7 @@ impl ChannelStore {
                     display_name: name.to_string(),
                     creator_peer_id: SYSTEM_PEER_ID.to_string(),
                     password_hash: None,
+                    password_salt: String::new(),
                     created_at: chrono::Utc::now().timestamp(),
                     signature: String::new(),
                 });
@@ -580,7 +584,9 @@ impl ChannelStore {
         }
 
         // Crear canal con el peer ID autorizado como owner
-        let password_hash = blake3::hash(password.as_bytes()).to_hex().to_string();
+        // Generar salt aleatorio para el hash del password
+        let salt: String = (0..16).map(|_| format!("{:02x}", rand::random::<u8>())).collect();
+        let password_hash = blake3::hash(format!("{}:{}", salt, password).as_bytes()).to_hex().to_string();
         let display = if display_name.trim().is_empty() {
             normalized.clone()
         } else {
@@ -593,6 +599,7 @@ impl ChannelStore {
             display_name: display,
             creator_peer_id: authorized_peer.to_string(),
             password_hash: Some(password_hash),
+            password_salt: salt,
             created_at: chrono::Utc::now().timestamp(),
             signature: String::new(),
         });
@@ -615,10 +622,13 @@ impl ChannelStore {
             return Err("Not the channel owner".to_string());
         }
 
-        let password_hash = blake3::hash(new_password.as_bytes()).to_hex().to_string();
+        // Generar nuevo salt para el nuevo password
+        let salt: String = (0..16).map(|_| format!("{:02x}", rand::random::<u8>())).collect();
+        let password_hash = blake3::hash(format!("{}:{}", salt, new_password).as_bytes()).to_hex().to_string();
 
         if let Some(ch) = self.channels.get_mut(&normalized) {
             ch.password_hash = Some(password_hash);
+            ch.password_salt = salt;
         }
 
         Ok(())
@@ -650,10 +660,13 @@ impl ChannelStore {
             Some(ch) => match &ch.password_hash {
                 None => true, // público
                 Some(hash) => {
-                    let provided = match password {
-                        Some(p) => blake3::hash(p.as_bytes()).to_hex().to_string(),
+                    let pwd = match password {
+                        Some(p) => p,
                         None => return false,
                     };
+                    // Usar salt del canal (o nombre como fallback para canales legacy)
+                    let salt = if ch.password_salt.is_empty() { &ch.name } else { &ch.password_salt };
+                    let provided = blake3::hash(format!("{}:{}", salt, pwd).as_bytes()).to_hex().to_string();
                     // Comparación constante para evitar timing attacks
                     if provided.len() != hash.len() { return false; }
                     let mut diff = 0u8;
@@ -795,6 +808,71 @@ impl BlacklistStore {
     pub fn purge_expired(&mut self) {
         let cutoff = chrono::Utc::now().timestamp() - 90 * 86400;
         self.blacklists.retain(|_, r| r.updated_at > cutoff);
+    }
+}
+
+/// Almacén de nicks conocidos (peer_id → nick/alias)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct KnownNicksStore {
+    /// peer_id → nick conocido (del gossip)
+    #[serde(default)]
+    pub nicks: HashMap<String, String>,
+    /// peer_id → alias local (definido por el usuario)
+    #[serde(default)]
+    pub aliases: HashMap<String, String>,
+}
+
+impl KnownNicksStore {
+    /// Carga el store desde disco
+    pub fn load(data_dir: &Path) -> Self {
+        let path = data_dir.join("known_nicks.json");
+        std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    }
+
+    /// Guarda el store a disco (atómico: temp + rename)
+    pub fn save(&self, data_dir: &Path) {
+        let path = data_dir.join("known_nicks.json");
+        let tmp_path = data_dir.join("known_nicks.json.tmp");
+        if let Ok(json) = serde_json::to_string_pretty(self) {
+            if std::fs::write(&tmp_path, json).is_ok() {
+                let _ = std::fs::rename(&tmp_path, &path);
+            }
+        }
+    }
+
+    /// Obtiene el nombre a mostrar para un peer_id (prioridad: alias > nick > peer_id truncado)
+    pub fn display_name(&self, peer_id: &str) -> String {
+        if let Some(alias) = self.aliases.get(peer_id) {
+            return alias.clone();
+        }
+        if let Some(nick) = self.nicks.get(peer_id) {
+            return nick.clone();
+        }
+        // Peer ID truncado como fallback
+        if peer_id.len() > 12 {
+            format!("{}…{}", &peer_id[..6], &peer_id[peer_id.len()-4..])
+        } else {
+            peer_id.to_string()
+        }
+    }
+
+    /// Actualiza el nick conocido de un peer_id (desde gossip)
+    pub fn update_nick(&mut self, peer_id: String, nick: String) {
+        if !nick.trim().is_empty() && nick.len() <= 64 {
+            self.nicks.insert(peer_id, nick);
+        }
+    }
+
+    /// Define un alias local para un peer_id
+    pub fn set_alias(&mut self, peer_id: String, alias: String) {
+        if alias.trim().is_empty() {
+            self.aliases.remove(&peer_id);
+        } else {
+            self.aliases.insert(peer_id, alias);
+        }
     }
 }
 

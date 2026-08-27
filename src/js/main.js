@@ -15,6 +15,7 @@ import { performDownload } from './download.js';
 import { initFlyerLoad } from './flyer-load.js';
 import { initClipboard } from './clipboard.js';
 import { initCanvasControls } from './canvas-controls.js';
+import { swarmGetConfig, swarmSetConfig } from './native/tauri-bridge.js';
 
 const { DateTime } = luxon;
 
@@ -100,9 +101,53 @@ function initTabs() {
     }));
 }
 
+async function checkNickRequired() {
+    const overlay = document.getElementById('nick-required-overlay');
+    const input = document.getElementById('nick-required-input');
+    const saveBtn = document.getElementById('nick-required-save');
+    if (!overlay || !input || !saveBtn) return;
+
+    try {
+        const config = await swarmGetConfig();
+        if (config.nickname && config.nickname.trim()) return; // Ya tiene nick
+    } catch { /* sin backend, continuar */ }
+
+    // Mostrar modal
+    overlay.classList.add('visible');
+    input.focus();
+
+    return new Promise((resolve) => {
+        const save = async () => {
+            const nick = input.value.trim();
+            if (!nick) {
+                input.style.borderColor = '#ff6b6b';
+                return;
+            }
+            try {
+                const config = await swarmGetConfig();
+                await swarmSetConfig({ ...config, nickname: nick });
+                overlay.classList.remove('visible');
+                resolve();
+            } catch (err) {
+                console.error('[INIT] Failed to save nick:', err);
+                input.style.borderColor = '#ff6b6b';
+                // No cerrar el modal si falló el guardado
+            }
+        };
+
+        saveBtn.addEventListener('click', save);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') save();
+        });
+    });
+}
+
 async function init() {
     initI18n();
     initTabs();
+
+    // Verificar nick obligatorio
+    await checkNickRequired();
 
     dom.customDate = document.getElementById("custom-date");
     dom.customTime = document.getElementById("custom-time");

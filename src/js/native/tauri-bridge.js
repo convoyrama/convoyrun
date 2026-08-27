@@ -44,8 +44,6 @@ export async function optimizePng(arrayBuffer) {
 }
 
 const CATBOX_MAX_SIZE = 10 * 1024 * 1024; // 10 MB
-const CATBOX_TIMEOUT_MS = 60000; // 60 seconds
-const CATBOX_MAX_RETRIES = 2;
 
 export async function uploadToCatbox(arrayBuffer) {
     if (arrayBuffer.byteLength > CATBOX_MAX_SIZE) {
@@ -255,6 +253,33 @@ export async function swarmValidateChannel(channel, password) {
         return ok;
     } catch {
         return true;
+    }
+}
+
+// ---- Nicks conocidos ---------------------------------------------------------
+
+export async function getKnownNicks() {
+    try {
+        return await tauri().core.invoke('get_known_nicks');
+    } catch {
+        return { nicks: {}, aliases: {} };
+    }
+}
+
+export async function setNickAlias(peerId, alias) {
+    try {
+        await tauri().core.invoke('set_nick_alias', { peerId, alias });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export async function getDisplayName(peerId) {
+    try {
+        return await tauri().core.invoke('get_display_name', { peerId });
+    } catch {
+        return peerId?.slice(0, 8) + '…' || '?';
     }
 }
 

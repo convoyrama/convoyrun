@@ -84,8 +84,21 @@ export function renderMarkdown(text) {
     s = s.replace(/_(.+?)_/g, '<em>$1</em>');
     // Strikethrough: ~~text~~
     s = s.replace(/~~(.+?)~~/g, '<del>$1</del>');
-    // Links: [text](url)
-    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    // Links: [text](url) — solo esquemas seguros (https, http, mailto)
+    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
+        const trimmedUrl = url.trim();
+        if (!/^(https?:|mailto:|\/)/.test(trimmedUrl)) {
+            return `<a href="#" target="_blank" rel="noopener noreferrer">${text}</a>`;
+        }
+        // Escapar caracteres especiales de atributos HTML
+        const safeUrl = trimmedUrl
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    });
     // Unordered list lines: "- " or "* " at line start
     s = s.replace(/^[\s]*[-*]\s+(.+)$/gm, '<li>$1</li>');
     s = s.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');

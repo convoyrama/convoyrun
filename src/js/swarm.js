@@ -10,10 +10,12 @@ import {
     dayKeyUTC, computeScore, authorReputation, reputationBadge,
     validateConvoy, nowUnix,
 } from './core/convoy.js';
+import { displayName } from './core/display-name.js';
 import {
     swarmInit, swarmList, swarmGetVotes, swarmGetMyVotes, swarmVote,
     swarmGetConfig, swarmSetConfig, swarmStatus, swarmPublish,
     swarmDelete, blockAuthor, getPublicBlacklists, copyToClipboard,
+    getKnownNicks,
 } from './native/tauri-bridge.js';
 
 const { DateTime } = luxon;
@@ -23,7 +25,6 @@ const FILTER_LABELS = {
     'filter-mode':   { all: 'swarm_filter_all', race: 'swarm_mode_race', simulation: 'swarm_mode_simulation', realistic: 'swarm_mode_realistic', arcade: 'swarm_mode_arcade', other: 'swarm_filter_other' },
     'filter-author': { all: 'swarm_filter_all', trusted: 'swarm_filter_trusted' },
     'filter-score':  { all: 'swarm_filter_all', positive: 'swarm_filter_positive' },
-    'filter-order':  { time: 'swarm_filter_order_time', reputation: 'swarm_filter_order_rep' },
     'filter-channel': { all: 'swarm_channel_filter_all' },
 };
 
@@ -37,6 +38,7 @@ let lang = 'en';
 let blockedAuthorsSet = new Set();
 let _autoRefreshInterval = null;
 let expandedConvoyId = null;
+let knownNicks = { nicks: {}, aliases: {} };
 
 let listEl, emptyEl, emptyFilteredEl, loadingEl;
 
@@ -96,7 +98,6 @@ function readFilters() {
         mode: val('filter-mode'),
         trust: val('filter-author'),
         score: val('filter-score'),
-        order: val('filter-order'),
         channel: val('filter-channel'),
         language: 'all',
     };
@@ -131,16 +132,7 @@ function isOffensive(c) {
 }
 
 function sortList(list) {
-    const f = readFilters();
-    const rep = {};
-    for (const c of list) rep[c.peerId] = authorReputation(list, votes, c.peerId);
-    return [...list].sort((a, b) => {
-        if (f.order === 'reputation') {
-            const r = (rep[b.peerId] || 0) - (rep[a.peerId] || 0);
-            if (r !== 0) return r;
-        }
-        return a.schedule.meetingTimestamp - b.schedule.meetingTimestamp;
-    });
+    return [...list].sort((a, b) => a.schedule.meetingTimestamp - b.schedule.meetingTimestamp);
 }
 
 function buildDayHeader(dayKey) {
@@ -257,7 +249,7 @@ function buildEvent(c) {
 
     row.appendChild(el('span', 'swarm-row-name', c.event.name));
 
-    const authorSpan = el('span', 'swarm-row-author clickable-author', c.nickname || c.peerId || '?');
+    const authorSpan = el('span', 'swarm-row-author clickable-author', displayName(c.peerId, c.nickname, knownNicks));
     authorSpan.dataset.peerId = c.peerId;
     authorSpan.title = c.peerId;
     row.appendChild(authorSpan);
@@ -274,16 +266,21 @@ function buildEvent(c) {
     details.hidden = true;
 
     if (c.flyer && c.flyer.url) {
-        const img = el('img', 'swarm-flyer-thumb');
-        img.src = c.flyer.url;
-        img.alt = c.event.name;
-        img.style.cursor = 'pointer';
-        img.title = label('swarm_flyer_zoom', 'Click para ver en grande');
-        img.addEventListener('click', (e) => {
-            e.stopPropagation();
-            showFlyerLightbox(c.flyer.url, c.event.name);
-        });
-        details.appendChild(img);
+        // Validar URL del flyer: solo hosts de imágenes conocidos
+        const flyerUrl = c.flyer.url;
+        const isSafeUrl = /^https:\/\/(files\.catbox\.moe|litterbox\.catbox\.moe)\//.test(flyerUrl);
+        if (isSafeUrl) {
+            const img = el('img', 'swarm-flyer-thumb');
+            img.src = flyerUrl;
+            img.alt = c.event.name;
+            img.style.cursor = 'pointer';
+            img.title = label('swarm_flyer_zoom', 'Click para ver en grande');
+            img.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showFlyerLightbox(flyerUrl, c.event.name);
+            });
+            details.appendChild(img);
+        }
     }
 
     const info = el('div', 'swarm-row-info');
@@ -302,7 +299,7 @@ function buildEvent(c) {
     const dot = el('span', `rep-dot rep-${reputationBadge(rep)}`);
     dot.title = label('swarm_score_label', 'Puntaje');
     author.appendChild(dot);
-    const nickSpan = el('span', 'swarm-card-nick clickable-author', c.nickname || c.peerId || '?');
+    const nickSpan = el('span', 'swarm-card-nick clickable-author', displayName(c.peerId, c.nickname, knownNicks));
     nickSpan.dataset.peerId = c.peerId;
     nickSpan.title = c.peerId;
     author.appendChild(nickSpan);
@@ -483,6 +480,7 @@ async function renderAll(silent = false) {
         votes = v || {};
         myVotes = my || {};
         config = cfg || {};
+        knownNicks = await getKnownNicks();
 
         const followed = new Set(config.followedBlacklists || []);
         blockedAuthorsSet = new Set();
@@ -497,6 +495,10 @@ async function renderAll(silent = false) {
         updateChannelFilter();
     } catch (err) {
         console.error('[SWARM] renderAll failed:', err);
+        // Limpiar datos si falla el refresh para no mostrar información stale
+        convoys = [];
+        votes = {};
+        myVotes = {};
     } finally {
         if (!silent && loadingEl) setVisible(loadingEl, false);
     }
@@ -527,6 +529,7 @@ export function initSwarm() {
         const s = await swarmInit();
         nodeMode = s.mode;
         myPeerId = s.peerId || '';
+        knownNicks = await getKnownNicks();
         await renderAll();
     })();
 
