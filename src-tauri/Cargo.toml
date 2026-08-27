@@ -1,6 +1,6 @@
 [package]
 name = "convoyrun"
-version = "0.3.4"
+version = "0.3.5"
 description = "ATS/ETS2 convoy & event manager"
 authors = ["CONVOYRAMA"]
 edition = "2021"
@@ -18,7 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["devtools", "tray-icon"] }
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-clipboard-manager = "2"
@@ -26,7 +26,7 @@ tauri-plugin-http = "2"
 tauri-plugin-autostart = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-image = "0.25"
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 # iroh 1.0 — P2P networking (gossip + blobs)
 iroh = "1.0"
@@ -37,8 +37,8 @@ iroh-blobs = "0.103"
 ed25519-dalek = { version = "3", features = ["rand_core"] }
 rand = "0.8"
 
-# Async runtime
-tokio = { version = "1", features = ["full"] }
+# Async runtime — solo features necesarios
+tokio = { version = "1", features = ["rt", "sync", "fs", "time"] }
 
 # Encriptación para backup de clave
 aes-gcm = "0.10"
@@ -54,4 +54,11 @@ sha2 = "0.10"
 futures-lite = "2"
 blake3 = "1"
 distributed-topic-tracker = { version = "0.3.5", features = ["iroh-gossip"] }
+
+[profile.release]
+strip = true          # Eliminar symbols (~13 MB de ahorro)
+lto = true            # Link Time Optimization (~5-10 MB de ahorro)
+codegen-units = 1     # Mejor optimización (compilación más lenta)
+panic = "abort"       # Sin unwind tables (~5% de ahorro)
+opt-level = 3         # Máxima optimización de velocidad
 

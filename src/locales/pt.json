@@ -272,10 +272,14 @@
     "swarm_wizard_image_uploading": "Enviando imagem...",
     "swarm_wizard_image_uploaded": "Imagem enviada com sucesso.",
     "swarm_wizard_image_upload_fail": "Erro ao enviar imagem.",
+    "swarm_wizard_image_too_large": "Imagem muito grande ({size} MB). Máximo 10 MB.",
+    "swarm_wizard_image_timeout": "Timeout no envio. Tente novamente mais tarde.",
+    "swarm_wizard_image_http_error": "Erro do servidor ({code}).",
+    "swarm_wizard_image_retention": "As imagens são hospedadas no Catbox.moe e excluídas após 2 anos sem uso.",
     "swarm_flyer_zoom": "Clique para ver em tamanho real",
     "swarm_wizard_error_image": "Anexe uma imagem (PNG) do comboio.",
     "swarm_wizard_error_image_type": "A imagem deve ser PNG.",
-    "swarm_wizard_error_image_size": "A imagem excede 2 MB.",
+    "swarm_wizard_error_image_size": "A imagem excede 10 MB.",
     "swarm_range_more": "Ver próximos dias",
     "swarm_range_fewer": "Só hoje e amanhã",
     "swarm_range_hint": "Não há comboios para hoje ou amanhã. Toque em \"Ver próximos dias\".",
@@ -428,5 +432,10 @@
     "tooltip_event_link": "URL do evento (TruckersMP, Discord, etc.)",
     "tooltip_description": "Descrição exibida no flyer e copiada para a área de transferência",
     "swarm_block_title": "Bloquear autor",
-    "footer_peers_suffix": " peers"
+    "footer_peers_suffix": " peers",
+    "footer_action_generating": "Gerando PNG...",
+    "footer_action_saved": "PNG salvo",
+    "footer_action_error": "Erro",
+    "footer_action_loading": "Carregando...",
+    "footer_action_copying": "Copiando..."
 }

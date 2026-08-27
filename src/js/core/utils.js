@@ -41,6 +41,21 @@ export function wrapText(ctx, text, maxWidth) {
 
 export function pad(n) { return n < 10 ? "0" + n : n; }
 
+let _footerActionTimeout = null;
+
+export function setFooterAction(text) {
+    const el = document.getElementById('footer-action');
+    if (el) el.textContent = text || '';
+}
+
+export function showFooterAction(text, durationMs = 2000) {
+    setFooterAction(text);
+    if (_footerActionTimeout) clearTimeout(_footerActionTimeout);
+    if (durationMs > 0) {
+        _footerActionTimeout = setTimeout(() => { setFooterAction(''); _footerActionTimeout = null; }, durationMs);
+    }
+}
+
 // Las zonas que el usuario agrega a mano (state.activeZones sin key) traen
 // su propio label; las de un preset se buscan por key como siempre.
 export function getZoneLabel(tz, langData) {

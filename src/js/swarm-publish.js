@@ -233,6 +233,7 @@ export function initSwarmPublish(onPublished) {
 
             currentFlyerSize = u8.byteLength;
             flyerStatus.textContent = state.currentLangData.swarm_wizard_image_uploading || 'Subiendo imagen...';
+            flyerStatus.classList.remove('ok');
             try {
                 currentImageUrl = await uploadToCatbox(buffer);
                 flyerPreview.src = currentImageUrl;
@@ -241,7 +242,19 @@ export function initSwarmPublish(onPublished) {
                 flyerStatus.classList.add('ok');
             } catch (err) {
                 console.error('[SWARM-FLYER-UPLOAD] Failed:', err);
-                flyerStatus.textContent = state.currentLangData.swarm_wizard_image_upload_fail || 'No se pudo subir la imagen.';
+                flyerStatus.classList.remove('ok');
+                const msg = err.message || '';
+                if (msg.startsWith('FILE_TOO_LARGE:')) {
+                    const size = msg.split(':')[1];
+                    flyerStatus.textContent = (state.currentLangData.swarm_wizard_image_too_large || 'Imagen demasiado grande ({size} MB). Máximo 10 MB.').replace('{size}', size);
+                } else if (msg === 'TIMEOUT') {
+                    flyerStatus.textContent = state.currentLangData.swarm_wizard_image_timeout || 'Timeout al subir. Reintentá más tarde.';
+                } else if (msg.startsWith('HTTP_ERROR:')) {
+                    const code = msg.split(':')[1];
+                    flyerStatus.textContent = (state.currentLangData.swarm_wizard_image_http_error || 'Error del servidor ({code}).').replace('{code}', code);
+                } else {
+                    flyerStatus.textContent = state.currentLangData.swarm_wizard_image_upload_fail || 'No se pudo subir la imagen.';
+                }
             }
         }).catch((err) => {
             console.error('[SWARM-FLYER-READ] Failed:', err);

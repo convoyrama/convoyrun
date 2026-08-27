@@ -43,16 +43,70 @@ export async function optimizePng(arrayBuffer) {
     return new Uint8Array(optimized).buffer;
 }
 
+const CATBOX_MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+const CATBOX_TIMEOUT_MS = 60000; // 60 seconds
+const CATBOX_MAX_RETRIES = 2;
+
 export async function uploadToCatbox(arrayBuffer) {
-    const blob = new Blob([arrayBuffer], { type: 'image/png' });
-    const formData = new FormData();
-    formData.append('reqtype', 'fileupload');
-    formData.append('fileToUpload', blob, 'flyer.png');
-    const resp = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: formData });
-    if (!resp.ok) throw new Error(`Catbox upload failed: ${resp.status}`);
-    const url = (await resp.text()).trim();
-    if (!url.startsWith('https://')) throw new Error(`Catbox returned invalid URL: ${url}`);
-    return url;
+    // Validate file size
+    if (arrayBuffer.byteLength > CATBOX_MAX_SIZE) {
+        const mb = (arrayBuffer.byteLength / (1024 * 1024)).toFixed(1);
+        throw new Error(`FILE_TOO_LARGE:${mb}`);
+    }
+
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= CATBOX_MAX_RETRIES; attempt++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), CATBOX_TIMEOUT_MS);
+
+        try {
+            const blob = new Blob([arrayBuffer], { type: 'image/png' });
+            const formData = new FormData();
+            formData.append('reqtype', 'fileupload');
+            formData.append('fileToUpload', blob, 'flyer.png');
+
+            const resp = await fetch('https://catbox.moe/user/api.php', {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal,
+            });
+
+            clearTimeout(timeoutId);
+
+            if (!resp.ok) {
+                throw new Error(`HTTP_ERROR:${resp.status}`);
+            }
+
+            const url = (await resp.text()).trim();
+            if (!url.startsWith('https://')) {
+                throw new Error(`INVALID_RESPONSE:${url.substring(0, 50)}`);
+            }
+
+            return url;
+        } catch (err) {
+            clearTimeout(timeoutId);
+
+            if (err.name === 'AbortError') {
+                lastError = new Error('TIMEOUT');
+            } else if (err.message?.startsWith('FILE_TOO_LARGE:') ||
+                       err.message?.startsWith('HTTP_ERROR:') ||
+                       err.message?.startsWith('INVALID_RESPONSE:')) {
+                // Non-retryable errors
+                throw err;
+            } else {
+                // Network error — retry
+                lastError = err;
+            }
+
+            // Wait before retry (exponential backoff: 1s, 2s)
+            if (attempt < CATBOX_MAX_RETRIES) {
+                await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+            }
+        }
+    }
+
+    throw lastError || new Error('UPLOAD_FAILED');
 }
 
 // ---- Swarm: comandos con fallback local (modo demo) ---------------------------

@@ -272,10 +272,14 @@
     "swarm_wizard_image_uploading": "Uploading image...",
     "swarm_wizard_image_uploaded": "Image uploaded successfully.",
     "swarm_wizard_image_upload_fail": "Error uploading image.",
+    "swarm_wizard_image_too_large": "Image too large ({size} MB). Maximum 10 MB.",
+    "swarm_wizard_image_timeout": "Upload timeout. Try again later.",
+    "swarm_wizard_image_http_error": "Server error ({code}).",
+    "swarm_wizard_image_retention": "Images are hosted on Catbox.moe and deleted after 2 years of inactivity.",
     "swarm_flyer_zoom": "Click to view full size",
     "swarm_wizard_error_image": "Attach an image (PNG) for the convoy.",
     "swarm_wizard_error_image_type": "The image must be a PNG.",
-    "swarm_wizard_error_image_size": "The image is over 2 MB.",
+    "swarm_wizard_error_image_size": "The image is over 10 MB.",
     "swarm_range_more": "Show upcoming days",
     "swarm_range_fewer": "Today & tomorrow only",
     "swarm_range_hint": "No convoys for today or tomorrow. Tap \"Show upcoming days\".",
@@ -428,5 +432,10 @@
     "tooltip_event_link": "Event URL (TruckersMP, Discord, etc.)",
     "tooltip_description": "Description shown on the flyer and copied to clipboard",
     "swarm_block_title": "Block author",
-    "footer_peers_suffix": " peers"
+    "footer_peers_suffix": " peers",
+    "footer_action_generating": "Generating PNG...",
+    "footer_action_saved": "PNG saved",
+    "footer_action_error": "Error",
+    "footer_action_loading": "Loading...",
+    "footer_action_copying": "Copying..."
 }

@@ -989,6 +989,7 @@ button {
 .swarm-flyer-preview[hidden] { display: none; }
 .swarm-flyer-status { font-size: 0.7rem; color: #888; margin: 0; }
 .swarm-flyer-status.ok { color: #4ade80; }
+.swarm-flyer-hint { font-size: 0.62rem; color: rgba(255,255,255,0.35); margin: 0.25rem 0 0; font-style: italic; }
 
 .swarm-wizard-status {
     margin-top: 12px;
