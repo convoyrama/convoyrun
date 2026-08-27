@@ -1396,6 +1396,50 @@ button.loading::after {
     color: #fff;
 }
 
+.settings-channel-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    font-weight: 600;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+.settings-channel-badge.badge-public {
+    background: rgba(0,170,255,0.2);
+    color: #00aaff;
+}
+.settings-channel-badge.badge-owner {
+    background: rgba(74,222,128,0.2);
+    color: #4ade80;
+}
+.settings-channel-badge.badge-private {
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.5);
+}
+
+.settings-action-btn {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.7);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    margin-left: 4px;
+}
+.settings-action-btn:hover {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+}
+
+.settings-hint {
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.4);
+    margin: 0 0 8px;
+}
+
 .settings-empty {
     font-size: 0.7rem;
     color: rgba(255,255,255,0.4);

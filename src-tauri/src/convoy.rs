@@ -9,6 +9,19 @@ use std::path::Path;
 /// Schema version
 pub const SCHEMA_EVENT: &str = "convoyrun/event/v1";
 pub const SCHEMA_VOTE: &str = "convoyrun/vote/v1";
+pub const SCHEMA_CHANNEL: &str = "convoyrun/channel/v1";
+
+/// Canales predefinidos del sistema (públicos, sin owner)
+pub const SYSTEM_CHANNELS: &[&str] = &[
+    "general",
+    "ats",
+    "ets",
+    "convoy",
+    "tmp",
+];
+
+/// Peer ID especial para canales del sistema
+pub const SYSTEM_PEER_ID: &str = "system";
 
 /// Tipos de evento
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -145,7 +158,11 @@ pub struct VoteRecord {
 #[serde(rename_all = "camelCase")]
 pub struct ChannelRecord {
     pub schema: String,
+    /// Nombre interno (siempre lowercase, usado como identificador)
     pub name: String,
+    /// Nombre para mostrar en la UI (puede tener mayúsculas, emojis, etc.)
+    #[serde(default)]
+    pub display_name: String,
     pub creator_peer_id: String,
     /// blake3 hash del password (None = público)
     pub password_hash: Option<String>,
@@ -361,73 +378,17 @@ impl VoteRecord {
 }
 
 impl ChannelRecord {
-    /// Serialización canónica para firma (sin el campo signature)
-    pub fn canonical_json(&self) -> Result<String> {
-        let mut copy = self.clone();
-        copy.signature = String::new();
-        let value = serde_json::to_value(&copy)
-            .context("Failed to serialize ChannelRecord for canonical JSON")?;
-        Ok(canonical_json(&value))
+    /// Verifica si este canal es del sistema (sin owner)
+    pub fn is_system(&self) -> bool {
+        self.creator_peer_id == SYSTEM_PEER_ID
     }
 
-    /// Firma el registro con la clave secreta
-    pub fn sign(&mut self, secret_key: &SecretKey) -> Result<()> {
-        use ed25519_dalek::{Signer, SigningKey};
-
-        let canonical = self.canonical_json()?;
-        let message = canonical.as_bytes();
-
-        let key_bytes = secret_key.to_bytes();
-        let signing_key = SigningKey::from_bytes(&key_bytes);
-        let signature = signing_key.sign(message);
-        self.signature = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            signature.to_bytes(),
-        );
-
-        Ok(())
-    }
-
-    /// Verifica la firma del registro
-    pub fn verify(&self) -> Result<bool> {
-        use ed25519_dalek::{Verifier, VerifyingKey};
-
-        if self.signature.is_empty() {
-            return Ok(false);
+    /// Verifica si el peer ID dado es el dueño de este canal
+    pub fn is_owner(&self, peer_id: &str) -> bool {
+        if self.is_system() {
+            return false; // Los canales del sistema no tienen dueño
         }
-
-        let peer_id_bytes = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
-            &self.creator_peer_id,
-        )
-        .context("Failed to decode creator_peer_id")?;
-
-        if peer_id_bytes.len() != 32 {
-            return Ok(false);
-        }
-
-        let mut key_array = [0u8; 32];
-        key_array.copy_from_slice(&peer_id_bytes);
-        let verifying_key = VerifyingKey::from_bytes(&key_array).context("Invalid public key")?;
-
-        let sig_bytes = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
-            &self.signature,
-        )
-        .context("Failed to decode signature")?;
-
-        if sig_bytes.len() != 64 {
-            return Ok(false);
-        }
-
-        let mut sig_array = [0u8; 64];
-        sig_array.copy_from_slice(&sig_bytes);
-        let signature = ed25519_dalek::Signature::from_bytes(&sig_array);
-
-        let canonical = self.canonical_json()?;
-        let message = canonical.as_bytes();
-
-        Ok(verifying_key.verify(message, &signature).is_ok())
+        self.creator_peer_id == peer_id
     }
 }
 
@@ -543,26 +504,142 @@ impl ChannelStore {
         Ok(())
     }
 
-    /// Crea un canal nuevo (si no existe)
-    pub fn create_channel(&mut self, name: String, creator_peer_id: String, password: Option<String>) {
-        let normalized = name.trim().to_lowercase();
-        if self.channels.contains_key(&normalized) {
-            return;
+    /// Crea los canales del sistema (si no existen)
+    pub fn ensure_system_channels(&mut self) {
+        for &name in SYSTEM_CHANNELS {
+            if !self.channels.contains_key(name) {
+                self.channels.insert(name.to_string(), ChannelRecord {
+                    schema: SCHEMA_CHANNEL.to_string(),
+                    name: name.to_string(),
+                    display_name: name.to_string(),
+                    creator_peer_id: SYSTEM_PEER_ID.to_string(),
+                    password_hash: None,
+                    created_at: chrono::Utc::now().timestamp(),
+                    signature: String::new(),
+                });
+            }
+        }
+    }
+
+    /// Activa un canal Patreon con key firmada
+    /// Key format: base64(channel_name|peer_id|signature)
+    pub fn activate_channel(
+        &mut self,
+        key: &str,
+        password: String,
+        display_name: String,
+        master_public_key: &[u8; 32],
+    ) -> Result<String, String> {
+        // Decodificar key
+        let decoded = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            key,
+        ).map_err(|_| "Invalid key format".to_string())?;
+
+        let key_str = String::from_utf8(decoded)
+            .map_err(|_| "Invalid key encoding".to_string())?;
+
+        let parts: Vec<&str> = key_str.split('|').collect();
+        if parts.len() != 3 {
+            return Err("Invalid key structure".to_string());
         }
 
-        let password_hash = password.map(|p| {
-            let hash = blake3::hash(p.as_bytes());
-            hash.to_hex().to_string()
-        });
+        let channel_name = parts[0];
+        let authorized_peer = parts[1];
+        let signature_b64 = parts[2];
+
+        // Verificar firma con master key
+        let payload = format!("{}|{}", channel_name, authorized_peer);
+        let payload_bytes = payload.as_bytes();
+
+        let sig_bytes = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            signature_b64,
+        ).map_err(|_| "Invalid signature encoding".to_string())?;
+
+        if sig_bytes.len() != 64 {
+            return Err("Invalid signature length".to_string());
+        }
+
+        let mut sig_array = [0u8; 64];
+        sig_array.copy_from_slice(&sig_bytes);
+        let signature = ed25519_dalek::Signature::from_bytes(&sig_array);
+
+        let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(master_public_key)
+            .map_err(|_| "Invalid master public key".to_string())?;
+
+        use ed25519_dalek::Verifier;
+        if verifying_key.verify(payload_bytes, &signature).is_err() {
+            return Err("Invalid signature".to_string());
+        }
+
+        // Verificar que el canal no exista ya
+        let normalized = channel_name.trim().to_lowercase();
+        if self.channels.contains_key(&normalized) {
+            return Err("Channel already exists".to_string());
+        }
+
+        // Crear canal con el peer ID autorizado como owner
+        let password_hash = blake3::hash(password.as_bytes()).to_hex().to_string();
+        let display = if display_name.trim().is_empty() {
+            normalized.clone()
+        } else {
+            display_name.trim().to_string()
+        };
 
         self.channels.insert(normalized.clone(), ChannelRecord {
-            schema: "convoyrun/channel/v1".to_string(),
-            name: normalized,
-            creator_peer_id,
-            password_hash,
+            schema: SCHEMA_CHANNEL.to_string(),
+            name: normalized.clone(),
+            display_name: display,
+            creator_peer_id: authorized_peer.to_string(),
+            password_hash: Some(password_hash),
             created_at: chrono::Utc::now().timestamp(),
             signature: String::new(),
         });
+
+        Ok(normalized)
+    }
+
+    /// Cambia la contraseña de un canal (solo el owner puede)
+    pub fn change_password(
+        &mut self,
+        channel_name: &str,
+        peer_id: &str,
+        new_password: String,
+    ) -> Result<(), String> {
+        let normalized = channel_name.trim().to_lowercase();
+        let channel = self.channels.get(&normalized)
+            .ok_or("Channel not found".to_string())?;
+
+        if !channel.is_owner(peer_id) {
+            return Err("Not the channel owner".to_string());
+        }
+
+        let password_hash = blake3::hash(new_password.as_bytes()).to_hex().to_string();
+
+        if let Some(ch) = self.channels.get_mut(&normalized) {
+            ch.password_hash = Some(password_hash);
+        }
+
+        Ok(())
+    }
+
+    /// Elimina un canal (solo el owner puede, no se pueden eliminar canales del sistema)
+    pub fn delete_channel(&mut self, channel_name: &str, peer_id: &str) -> Result<(), String> {
+        let normalized = channel_name.trim().to_lowercase();
+        let channel = self.channels.get(&normalized)
+            .ok_or("Channel not found".to_string())?;
+
+        if channel.is_system() {
+            return Err("Cannot delete system channel".to_string());
+        }
+
+        if !channel.is_owner(peer_id) {
+            return Err("Not the channel owner".to_string());
+        }
+
+        self.channels.remove(&normalized);
+        Ok(())
     }
 
     /// Verifica si un usuario puede publicar en un canal

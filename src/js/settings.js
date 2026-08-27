@@ -6,7 +6,7 @@ import {
     exportIdentity, importIdentity,
     publishBlacklist, importBlacklist, stopFollowingBlacklist,
     getPublicBlacklists,
-    swarmListChannels, createChannel, deleteChannel,
+    swarmListChannels, getSystemChannels, activateChannel, changeChannelPassword, deleteChannel,
 } from './native/tauri-bridge.js';
 import { setVisible } from './core/utils.js';
 import { AVAILABLE_LANGUAGES } from './core/config.js';
@@ -160,35 +160,81 @@ async function renderChannels(myPeerId) {
     const empty = $('#settings-channels-empty');
     container.replaceChildren();
     const channels = await swarmListChannels();
+    const systemChannels = await getSystemChannels();
     if (!channels.length) { setVisible(empty, true); return; }
     setVisible(empty, false);
     channels.sort((a, b) => a.name.localeCompare(b.name));
     channels.forEach(ch => {
         const item = document.createElement('div');
         item.className = 'settings-list-item';
-        const lockSpan = document.createElement('span');
-        lockSpan.textContent = (ch.passwordHash ? '🔒 ' : '🔓 ');
+
+        const isSystem = systemChannels.includes(ch.name);
+        const isOwner = ch.creatorPeerId === myPeerId && !isSystem;
+
+        // Badge + nombre
+        const infoSpan = document.createElement('span');
+        if (isSystem) {
+            infoSpan.textContent = '🌐 ';
+        } else if (ch.passwordHash) {
+            infoSpan.textContent = '🔒 ';
+        } else {
+            infoSpan.textContent = '🔓 ';
+        }
         const nameStrong = document.createElement('strong');
-        nameStrong.textContent = ch.name;
-        lockSpan.appendChild(nameStrong);
-        item.appendChild(lockSpan);
-        const creatorCode = document.createElement('code');
-        const creator = ch.creatorPeerId === myPeerId ? t('settings_you', 'You') : truncPeer(ch.creatorPeerId);
-        creatorCode.textContent = creator;
-        item.appendChild(creatorCode);
-        if (ch.creatorPeerId === myPeerId) {
-            const btn = document.createElement('button');
-            btn.className = 'settings-remove-btn';
-            btn.textContent = '✕';
-            btn.title = t('settings_delete_channel', 'Delete channel');
-            btn.onclick = async () => {
+        nameStrong.textContent = `#${ch.displayName || ch.name}`;
+        infoSpan.appendChild(nameStrong);
+
+        // Badge
+        const badge = document.createElement('span');
+        badge.className = 'settings-channel-badge';
+        if (isSystem) {
+            badge.textContent = t('settings_channel_badge_public', 'Public');
+            badge.classList.add('badge-public');
+        } else if (isOwner) {
+            badge.textContent = t('settings_channel_badge_owner', 'Owner');
+            badge.classList.add('badge-owner');
+        } else {
+            badge.textContent = t('settings_channel_badge_private', 'Private');
+            badge.classList.add('badge-private');
+        }
+        infoSpan.appendChild(badge);
+        item.appendChild(infoSpan);
+
+        // Owner: botones de cambiar contraseña y eliminar
+        if (isOwner) {
+            const changePwdBtn = document.createElement('button');
+            changePwdBtn.className = 'settings-action-btn';
+            changePwdBtn.textContent = '🔑';
+            changePwdBtn.title = t('settings_channel_change_password', 'Change password');
+            changePwdBtn.onclick = async () => {
+                const newPwd = prompt(t('settings_channel_new_password_prompt', 'Enter new password:'));
+                if (!newPwd) return;
+                try {
+                    await changeChannelPassword(ch.name, newPwd);
+                    alert(t('channel_password_changed', 'Password changed.'));
+                } catch (err) {
+                    alert(err.message);
+                }
+            };
+            item.appendChild(changePwdBtn);
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'settings-remove-btn';
+            delBtn.textContent = '✕';
+            delBtn.title = t('settings_delete_channel', 'Delete channel');
+            delBtn.onclick = async () => {
                 const msg = (t('settings_delete_channel_confirm', `Delete channel "${ch.name}"?`)).replace('{name}', ch.name);
                 if (!confirm(msg)) return;
-                await deleteChannel(ch.name);
-                await renderChannels(myPeerId);
+                try {
+                    await deleteChannel(ch.name);
+                    await renderChannels(myPeerId);
+                } catch (err) {
+                    alert(err.message);
+                }
             };
-            item.appendChild(btn);
+            item.appendChild(delBtn);
         }
+
         container.appendChild(item);
     });
 }
@@ -324,20 +370,27 @@ function initSettings() {
         await loadSettingsData();
     });
 
-    $('#settings-create-channel-btn')?.addEventListener('click', async () => {
-        const nameInput = $('#settings-channel-name-input');
+    $('#settings-activate-channel-btn')?.addEventListener('click', async () => {
+        const keyInput = $('#settings-channel-key-input');
         const pwdInput = $('#settings-channel-password-input');
-        const name = nameInput.value.trim();
-        if (!name) return;
-        const password = pwdInput.value.trim() || null;
-        const result = await createChannel(name, password);
-        if (result) {
-            nameInput.value = '';
+        const displayNameInput = $('#settings-channel-display-name-input');
+        const key = keyInput.value.trim();
+        const password = pwdInput.value.trim();
+        const displayName = displayNameInput.value.trim();
+        if (!key || !password) {
+            alert(t('settings_channel_activate_missing', 'Enter both the key and a password.'));
+            return;
+        }
+        try {
+            await activateChannel(key, password, displayName);
+            keyInput.value = '';
             pwdInput.value = '';
+            displayNameInput.value = '';
             const status = await swarmStatus();
             await renderChannels(status.peerId || '');
-        } else {
-            alert(t('settings_channel_create_error', 'Could not create channel. It may already exist.'));
+            alert(t('channel_activated_ok', 'Channel activated successfully.'));
+        } catch (err) {
+            alert(err.message);
         }
     });
 

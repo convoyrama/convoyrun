@@ -496,14 +496,6 @@ impl P2pState {
         Self::publish_gossip(sender, message).await
     }
 
-    /// Publica un canal por gossip
-    pub async fn publish_channel_gossip(sender: &distributed_topic_tracker::GossipSender, channel_json: &str) -> Result<()> {
-        let message = GossipMessage::Channel {
-            data: channel_json.to_string(),
-        };
-        Self::publish_gossip(sender, message).await
-    }
-
     /// Publica una lista negra por gossip
     pub async fn publish_blacklist_gossip(sender: &distributed_topic_tracker::GossipSender, blacklist_json: &str) -> Result<()> {
         let message = GossipMessage::Blacklist {

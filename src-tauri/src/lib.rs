@@ -12,7 +12,16 @@ use tokio::sync::RwLock;
 mod p2p;
 mod convoy;
 use p2p::{NodeStatus, P2pState, GossipMessage, UserConfig};
-use convoy::{ConvoyRecord, ConvoyStore, EventData, FlyerData, Schedule, VoteRecord, ChannelRecord, ChannelStore, BlacklistRecord, BlacklistStore};
+use convoy::{ConvoyRecord, ConvoyStore, EventData, FlyerData, Schedule, VoteRecord, ChannelRecord, ChannelStore, BlacklistRecord, BlacklistStore, SYSTEM_CHANNELS};
+
+/// Master public key para verificar keys de canales Patreon
+/// Esta es la clave PÚBLICA ed25519 (32 bytes) derivada de la master private key.
+const MASTER_PUBLIC_KEY: [u8; 32] = [
+    0xbe, 0x33, 0x70, 0xf6, 0x64, 0x18, 0x3a, 0xd7,
+    0x71, 0xe0, 0x4d, 0xc8, 0xdd, 0xe8, 0x9f, 0x4b,
+    0xed, 0x3e, 0x51, 0x16, 0xc8, 0x6c, 0xba, 0xc1,
+    0x32, 0xed, 0x40, 0xa5, 0x40, 0x02, 0x26, 0xd0,
+];
 
 /// Estado global de la app — stores en memoria con Arc<RwLock> para evitar TOCTOU
 struct AppState {
@@ -231,17 +240,6 @@ async fn process_gossip_receiver(
                         }
                         GossipMessage::Channel { data } => {
                             if let Ok(channel) = serde_json::from_str::<ChannelRecord>(&data) {
-                                match channel.verify() {
-                                    Ok(true) => {}
-                                    Ok(false) => {
-                                        eprintln!("[P2P] Received channel with invalid signature, ignoring");
-                                        continue;
-                                    }
-                                    Err(e) => {
-                                        eprintln!("[P2P] Failed to verify channel signature: {}", e);
-                                        continue;
-                                    }
-                                }
                                 let mut store = channel_store.write().await;
                                 if !store.channels.contains_key(&channel.name) {
                                     store.channels.insert(channel.name.clone(), channel);
@@ -615,35 +613,14 @@ async fn publish_convoy(
 
     let channel_name = channel.unwrap_or_default().trim().to_lowercase();
     if !channel_name.is_empty() {
-        let mut ch_store = state.channel_store.write().await;
+        let ch_store = state.channel_store.write().await;
 
         if !ch_store.can_publish(&channel_name, channel_password.as_deref()) {
             return Err("Wrong channel password".to_string());
         }
 
         if ch_store.get_channel(&channel_name).is_none() {
-            ch_store.create_channel(
-                channel_name.clone(),
-                p2p.peer_id(),
-                channel_password.clone(),
-            );
-
-            // Firmar el canal antes de persistir y propagar
-            if let Some(ch) = ch_store.channels.get_mut(&channel_name) {
-                if let Err(e) = ch.sign(&p2p.secret_key) {
-                    return Err(format!("Failed to sign channel: {}", e));
-                }
-            }
-            flush_channel_store(&ch_store, &state.data_dir);
-
-            if let Some(sender) = &p2p.gossip_sender {
-                if let Some(ch) = ch_store.get_channel(&channel_name) {
-                    let ch_json = serde_json::to_string(ch).map_err(|e| e.to_string())?;
-                    if let Err(e) = P2pState::publish_channel_gossip(sender, &ch_json).await {
-                        eprintln!("[P2P] Failed to publish channel via gossip: {}", e);
-                    }
-                }
-            }
+            return Err("Channel does not exist".to_string());
         }
     }
 
@@ -719,6 +696,11 @@ async fn list_channels(state: State<'_, AppState>) -> Result<Vec<ChannelRecord>,
 }
 
 #[tauri::command]
+async fn get_system_channels() -> Vec<String> {
+    SYSTEM_CHANNELS.iter().map(|s| s.to_string()).collect()
+}
+
+#[tauri::command]
 async fn validate_channel_password(
     state: State<'_, AppState>,
     channel: String,
@@ -729,43 +711,37 @@ async fn validate_channel_password(
 }
 
 #[tauri::command]
-async fn create_channel(
+async fn activate_channel(
     state: State<'_, AppState>,
-    name: String,
-    password: Option<String>,
-) -> Result<ChannelRecord, String> {
+    key: String,
+    password: String,
+    display_name: String,
+) -> Result<String, String> {
+    let mut store = state.channel_store.write().await;
+
+    let channel_name = store.activate_channel(&key, password, display_name, &MASTER_PUBLIC_KEY)?;
+
+    flush_channel_store(&store, &state.data_dir);
+
+    Ok(channel_name)
+}
+
+#[tauri::command]
+async fn change_channel_password(
+    state: State<'_, AppState>,
+    channel: String,
+    new_password: String,
+) -> Result<(), String> {
     let p2p_guard = state.p2p.read().await;
     let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
 
     let mut store = state.channel_store.write().await;
-    let normalized = name.trim().to_lowercase();
 
-    if store.channels.contains_key(&normalized) {
-        return Err("Channel already exists".to_string());
-    }
+    store.change_password(&channel, &p2p.peer_id(), new_password)?;
 
-    store.create_channel(normalized, p2p.peer_id(), password);
-
-    let channel = store.get_channel(&name.trim().to_lowercase())
-        .ok_or("Failed to create channel")?;
-    let mut channel = channel.clone();
-
-    if let Err(e) = channel.sign(&p2p.secret_key) {
-        eprintln!("[P2P] Failed to sign channel: {}", e);
-        return Err(format!("Failed to sign channel: {}", e));
-    }
-
-    store.channels.insert(channel.name.clone(), channel.clone());
     flush_channel_store(&store, &state.data_dir);
 
-    if let Some(sender) = &p2p.gossip_sender {
-        let ch_json = serde_json::to_string(&channel).map_err(|e| e.to_string())?;
-        if let Err(e) = P2pState::publish_channel_gossip(sender, &ch_json).await {
-            eprintln!("[P2P] Failed to publish channel via gossip: {}", e);
-        }
-    }
-
-    Ok(channel)
+    Ok(())
 }
 
 #[tauri::command]
@@ -777,17 +753,12 @@ async fn delete_channel(
     let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
 
     let mut store = state.channel_store.write().await;
-    let normalized = name.trim().to_lowercase();
 
-    match store.channels.get(&normalized) {
-        Some(ch) if ch.creator_peer_id == p2p.peer_id() => {
-            store.channels.remove(&normalized);
-            flush_channel_store(&store, &state.data_dir);
-            Ok(())
-        }
-        Some(_) => Err("You can only delete channels you created".to_string()),
-        None => Err("Channel not found".to_string()),
-    }
+    store.delete_channel(&name, &p2p.peer_id())?;
+
+    flush_channel_store(&store, &state.data_dir);
+
+    Ok(())
 }
 
 // --- Comandos de votos ---
@@ -911,7 +882,12 @@ pub fn run() {
                 flush_convoy_store(&s, &data_dir);
                 s
             }));
-            let channel_store = Arc::new(RwLock::new(ChannelStore::load(&data_dir).unwrap_or_default()));
+            let channel_store = Arc::new(RwLock::new({
+                let mut store = ChannelStore::load(&data_dir).unwrap_or_default();
+                store.ensure_system_channels();
+                flush_channel_store(&store, &data_dir);
+                store
+            }));
             let blacklist_store = Arc::new(RwLock::new(BlacklistStore::load(&data_dir).unwrap_or_default()));
             let config = p2p::load_config(&data_dir).unwrap_or_default();
             app.manage(AppState {
@@ -1049,8 +1025,10 @@ pub fn run() {
             get_my_votes,
             get_all_votes,
             list_channels,
+            get_system_channels,
             validate_channel_password,
-            create_channel,
+            activate_channel,
+            change_channel_password,
             delete_channel,
             delete_convoy,
         ])

@@ -511,7 +511,7 @@
             <div class="about-panel">
                 <img src="./images/branding/logotext.png" alt="ConvoyRun" class="about-logo">
                 <div class="about-tagline" data-i18n="app_tagline">Convoy & Event Manager</div>
-                <div class="about-version">v<span id="about-version">0.3.5</span></div>
+                <div class="about-version">v<span id="about-version">0.3.6</span></div>
                 <p class="about-credit"><span data-i18n="about_credit">Developed by</span> <span class="architect">dr.will</span> for <strong>CONVOYRAMA</strong></p>
                 <div class="about-links">
                     <a href="https://discord.gg/hjJcyREthH" target="_blank" data-i18n="about_link_discord">Discord de CONVOYRAMA</a>
@@ -618,19 +618,23 @@
             <!-- Channels Tab -->
             <div class="settings-panel" id="settings-panel-channels">
                 <div class="settings-section">
-                    <h4 data-i18n="settings_create_channel">Create Channel</h4>
+                    <h4 data-i18n="settings_channel_activate_title">Activate Private Channel</h4>
+                    <p class="settings-hint" data-i18n="settings_channel_activate_hint">Enter your channel key, define a password and a display name.</p>
                     <div class="settings-input-row">
-                        <input type="text" id="settings-channel-name-input" data-i18n-placeholder="settings_channel_name_ph" placeholder="Channel name">
+                        <input type="text" id="settings-channel-key-input" data-i18n-placeholder="settings_channel_key_ph" placeholder="Channel key (XXXX-XXXX-XXXX-XXXX)">
                     </div>
                     <div class="settings-input-row">
-                        <input type="text" id="settings-channel-password-input" data-i18n-placeholder="settings_channel_password_ph" placeholder="Password (optional)">
-                        <button type="button" id="settings-create-channel-btn" class="settings-small-btn" data-i18n="settings_create_channel_btn" aria-label="Create channel">Create</button>
+                        <input type="password" id="settings-channel-password-input" data-i18n-placeholder="settings_channel_password_ph" placeholder="Define a password">
+                    </div>
+                    <div class="settings-input-row">
+                        <input type="text" id="settings-channel-display-name-input" data-i18n-placeholder="settings_channel_display_name_ph" placeholder="Display name (e.g. VTC My VTC 🚛)">
+                        <button type="button" id="settings-activate-channel-btn" class="settings-small-btn" data-i18n="settings_activate_channel_btn" aria-label="Activate channel">Activate</button>
                     </div>
                 </div>
                 <div class="settings-section">
-                    <h4 data-i18n="settings_known_channels">Known Channels</h4>
+                    <h4 data-i18n="settings_known_channels">Channels</h4>
                     <div id="settings-channels-list" class="settings-list"></div>
-                    <p id="settings-channels-empty" class="settings-empty" data-i18n="settings_channels_empty">No channels yet.</p>
+                    <p id="settings-channels-empty" class="settings-empty" data-i18n="settings_channels_empty">No channels.</p>
                 </div>
             </div>
         </div>
@@ -755,7 +759,7 @@
                 </label>
                 <label class="swarm-field swarm-field-full">
                     <span data-i18n="swarm_channel">Canal</span>
-                    <input type="text" id="swarm-w-channel" maxlength="32" data-i18n-placeholder="swarm_channel_placeholder_ph" placeholder="General">
+                    <input type="text" id="swarm-w-channel" maxlength="32" data-i18n-placeholder="swarm_channel_placeholder_ph" placeholder="general">
                 </label>
                 <label class="swarm-field swarm-field-full" id="swarm-w-password-group" hidden>
                     <span data-i18n="swarm_channel_password">Contraseña del canal</span>

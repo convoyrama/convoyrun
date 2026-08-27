@@ -264,11 +264,28 @@ export async function swarmListChannels() {
     return [];
 }
 
-export async function createChannel(name, password) {
+export async function getSystemChannels() {
     try {
-        return await tauri().core.invoke('create_channel', { name, password: password || null });
+        return await tauri().core.invoke('get_system_channels');
     } catch {
-        return null;
+        return [];
+    }
+}
+
+export async function activateChannel(key, password, displayName) {
+    try {
+        return await tauri().core.invoke('activate_channel', { key, password, displayName });
+    } catch (err) {
+        throw new Error(err.message || err);
+    }
+}
+
+export async function changeChannelPassword(channel, newPassword) {
+    try {
+        await tauri().core.invoke('change_channel_password', { channel, newPassword });
+        return true;
+    } catch (err) {
+        throw new Error(err.message || err);
     }
 }
 
@@ -276,8 +293,8 @@ export async function deleteChannel(name) {
     try {
         await tauri().core.invoke('delete_channel', { name });
         return true;
-    } catch {
-        return false;
+    } catch (err) {
+        throw new Error(err.message || err);
     }
 }
 

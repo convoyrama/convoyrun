@@ -398,8 +398,8 @@ export function initSwarmPublish(onPublished) {
         });
 
         // Agregar canal al convoy
-        const channelName = channelEl ? channelEl.value.trim() : '';
-        if (channelName) convoy.channel = channelName;
+        const channelName = channelEl ? (channelEl.value.trim() || 'general') : 'general';
+        convoy.channel = channelName;
 
         if (!isWithinPublishWindow(convoy)) {
             showStatus(state.currentLangData.swarm_wizard_error_window || 'Solo se pueden publicar convoys hasta 3 meses adelante.');
