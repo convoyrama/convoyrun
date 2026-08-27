@@ -243,7 +243,7 @@ export function initSwarmPublish(onPublished) {
             } catch (err) {
                 console.error('[SWARM-FLYER-UPLOAD] Failed:', err);
                 flyerStatus.classList.remove('ok');
-                const msg = err.message || '';
+                const msg = err?.message || String(err);
                 if (msg.startsWith('FILE_TOO_LARGE:')) {
                     const size = msg.split(':')[1];
                     flyerStatus.textContent = (state.currentLangData.swarm_wizard_image_too_large || 'Imagen demasiado grande ({size} MB). Máximo 10 MB.').replace('{size}', size);
@@ -253,7 +253,7 @@ export function initSwarmPublish(onPublished) {
                     const code = msg.split(':')[1];
                     flyerStatus.textContent = (state.currentLangData.swarm_wizard_image_http_error || 'Error del servidor ({code}).').replace('{code}', code);
                 } else {
-                    flyerStatus.textContent = state.currentLangData.swarm_wizard_image_upload_fail || 'No se pudo subir la imagen.';
+                    flyerStatus.textContent = `${state.currentLangData.swarm_wizard_image_upload_fail || 'No se pudo subir la imagen.'} [${msg}]`;
                 }
             }
         }).catch((err) => {

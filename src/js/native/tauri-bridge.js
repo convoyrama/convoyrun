@@ -48,61 +48,16 @@ const CATBOX_TIMEOUT_MS = 60000; // 60 seconds
 const CATBOX_MAX_RETRIES = 2;
 
 export async function uploadToCatbox(arrayBuffer) {
-    // Validate file size
     if (arrayBuffer.byteLength > CATBOX_MAX_SIZE) {
         const mb = (arrayBuffer.byteLength / (1024 * 1024)).toFixed(1);
         throw new Error(`FILE_TOO_LARGE:${mb}`);
     }
 
-    // fetch() nativo del webview no sirve para hosts externos (CORS).
-    // Usamos el plugin HTTP de Tauri que hace el request desde Rust.
-    const httpFetch = tauri()?.http?.fetch;
-    if (!httpFetch) {
-        throw new Error('HTTP_PLUGIN_UNAVAILABLE');
-    }
-
-    let lastError = null;
-
-    for (let attempt = 0; attempt <= CATBOX_MAX_RETRIES; attempt++) {
-        try {
-            const blob = new Blob([arrayBuffer], { type: 'image/png' });
-            const formData = new FormData();
-            formData.append('reqtype', 'fileupload');
-            formData.append('fileToUpload', blob, 'flyer.png');
-
-            const resp = await httpFetch('https://catbox.moe/user/api.php', {
-                method: 'POST',
-                body: formData,
-                connectTimeout: CATBOX_TIMEOUT_MS,
-            });
-
-            if (!resp.ok) {
-                throw new Error(`HTTP_ERROR:${resp.status}`);
-            }
-
-            const url = (await resp.text()).trim();
-            if (!url.startsWith('https://')) {
-                throw new Error(`INVALID_RESPONSE:${url.substring(0, 50)}`);
-            }
-
-            return url;
-        } catch (err) {
-            if (err.message?.startsWith('FILE_TOO_LARGE:') ||
-                       err.message?.startsWith('HTTP_ERROR:') ||
-                       err.message?.startsWith('INVALID_RESPONSE:') ||
-                       err.message === 'HTTP_PLUGIN_UNAVAILABLE') {
-                throw err;
-            }
-
-            lastError = err;
-
-            if (attempt < CATBOX_MAX_RETRIES) {
-                await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
-            }
-        }
-    }
-
-    throw lastError || new Error('UPLOAD_FAILED');
+    // Upload desde Rust (reqwest multipart) — evita CORS del webview
+    const url = await tauri().core.invoke('upload_to_catbox', {
+        bytes: new Uint8Array(arrayBuffer),
+    });
+    return url;
 }
 
 // ---- Swarm: comandos con fallback local (modo demo) ---------------------------

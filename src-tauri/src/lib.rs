@@ -14,6 +14,44 @@ mod convoy;
 use p2p::{NodeStatus, P2pState, GossipMessage, UserConfig};
 use convoy::{ConvoyRecord, ConvoyStore, EventData, FlyerData, Schedule, VoteRecord, ChannelRecord, ChannelStore, BlacklistRecord, BlacklistStore, SYSTEM_CHANNELS};
 
+/// Upload de imagen PNG a Catbox.moe (multipart desde Rust, evita CORS del webview)
+#[tauri::command]
+async fn upload_to_catbox(bytes: Vec<u8>) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .map_err(|e| format!("CLIENT_ERROR:{}", e))?;
+
+    let part = reqwest::multipart::Part::bytes(bytes)
+        .file_name("flyer.png")
+        .mime_str("image/png")
+        .map_err(|e| format!("PART_ERROR:{}", e))?;
+
+    let form = reqwest::multipart::Form::new()
+        .text("reqtype", "fileupload")
+        .part("fileToUpload", part);
+
+    let resp = client.post("https://catbox.moe/user/api.php")
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| format!("UPLOAD_ERROR:{}", e))?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(format!("HTTP_ERROR:{}", status.as_u16()));
+    }
+
+    let url = resp.text().await.map_err(|e| format!("READ_ERROR:{}", e))?;
+    let url = url.trim().to_string();
+
+    if !url.starts_with("https://") {
+        return Err(format!("INVALID_RESPONSE:{}", &url[..url.len().min(50)]));
+    }
+
+    Ok(url)
+}
+
 /// Master public key para verificar keys de canales Patreon
 /// Esta es la clave PÚBLICA ed25519 (32 bytes) derivada de la master private key.
 const MASTER_PUBLIC_KEY: [u8; 32] = [
@@ -1031,6 +1069,7 @@ pub fn run() {
             change_channel_password,
             delete_channel,
             delete_convoy,
+            upload_to_catbox,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
