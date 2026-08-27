@@ -18,7 +18,9 @@ use convoy::{ConvoyRecord, ConvoyStore, EventData, FlyerData, Schedule, VoteReco
 #[tauri::command]
 async fn upload_to_catbox(bytes: Vec<u8>) -> Result<String, String> {
     let client = reqwest::Client::builder()
+        .user_agent("ConvoyRun/0.3.6")
         .timeout(std::time::Duration::from_secs(60))
+        .no_proxy()
         .build()
         .map_err(|e| format!("CLIENT_ERROR:{}", e))?;
 

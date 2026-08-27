@@ -46,7 +46,7 @@ base64 = "0.22"
 argon2 = "0.5"
 
 # Upload de imágenes a Catbox (multipart desde Rust, sin CORS)
-reqwest = { version = "0.12", default-features = false, features = ["multipart", "rustls-tls"] }
+reqwest = { version = "0.12", features = ["multipart", "native-tls"] }
 
 # Utilidades
 anyhow = "1"
