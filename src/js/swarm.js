@@ -466,9 +466,11 @@ function updateChannelFilter() {
 
 
 
-async function renderAll() {
-    if (loadingEl) setVisible(loadingEl, true, 'flex');
-    if (listEl) setVisible(listEl, false);
+async function renderAll(silent = false) {
+    if (!silent) {
+        if (loadingEl) setVisible(loadingEl, true, 'flex');
+        if (listEl) setVisible(listEl, false);
+    }
     try {
         const [c, v, my, cfg, blacklists] = await Promise.all([
             swarmList(), swarmGetVotes(), swarmGetMyVotes(), swarmGetConfig(),
@@ -496,7 +498,7 @@ async function renderAll() {
     } catch (err) {
         console.error('[SWARM] renderAll failed:', err);
     } finally {
-        if (loadingEl) setVisible(loadingEl, false);
+        if (!silent && loadingEl) setVisible(loadingEl, false);
     }
     renderList();
 }
@@ -548,14 +550,14 @@ export function initSwarm() {
             nodeMode = s.mode;
             myPeerId = s.peerId || '';
         } catch { /* keep current status */ }
-        await renderAll();
+        await renderAll(true);
     }, 60000);
 
     // Listen for real-time events from Rust backend
     const tauri = window.__TAURI__;
     if (tauri?.event) {
-        tauri.event.listen('convoy-new', () => renderAll());
-        tauri.event.listen('vote-new', () => renderAll());
+        tauri.event.listen('convoy-new', () => renderAll(true));
+        tauri.event.listen('vote-new', () => renderAll(true));
     }
 
     return renderAll;

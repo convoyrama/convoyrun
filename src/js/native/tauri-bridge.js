@@ -54,25 +54,27 @@ export async function uploadToCatbox(arrayBuffer) {
         throw new Error(`FILE_TOO_LARGE:${mb}`);
     }
 
+    // fetch() nativo del webview no sirve para hosts externos (CORS).
+    // Usamos el plugin HTTP de Tauri que hace el request desde Rust.
+    const httpFetch = tauri()?.http?.fetch;
+    if (!httpFetch) {
+        throw new Error('HTTP_PLUGIN_UNAVAILABLE');
+    }
+
     let lastError = null;
 
     for (let attempt = 0; attempt <= CATBOX_MAX_RETRIES; attempt++) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), CATBOX_TIMEOUT_MS);
-
         try {
             const blob = new Blob([arrayBuffer], { type: 'image/png' });
             const formData = new FormData();
             formData.append('reqtype', 'fileupload');
             formData.append('fileToUpload', blob, 'flyer.png');
 
-            const resp = await fetch('https://catbox.moe/user/api.php', {
+            const resp = await httpFetch('https://catbox.moe/user/api.php', {
                 method: 'POST',
                 body: formData,
-                signal: controller.signal,
+                connectTimeout: CATBOX_TIMEOUT_MS,
             });
-
-            clearTimeout(timeoutId);
 
             if (!resp.ok) {
                 throw new Error(`HTTP_ERROR:${resp.status}`);
@@ -85,21 +87,15 @@ export async function uploadToCatbox(arrayBuffer) {
 
             return url;
         } catch (err) {
-            clearTimeout(timeoutId);
-
-            if (err.name === 'AbortError') {
-                lastError = new Error('TIMEOUT');
-            } else if (err.message?.startsWith('FILE_TOO_LARGE:') ||
+            if (err.message?.startsWith('FILE_TOO_LARGE:') ||
                        err.message?.startsWith('HTTP_ERROR:') ||
-                       err.message?.startsWith('INVALID_RESPONSE:')) {
-                // Non-retryable errors
+                       err.message?.startsWith('INVALID_RESPONSE:') ||
+                       err.message === 'HTTP_PLUGIN_UNAVAILABLE') {
                 throw err;
-            } else {
-                // Network error — retry
-                lastError = err;
             }
 
-            // Wait before retry (exponential backoff: 1s, 2s)
+            lastError = err;
+
             if (attempt < CATBOX_MAX_RETRIES) {
                 await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
             }
