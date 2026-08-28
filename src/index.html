@@ -588,6 +588,7 @@
             <div class="settings-panel" id="settings-panel-blacklist">
                 <div class="settings-section">
                     <h4 data-i18n="settings_blocked_list">Blocked Authors</h4>
+                    <p class="settings-hint" data-i18n="settings_blocked_hint">Block authors to hide their events. Your block list can be shared with the community.</p>
                     <div class="settings-input-row">
                         <input type="text" id="settings-add-blocked-input" data-i18n-placeholder="settings_add_blocked_ph" placeholder="Paste peer ID to block">
                         <button type="button" id="settings-add-blocked-btn" class="settings-small-btn" data-i18n="settings_add_blocked" aria-label="Block author">Block</button>
@@ -620,6 +621,18 @@
                     </div>
                     <div id="settings-trusted-list" class="settings-list"></div>
                     <p id="settings-trusted-empty" class="settings-empty" data-i18n="settings_trusted_empty">No trusted authors yet. Add from event cards or manually above.</p>
+                </div>
+                <div class="settings-section">
+                    <h4 data-i18n="settings_public_trustlists">Public Trust Lists</h4>
+                    <div class="settings-blacklist-actions">
+                        <button type="button" id="settings-publish-trustlist" class="settings-action-btn" data-i18n="settings_publish_trustlist" aria-label="Publish my trust list">Publish my trust list</button>
+                    </div>
+                    <h5 data-i18n="settings_followed_trustlists">Lists you follow</h5>
+                    <div id="settings-followed-trustlists" class="settings-list"></div>
+                    <p id="settings-followed-trustlists-empty" class="settings-empty" data-i18n="settings_followed_trustlists_empty">You're not following any trust list.</p>
+                    <h5 data-i18n="settings_explore_trustlists">Explore community trust lists</h5>
+                    <div id="settings-explore-trustlists" class="settings-list"></div>
+                    <p id="settings-explore-trustlists-empty" class="settings-empty" data-i18n="settings_explore_trustlists_empty">No public trust lists available yet.</p>
                 </div>
             </div>
 

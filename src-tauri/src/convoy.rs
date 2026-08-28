@@ -811,6 +811,111 @@ impl BlacklistStore {
     }
 }
 
+// --- Trustlist pública (espejo de Blacklist) ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrustlistRecord {
+    pub schema: String,
+    pub author_peer_id: String,
+    pub trusted: Vec<String>,
+    pub updated_at: i64,
+    #[serde(default)]
+    pub signature: String,
+}
+
+impl TrustlistRecord {
+    pub fn canonical_json(&self) -> Result<String> {
+        let mut copy = self.clone();
+        copy.signature = String::new();
+        let value = serde_json::to_value(&copy)
+            .context("Failed to serialize TrustlistRecord for canonical JSON")?;
+        Ok(canonical_json(&value))
+    }
+
+    pub fn sign(&mut self, secret_key: &SecretKey) -> Result<()> {
+        use ed25519_dalek::{Signer, SigningKey};
+        let canonical = self.canonical_json()?;
+        let message = canonical.as_bytes();
+        let key_bytes = secret_key.to_bytes();
+        let signing_key = SigningKey::from_bytes(&key_bytes);
+        let signature = signing_key.sign(message);
+        self.signature = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            signature.to_bytes(),
+        );
+        Ok(())
+    }
+
+    pub fn verify(&self) -> Result<bool> {
+        use ed25519_dalek::{Verifier, VerifyingKey};
+        if self.signature.is_empty() {
+            return Ok(false);
+        }
+        let peer_bytes = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            &self.author_peer_id,
+        )?;
+        if peer_bytes.len() != 32 {
+            return Ok(false);
+        }
+        let mut key_array = [0u8; 32];
+        key_array.copy_from_slice(&peer_bytes);
+        let verifying_key = VerifyingKey::from_bytes(&key_array)?;
+        let sig_bytes = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            &self.signature,
+        )?;
+        if sig_bytes.len() != 64 {
+            return Ok(false);
+        }
+        let mut sig_array = [0u8; 64];
+        sig_array.copy_from_slice(&sig_bytes);
+        let sig = ed25519_dalek::Signature::from_bytes(&sig_array);
+        let canonical = self.canonical_json()?;
+        Ok(verifying_key.verify(canonical.as_bytes(), &sig).is_ok())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TrustlistStore {
+    pub trustlists: HashMap<String, TrustlistRecord>,
+}
+
+impl TrustlistStore {
+    pub fn load(data_dir: &Path) -> Result<Self> {
+        let store_path = data_dir.join("trustlist_store.json");
+        if store_path.exists() {
+            let s = std::fs::read_to_string(&store_path)
+                .context("Failed to read trustlist store")?;
+            let store: Self = serde_json::from_str(&s)
+                .context("Failed to parse trustlist store")?;
+            Ok(store)
+        } else {
+            Ok(Self::default())
+        }
+    }
+
+    pub fn save(&self, data_dir: &Path) -> Result<()> {
+        let store_path = data_dir.join("trustlist_store.json");
+        let tmp_path = data_dir.join("trustlist_store.json.tmp");
+        std::fs::write(&tmp_path, serde_json::to_string(self)?)
+            .context("Failed to write trustlist store")?;
+        std::fs::rename(&tmp_path, &store_path)
+            .context("Failed to rename trustlist store")?;
+        Ok(())
+    }
+
+    pub fn upsert(&mut self, record: TrustlistRecord) {
+        self.trustlists.insert(record.author_peer_id.clone(), record);
+    }
+
+    pub fn purge_expired(&mut self) {
+        let cutoff = chrono::Utc::now().timestamp() - 90 * 86400;
+        self.trustlists.retain(|_, r| r.updated_at > cutoff);
+    }
+}
+
 /// Almacén de nicks conocidos (peer_id → nick/alias)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct KnownNicksStore {

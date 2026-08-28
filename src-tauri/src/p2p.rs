@@ -65,6 +65,8 @@ pub struct UserConfig {
     #[serde(default)]
     pub trusted_peers: Vec<String>,
     #[serde(default)]
+    pub followed_trustlists: Vec<String>,
+    #[serde(default)]
     pub default_languages: Vec<String>,
     #[serde(default)]
     pub last_publish_ts: Option<i64>,
@@ -194,15 +196,22 @@ pub fn export_identity_with_key(
     password: Option<&str>,
 ) -> Result<()> {
 
-    // Cargar nickname si existe
+    // Cargar configuración completa para incluir listas en el backup
     let config_path = data_dir.join("convoyrun_config.json");
-    let nickname = if config_path.exists() {
+    let (nickname, blocked_authors, trusted_peers, followed_blacklists, followed_trustlists) = if config_path.exists() {
         let config_str = std::fs::read_to_string(&config_path).ok();
-        config_str
-            .and_then(|s| serde_json::from_str::<UserConfig>(&s).ok())
-            .and_then(|c| c.nickname)
+        match config_str.and_then(|s| serde_json::from_str::<UserConfig>(&s).ok()) {
+            Some(c) => (
+                c.nickname,
+                c.blocked_authors.into_iter().collect::<Vec<_>>(),
+                c.trusted_peers,
+                c.followed_blacklists,
+                c.followed_trustlists,
+            ),
+            None => (None, vec![], vec![], vec![], vec![]),
+        }
     } else {
-        None
+        (None, vec![], vec![], vec![], vec![])
     };
 
     let export = if let Some(pwd) = password {
@@ -245,6 +254,10 @@ pub fn export_identity_with_key(
             "nonce": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, nonce_bytes),
             "encryptedKey": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, encrypted),
             "nickname": nickname,
+            "blockedAuthors": blocked_authors,
+            "trustedPeers": trusted_peers,
+            "followedBlacklists": followed_blacklists,
+            "followedTrustlists": followed_trustlists,
             "exportedAt": chrono::Utc::now().timestamp(),
         });
 
@@ -256,6 +269,10 @@ pub fn export_identity_with_key(
             "encrypted": false,
             "secretKey": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, key_bytes),
             "nickname": nickname,
+            "blockedAuthors": blocked_authors,
+            "trustedPeers": trusted_peers,
+            "followedBlacklists": followed_blacklists,
+            "followedTrustlists": followed_trustlists,
             "exportedAt": chrono::Utc::now().timestamp(),
         });
 
@@ -355,7 +372,7 @@ pub fn import_identity(
             .context("Failed to write identity file")?;
     }
 
-    // Restaurar nickname si existe
+    // Restaurar nickname y listas si existen
     if let Some(nick) = export["nickname"].as_str() {
         let config_path = data_dir.join("convoyrun_config.json");
         let mut config = if config_path.exists() {
@@ -365,6 +382,43 @@ pub fn import_identity(
             UserConfig::default()
         };
         config.nickname = Some(nick.to_string());
+
+        // Restaurar listas del backup (merge sin duplicados)
+        if let Some(arr) = export["blockedAuthors"].as_array() {
+            for v in arr {
+                if let Some(s) = v.as_str() {
+                    config.blocked_authors.insert(s.to_string());
+                }
+            }
+        }
+        if let Some(arr) = export["trustedPeers"].as_array() {
+            for v in arr {
+                if let Some(s) = v.as_str() {
+                    if !config.trusted_peers.contains(&s.to_string()) {
+                        config.trusted_peers.push(s.to_string());
+                    }
+                }
+            }
+        }
+        if let Some(arr) = export["followedBlacklists"].as_array() {
+            for v in arr {
+                if let Some(s) = v.as_str() {
+                    if !config.followed_blacklists.contains(&s.to_string()) {
+                        config.followed_blacklists.push(s.to_string());
+                    }
+                }
+            }
+        }
+        if let Some(arr) = export["followedTrustlists"].as_array() {
+            for v in arr {
+                if let Some(s) = v.as_str() {
+                    if !config.followed_trustlists.contains(&s.to_string()) {
+                        config.followed_trustlists.push(s.to_string());
+                    }
+                }
+            }
+        }
+
         std::fs::write(&config_path, serde_json::to_string_pretty(&config)?)
             .context("Failed to write config file")?;
     }
@@ -414,6 +468,8 @@ pub enum GossipMessage {
     Channel { data: String },
     #[serde(rename = "blacklist")]
     Blacklist { data: String },
+    #[serde(rename = "trustlist")]
+    Trustlist { data: String },
 }
 
 impl P2pState {
@@ -490,6 +546,14 @@ impl P2pState {
     pub async fn publish_blacklist_gossip(sender: &distributed_topic_tracker::GossipSender, blacklist_json: &str) -> Result<()> {
         let message = GossipMessage::Blacklist {
             data: blacklist_json.to_string(),
+        };
+        Self::publish_gossip(sender, message).await
+    }
+
+    /// Publica una lista de confianza por gossip
+    pub async fn publish_trustlist_gossip(sender: &distributed_topic_tracker::GossipSender, trustlist_json: &str) -> Result<()> {
+        let message = GossipMessage::Trustlist {
+            data: trustlist_json.to_string(),
         };
         Self::publish_gossip(sender, message).await
     }

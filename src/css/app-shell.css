@@ -1369,6 +1369,15 @@ button.loading::after {
     margin-right: 6px;
     white-space: nowrap;
 }
+.settings-list-item .settings-peer-name {
+    color: rgba(255,255,255,0.8);
+    font-weight: 600;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: 6px;
+}
 .settings-list-item .settings-remove-btn {
     padding: 4px 10px;
     font-size: 0.6rem;
@@ -1423,12 +1432,6 @@ button.loading::after {
 .settings-channel-badge.badge-private {
     background: rgba(255,255,255,0.1);
     color: rgba(255,255,255,0.5);
-}
-
-.settings-hint {
-    font-size: 0.7rem;
-    color: rgba(255,255,255,0.4);
-    margin: 0 0 8px;
 }
 
 .settings-empty {
@@ -1689,6 +1692,15 @@ button.loading::after {
 .clickable-author:hover {
     color: #00aaff;
     text-decoration: underline;
+}
+
+.clickable-author.trusted-author {
+    color: #4caf50;
+    font-weight: 600;
+}
+
+.clickable-author.trusted-author:hover {
+    color: #66bb6a;
 }
 
 /* Footer / Status Bar */

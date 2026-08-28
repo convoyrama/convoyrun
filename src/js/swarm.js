@@ -14,7 +14,7 @@ import { displayName } from './core/display-name.js';
 import {
     swarmInit, swarmList, swarmGetVotes, swarmGetMyVotes, swarmVote,
     swarmGetConfig, swarmSetConfig, swarmStatus, swarmPublish,
-    swarmDelete, blockAuthor, getPublicBlacklists, copyToClipboard,
+    swarmDelete, blockAuthor, getPublicBlacklists, getPublicTrustlists, copyToClipboard,
     getKnownNicks,
 } from './native/tauri-bridge.js';
 
@@ -36,6 +36,7 @@ let nodeMode = 'local';
 let myPeerId = '';
 let lang = 'en';
 let blockedAuthorsSet = new Set();
+let trustedAuthorsSet = new Set();
 let _autoRefreshInterval = null;
 let expandedConvoyId = null;
 let knownNicks = { nicks: {}, aliases: {} };
@@ -106,6 +107,9 @@ function readFilters() {
 function applyFilters(list) {
     const f = readFilters();
     let out = [...list];
+    // Ocultar convoys que pasaron hace más de 24h (husos horarios)
+    const cutoff24h = Math.floor(Date.now() / 1000) - 24 * 3600;
+    out = out.filter(c => c.schedule.meetingTimestamp > cutoff24h);
     if (blockedAuthorsSet.size > 0) out = out.filter(c => !blockedAuthorsSet.has(c.peerId));
     if (f.game !== 'all') out = out.filter(c => c.event.game === f.game);
     if (f.mode !== 'all') out = out.filter(c => c.event.mode === f.mode);
@@ -252,6 +256,9 @@ function buildEvent(c) {
     const authorSpan = el('span', 'swarm-row-author clickable-author', displayName(c.peerId, c.nickname, knownNicks));
     authorSpan.dataset.peerId = c.peerId;
     authorSpan.title = c.peerId;
+    if (trustedAuthorsSet.has(c.peerId)) {
+        authorSpan.classList.add('trusted-author');
+    }
     row.appendChild(authorSpan);
 
     const votesBox = el('div', 'swarm-votes');
@@ -302,9 +309,12 @@ function buildEvent(c) {
     const nickSpan = el('span', 'swarm-card-nick clickable-author', displayName(c.peerId, c.nickname, knownNicks));
     nickSpan.dataset.peerId = c.peerId;
     nickSpan.title = c.peerId;
+    if (trustedAuthorsSet.has(c.peerId)) {
+        nickSpan.classList.add('trusted-author');
+    }
     author.appendChild(nickSpan);
     if (c.peerId && c.peerId !== myPeerId) {
-        if ((config.trustedPeers || []).includes(c.peerId)) {
+        if (trustedAuthorsSet.has(c.peerId)) {
             author.appendChild(el('span', 'swarm-trusted-badge', label('swarm_author_trusted', 'confianza')));
         }
         const trustBtn = el('button', 'swarm-trust-btn',
@@ -469,9 +479,10 @@ async function renderAll(silent = false) {
         if (listEl) setVisible(listEl, false);
     }
     try {
-        const [c, v, my, cfg, blacklists] = await Promise.all([
+        const [c, v, my, cfg, blacklists, trustlists] = await Promise.all([
             swarmList(), swarmGetVotes(), swarmGetMyVotes(), swarmGetConfig(),
             getPublicBlacklists(),
+            getPublicTrustlists(),
         ]);
         convoys = (Array.isArray(c) ? c : []).filter(validateConvoy);
         if (convoys.length === 0 && Array.isArray(c) && c.length > 0) {
@@ -488,6 +499,16 @@ async function renderAll(silent = false) {
             for (const bl of blacklists) {
                 if (followed.has(bl.authorPeerId) && Array.isArray(bl.blocked)) {
                     for (const pid of bl.blocked) blockedAuthorsSet.add(pid);
+                }
+            }
+        }
+
+        const followedTrust = new Set(config.followedTrustlists || []);
+        trustedAuthorsSet = new Set(config.trustedPeers || []);
+        if (followedTrust.size > 0 && Array.isArray(trustlists)) {
+            for (const tl of trustlists) {
+                if (followedTrust.has(tl.authorPeerId) && Array.isArray(tl.trusted)) {
+                    for (const pid of tl.trusted) trustedAuthorsSet.add(pid);
                 }
             }
         }

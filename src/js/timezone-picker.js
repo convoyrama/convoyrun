@@ -127,6 +127,11 @@ export function initTimezoneSettings(onChange) {
     dom.zoneSettingsOverlay.addEventListener('click', (e) => {
         if (e.target === dom.zoneSettingsOverlay) dom.zoneSettingsOverlay.classList.remove('open');
     });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && dom.zoneSettingsOverlay.classList.contains('open')) {
+            dom.zoneSettingsOverlay.classList.remove('open');
+        }
+    });
 
     const addZone = () => {
         const typed = dom.zoneSearch.value.trim();

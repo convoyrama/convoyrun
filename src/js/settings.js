@@ -6,6 +6,8 @@ import {
     exportIdentity, importIdentity,
     publishBlacklist, importBlacklist, stopFollowingBlacklist,
     getPublicBlacklists,
+    publishTrustlist, importTrustlist, stopFollowingTrustlist,
+    getPublicTrustlists,
     swarmListChannels, getSystemChannels, activateChannel, changeChannelPassword, deleteChannel,
     getKnownNicks, setNickAlias,
 } from './native/tauri-bridge.js';
@@ -59,11 +61,15 @@ async function loadSettingsData() {
         renderDefaultLanguages(savedLangs);
         renderBlocked(config.blockedAuthors || [], knownNicks);
         renderTrusted(config.trustedPeers || [], knownNicks);
-        renderFollowed(config.followedBlacklists || []);
+        renderFollowed(config.followedBlacklists || [], knownNicks);
+        renderFollowedTrustlists(config.followedTrustlists || [], knownNicks);
         await renderChannels(status.peerId || '');
 
         const lists = await getPublicBlacklists();
-        renderExplore(lists, config.followedBlacklists || []);
+        renderExplore(lists, config.followedBlacklists || [], knownNicks);
+
+        const trustlists = await getPublicTrustlists();
+        renderExploreTrustlists(trustlists, config.followedTrustlists || [], knownNicks);
     } catch (err) {
         console.error('[SETTINGS] Failed to load data:', err);
     }
@@ -148,7 +154,7 @@ async function promptAlias(peerId) {
 }
 
 
-function renderFollowed(followed) {
+function renderFollowed(followed, knownNicks) {
     const container = $('#settings-followed-lists');
     const empty = $('#settings-followed-empty');
     container.replaceChildren();
@@ -157,10 +163,11 @@ function renderFollowed(followed) {
     followed.forEach(peerId => {
         const item = document.createElement('div');
         item.className = 'settings-list-item';
-        const code = document.createElement('code');
-        code.title = peerId;
-        code.textContent = truncPeer(peerId);
-        item.appendChild(code);
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'settings-peer-name';
+        nameSpan.title = peerId;
+        nameSpan.textContent = displayName(peerId, null, knownNicks);
+        item.appendChild(nameSpan);
         const btn = document.createElement('button');
         btn.className = 'settings-remove-btn';
         btn.textContent = '✕';
@@ -174,7 +181,7 @@ function renderFollowed(followed) {
     });
 }
 
-function renderExplore(lists, followed) {
+function renderExplore(lists, followed, knownNicks) {
     const container = $('#settings-explore-lists');
     const empty = $('#settings-explore-empty');
     container.replaceChildren();
@@ -187,7 +194,7 @@ function renderExplore(lists, followed) {
         item.className = 'settings-list-item';
         const nick = document.createElement('span');
         nick.className = 'settings-nick';
-        nick.textContent = list.authorPeerId ? truncPeer(list.authorPeerId) : 'Unknown';
+        nick.textContent = list.authorPeerId ? displayName(list.authorPeerId, null, knownNicks) : 'Unknown';
         item.appendChild(nick);
         const count = document.createElement('code');
         const blockedCount = list.blocked ? list.blocked.length : 0;
@@ -198,6 +205,64 @@ function renderExplore(lists, followed) {
         btn.textContent = t('settings_follow', 'Follow');
         btn.onclick = async () => {
             await importBlacklist(list.authorPeerId);
+            await loadSettingsData();
+        };
+        item.appendChild(btn);
+        container.appendChild(item);
+    });
+}
+
+function renderFollowedTrustlists(followed, knownNicks) {
+    const container = $('#settings-followed-trustlists');
+    const empty = $('#settings-followed-trustlists-empty');
+    container.replaceChildren();
+    if (!followed.length) { setVisible(empty, true); return; }
+    setVisible(empty, false);
+    followed.forEach(peerId => {
+        const item = document.createElement('div');
+        item.className = 'settings-list-item';
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'settings-peer-name';
+        nameSpan.title = peerId;
+        nameSpan.textContent = displayName(peerId, null, knownNicks);
+        item.appendChild(nameSpan);
+        const btn = document.createElement('button');
+        btn.className = 'settings-remove-btn';
+        btn.textContent = '✕';
+        btn.title = t('settings_stop_following', 'Stop following');
+        btn.onclick = async () => {
+            await stopFollowingTrustlist(peerId);
+            await loadSettingsData();
+        };
+        item.appendChild(btn);
+        container.appendChild(item);
+    });
+}
+
+function renderExploreTrustlists(lists, followed, knownNicks) {
+    const container = $('#settings-explore-trustlists');
+    const empty = $('#settings-explore-trustlists-empty');
+    container.replaceChildren();
+    const followedSet = new Set(followed);
+    const available = lists.filter(l => !followedSet.has(l.authorPeerId));
+    if (!available.length) { setVisible(empty, true); return; }
+    setVisible(empty, false);
+    available.forEach(list => {
+        const item = document.createElement('div');
+        item.className = 'settings-list-item';
+        const nick = document.createElement('span');
+        nick.className = 'settings-nick';
+        nick.textContent = list.authorPeerId ? displayName(list.authorPeerId, null, knownNicks) : 'Unknown';
+        item.appendChild(nick);
+        const count = document.createElement('code');
+        const trustedCount = list.trusted ? list.trusted.length : 0;
+        count.textContent = trustedCount + ' ' + t('settings_trusted_count', 'trusted');
+        item.appendChild(count);
+        const btn = document.createElement('button');
+        btn.className = 'settings-follow-btn';
+        btn.textContent = t('settings_follow', 'Follow');
+        btn.onclick = async () => {
+            await importTrustlist(list.authorPeerId);
             await loadSettingsData();
         };
         item.appendChild(btn);
@@ -392,6 +457,8 @@ function initSettings() {
         if (ok) {
             $('#settings-export-confirm').textContent = `✓ ${t('settings_saved', 'Saved')}`;
             setTimeout(() => { $('#settings-export-confirm').textContent = t('settings_export_save', 'Save backup'); }, 2000);
+        } else {
+            alert(t('settings_export_error', 'Failed to save backup.'));
         }
     });
 
@@ -408,6 +475,8 @@ function initSettings() {
             $('#settings-import-confirm').textContent = `✓ ${t('settings_restored', 'Restored')}`;
             setTimeout(() => { $('#settings-import-confirm').textContent = t('settings_import_open', 'Restore backup'); }, 2000);
             await loadSettingsData();
+        } else {
+            alert(t('settings_import_error', 'Failed to restore backup. Check the file and password.'));
         }
     });
 
@@ -468,6 +537,20 @@ function initSettings() {
         } catch (err) {
             console.error('[SETTINGS] publishBlacklist failed:', err);
             alert(t('settings_publish_blacklist_error', 'Failed to publish blacklist. Is P2P initialized?'));
+        }
+    });
+
+    $('#settings-publish-trustlist')?.addEventListener('click', async () => {
+        try {
+            await publishTrustlist();
+            $('#settings-publish-trustlist').textContent = `✓ ${t('settings_published', 'Published')}`;
+            setTimeout(() => {
+                const el = $('#settings-publish-trustlist');
+                if (el) el.textContent = t('settings_publish_trustlist', 'Publish my trust list');
+            }, 2000);
+        } catch (err) {
+            console.error('[SETTINGS] publishTrustlist failed:', err);
+            alert(t('settings_publish_trustlist_error', 'Failed to publish trust list. Is P2P initialized?'));
         }
     });
 }

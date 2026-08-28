@@ -361,6 +361,43 @@ export async function getPublicBlacklists() {
     return [];
 }
 
+// ---- Trustlists públicas -----------------------------------------------------
+
+export async function publishTrustlist() {
+    try {
+        await tauri().core.invoke('publish_trustlist');
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export async function importTrustlist(peerId) {
+    try {
+        await tauri().core.invoke('import_trustlist', { peerId });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export async function stopFollowingTrustlist(peerId) {
+    try {
+        await tauri().core.invoke('stop_following_trustlist', { peerId });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export async function getPublicTrustlists() {
+    try {
+        const list = await tauri().core.invoke('get_public_trustlists');
+        if (Array.isArray(list)) return list;
+    } catch { /* sin backend */ }
+    return [];
+}
+
 
 export async function getAuthorProfile(peerId) {
     try {

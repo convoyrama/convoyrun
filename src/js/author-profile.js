@@ -4,7 +4,7 @@ import { showCopyMessage, setVisible } from './core/utils.js';
 import { reputationBadge, computeScore } from './core/convoy.js';
 import {
     getAuthorProfile, blockAuthor, unblockAuthor,
-    importBlacklist, copyToClipboard,
+    importBlacklist, importTrustlist, copyToClipboard,
     swarmGetConfig, swarmSetConfig,
 } from './native/tauri-bridge.js';
 
@@ -74,7 +74,7 @@ function buildOverlay() {
 
 function closeProfile() {
     if (!overlay) return;
-    overlay.hidden = true;
+    setVisible(overlay, false);
     currentPeerId = null;
 }
 
@@ -151,6 +151,16 @@ async function openProfile(peerId) {
             }
         });
         actionsEl.appendChild(mergeBtn);
+
+        const mergeTrustBtn = el('button', 'settings-action-btn', t('ap_merge_trustlist', 'Importar confianza'));
+        mergeTrustBtn.title = t('ap_merge_trustlist_title', 'Agregar la lista de confianza de este usuario');
+        mergeTrustBtn.addEventListener('click', async () => {
+            const ok = await importTrustlist(peerId);
+            if (ok) {
+                showCopyMessage(t('ap_merge_trustlist_ok', 'Lista de confianza importada.'));
+            }
+        });
+        actionsEl.appendChild(mergeTrustBtn);
     }
 
     if (profile.convoys && profile.convoys.length) {

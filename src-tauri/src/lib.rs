@@ -13,7 +13,7 @@ use tokio::sync::RwLock;
 mod p2p;
 mod convoy;
 use p2p::{NodeStatus, P2pState, GossipMessage, UserConfig};
-use convoy::{ConvoyRecord, ConvoyStore, EventData, FlyerData, Schedule, VoteRecord, ChannelRecord, ChannelStore, BlacklistRecord, BlacklistStore, KnownNicksStore, SYSTEM_CHANNELS};
+use convoy::{ConvoyRecord, ConvoyStore, EventData, FlyerData, Schedule, VoteRecord, ChannelRecord, ChannelStore, BlacklistRecord, BlacklistStore, TrustlistRecord, TrustlistStore, KnownNicksStore, SYSTEM_CHANNELS};
 
 /// Upload de imagen PNG a Catbox.moe (multipart desde Rust, evita CORS del webview)
 #[tauri::command]
@@ -76,6 +76,7 @@ struct AppState {
     convoy_store: Arc<RwLock<ConvoyStore>>,
     channel_store: Arc<RwLock<ChannelStore>>,
     blacklist_store: Arc<RwLock<BlacklistStore>>,
+    trustlist_store: Arc<RwLock<TrustlistStore>>,
     known_nicks: Arc<RwLock<KnownNicksStore>>,
     config: Arc<RwLock<UserConfig>>,
 }
@@ -101,6 +102,13 @@ fn flush_blacklist_store(store: &BlacklistStore, data_dir: &Path) {
     }
 }
 
+/// Helper: flush trustlist store a disco
+fn flush_trustlist_store(store: &TrustlistStore, data_dir: &Path) {
+    if let Err(e) = store.save(data_dir) {
+        eprintln!("[P2P] Failed to save trustlist store: {}", e);
+    }
+}
+
 /// Helper: load config from shared cache (avoid disk I/O on every command)
 async fn load_config_cached(config: &Arc<RwLock<UserConfig>>) -> UserConfig {
     config.read().await.clone()
@@ -122,6 +130,7 @@ async fn process_gossip_receiver(
     convoy_store: Arc<RwLock<ConvoyStore>>,
     channel_store: Arc<RwLock<ChannelStore>>,
     blacklist_store: Arc<RwLock<BlacklistStore>>,
+    trustlist_store: Arc<RwLock<TrustlistStore>>,
     known_nicks: Arc<RwLock<KnownNicksStore>>,
     neighbor_count: Arc<AtomicUsize>,
 ) {
@@ -169,6 +178,9 @@ async fn process_gossip_receiver(
                         GossipMessage::Blacklist { data } => {
                             serde_json::from_str::<BlacklistRecord>(data).ok().map(|r| format!("blacklist:{}:{}", r.author_peer_id, r.updated_at))
                         }
+                        GossipMessage::Trustlist { data } => {
+                            serde_json::from_str::<TrustlistRecord>(data).ok().map(|r| format!("trustlist:{}:{}", r.author_peer_id, r.updated_at))
+                        }
                     };
                     if let Some(ref key) = dedup_key {
                         if seen.contains(key) {
@@ -196,6 +208,9 @@ async fn process_gossip_receiver(
                         }
                         GossipMessage::Blacklist { data } => {
                             serde_json::from_str::<BlacklistRecord>(data).ok().map(|r| r.author_peer_id)
+                        }
+                        GossipMessage::Trustlist { data } => {
+                            serde_json::from_str::<TrustlistRecord>(data).ok().map(|r| r.author_peer_id)
                         }
                     };
                     if let Some(ref pid) = author_peer_id {
@@ -331,6 +346,24 @@ async fn process_gossip_receiver(
                                 flush_blacklist_store(&store, &data_dir);
                             }
                         }
+                        GossipMessage::Trustlist { data } => {
+                            if let Ok(record) = serde_json::from_str::<TrustlistRecord>(&data) {
+                                match record.verify() {
+                                    Ok(true) => {}
+                                    Ok(false) => {
+                                        eprintln!("[P2P] Received trustlist with invalid signature, ignoring");
+                                        continue;
+                                    }
+                                    Err(e) => {
+                                        eprintln!("[P2P] Failed to verify trustlist signature: {}", e);
+                                        continue;
+                                    }
+                                }
+                                let mut store = trustlist_store.write().await;
+                                store.upsert(record);
+                                flush_trustlist_store(&store, &data_dir);
+                            }
+                        }
                     }
                 } else {
                     eprintln!("[P2P] Received malformed gossip message ({} bytes), ignoring", message.content.len());
@@ -416,12 +449,13 @@ async fn p2p_init(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<N
             let cs = state.convoy_store.clone();
             let chs = state.channel_store.clone();
             let bls = state.blacklist_store.clone();
+            let tls = state.trustlist_store.clone();
             let kn = state.known_nicks.clone();
             let nc = p2p.neighbor_count.clone();
             let cc = state.config.clone();
             let ah = app.clone();
             tokio::spawn(async move {
-                process_gossip_receiver(receiver, data_dir, cc, ah, cs, chs, bls, kn, nc).await;
+                process_gossip_receiver(receiver, data_dir, cc, ah, cs, chs, bls, tls, kn, nc).await;
             });
             eprintln!("[P2P] Joined gossip topic successfully");
         }
@@ -599,6 +633,62 @@ async fn stop_following_blacklist(state: State<'_, AppState>, peer_id: String) -
 async fn get_public_blacklists(state: State<'_, AppState>) -> Result<Vec<BlacklistRecord>, String> {
     let store = state.blacklist_store.read().await;
     Ok(store.blacklists.values().cloned().collect())
+}
+
+// --- Comandos de trustlists públicas ---
+
+#[tauri::command]
+async fn publish_trustlist(state: State<'_, AppState>) -> Result<(), String> {
+    let config = load_config_cached(&state.config).await;
+    let p2p_guard = state.p2p.read().await;
+    let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
+
+    let mut record = TrustlistRecord {
+        schema: "convoyrun/trustlist/v1".to_string(),
+        author_peer_id: p2p.peer_id(),
+        trusted: config.trusted_peers.iter().cloned().collect(),
+        updated_at: chrono::Utc::now().timestamp(),
+        signature: String::new(),
+    };
+
+    if let Err(e) = record.sign(&p2p.secret_key) {
+        eprintln!("[P2P] Failed to sign trustlist: {}", e);
+        return Err(format!("Failed to sign trustlist: {}", e));
+    }
+
+    let tl_json = serde_json::to_string(&record).map_err(|e| e.to_string())?;
+
+    if let Some(sender) = &p2p.gossip_sender {
+        if let Err(e) = P2pState::publish_trustlist_gossip(sender, &tl_json).await {
+            eprintln!("[P2P] Failed to publish trustlist via gossip: {}", e);
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn import_trustlist(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
+    let mut config = state.config.write().await;
+    if !config.followed_trustlists.contains(&peer_id) {
+        config.followed_trustlists.push(peer_id);
+        p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn stop_following_trustlist(state: State<'_, AppState>, peer_id: String) -> Result<(), String> {
+    let mut config = state.config.write().await;
+    config.followed_trustlists.retain(|id| id != &peer_id);
+    p2p::save_config(&state.data_dir, &config).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_public_trustlists(state: State<'_, AppState>) -> Result<Vec<TrustlistRecord>, String> {
+    let store = state.trustlist_store.read().await;
+    Ok(store.trustlists.values().cloned().collect())
 }
 
 // --- Comandos de discovery ---
@@ -1020,6 +1110,7 @@ pub fn run() {
                 store
             }));
             let blacklist_store = Arc::new(RwLock::new(BlacklistStore::load(&data_dir).unwrap_or_default()));
+            let trustlist_store = Arc::new(RwLock::new(TrustlistStore::load(&data_dir).unwrap_or_default()));
             let known_nicks = Arc::new(RwLock::new(KnownNicksStore::load(&data_dir)));
             let config = p2p::load_config(&data_dir).unwrap_or_default();
             app.manage(AppState {
@@ -1028,6 +1119,7 @@ pub fn run() {
                 convoy_store: convoy_store.clone(),
                 channel_store: channel_store.clone(),
                 blacklist_store: blacklist_store.clone(),
+                trustlist_store: trustlist_store.clone(),
                 known_nicks: known_nicks.clone(),
                 config: Arc::new(RwLock::new(config)),
             });
@@ -1054,6 +1146,20 @@ pub fn run() {
                         let mut store = bl_store.write().await;
                         store.purge_expired();
                         flush_blacklist_store(&store, &bl_dir);
+                    }
+                });
+            }
+
+            // Purge expired trustlists every 6 hours
+            {
+                let tl_dir = data_dir.clone();
+                let tl_store = trustlist_store.clone();
+                tauri::async_runtime::spawn(async move {
+                    loop {
+                        tokio::time::sleep(std::time::Duration::from_secs(6 * 3600)).await;
+                        let mut store = tl_store.write().await;
+                        store.purge_expired();
+                        flush_trustlist_store(&store, &tl_dir);
                     }
                 });
             }
@@ -1150,6 +1256,10 @@ pub fn run() {
             import_blacklist,
             stop_following_blacklist,
             get_public_blacklists,
+            publish_trustlist,
+            import_trustlist,
+            stop_following_trustlist,
+            get_public_trustlists,
             get_author_profile,
             get_discovery_state,
             publish_convoy,
