@@ -16,7 +16,7 @@ use distributed_topic_tracker::{AutoDiscoveryGossip, RecordPublisher, Config as 
 
 /// Topic de gossip para el calendario de convoys
 /// Todos los nodos de ConvoyRun se unen a este topic por nombre.
-pub const CONVOY_TOPIC: &str = "convoyrama.convoyrun.v1";
+pub const CONVOY_TOPIC: &str = "convoyrama.convoyrun.v3";
 
 /// Passphrase compartido para discovery por DHT.
 /// Todos los clientes de ConvoyRun lo usan para encontrarse automáticamente

@@ -1,0 +1,559 @@
+<div class="preview-container">
+    <h1>🚛 ConvoyRun v0.3.7 - Swarm Card Preview</h1>
+    <h2>Visualización de tarjetas de eventos en el Swarm</h2>
+
+    <div class="info-note">
+        <strong>Novedades v0.3.7:</strong><br>
+        • <strong>Tipo de evento</strong> visible en detalles expandidos (Convoy, Expo, Exploración, Competencia, Cruce, Otro)<br>
+        • <strong>Canal</strong> mostrado como #channel a la derecha del nombre del evento<br>
+        • Click en la tarjeta para expandir/colapsar detalles
+    </div>
+
+    <div class="section">
+        <div class="section-title">Estado Colapsado (vista en línea) - Click para expandir</div>
+        
+        <!-- Event 1: Collapsed -->
+        <div class="swarm-event" onclick="this.classList.toggle('open')">
+            <div class="swarm-row">
+                <span class="swarm-row-caret">▶</span>
+                <div class="swarm-badges">
+                    <span class="swarm-badge swarm-badge-game">ETS2</span>
+                    <span class="swarm-badge swarm-badge-mode">Simulación</span>
+                    <span class="swarm-badge swarm-badge-lang">ES EN</span>
+                </div>
+                <span class="swarm-row-time">20:30</span>
+                <span class="swarm-row-name">Cumbre del Desierto - Ruta Nocturna</span>
+                <span class="swarm-row-channel">#convoy</span>
+                <span class="swarm-row-author">dr.will</span>
+                <div class="swarm-votes">
+                    <button class="swarm-vote-btn" onclick="event.stopPropagation()">▲</button>
+                    <span class="swarm-score">+12</span>
+                    <button class="swarm-vote-btn" onclick="event.stopPropagation()">▼</button>
+                </div>
+            </div>
+            <div class="swarm-row-details">
+                <div class="swarm-row-info">
+                    <div class="swarm-detail-name">Cumbre del Desierto - Ruta Nocturna</div>
+                    <div class="swarm-detail-type">CONVOY</div>
+                    
+                    <div class="swarm-detail-kicker">Cuándo</div>
+                    <div class="swarm-detail-time">Viernes 29 de Agosto, 20:30</div>
+                    <div class="swarm-detail-zone">Zona del creador: America/Montevideo</div>
+                    
+                    <div class="swarm-detail-kicker">Autor</div>
+                    <div class="swarm-detail-author">
+                        <span class="rep-dot rep-green"></span>
+                        <span class="swarm-card-nick">dr.will</span>
+                        <button class="swarm-trust-btn" onclick="event.stopPropagation()">Confiar</button>
+                        <button class="swarm-block-btn" onclick="event.stopPropagation()">🚫</button>
+                    </div>
+                    
+                    <div class="swarm-detail-kicker">Ruta</div>
+                    <div class="swarm-detail-route">
+                        <strong>Salida:</strong> Las Vegas, NV - Empresa de carga<br>
+                        <strong>Destino:</strong> Los Angeles, CA - Puerto
+                    </div>
+                    
+                    <div class="swarm-detail-kicker">Descripción</div>
+                    <div class="swarm-detail-description">Ruta nocturna por el desierto de Mojave. Se recomienda usar luces altas y cuidado con los animales en la ruta. ¡Los esperamos!</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Event 2: Different type (Cruce) -->
+        <div class="swarm-event" onclick="this.classList.toggle('open')">
+            <div class="swarm-row">
+                <span class="swarm-row-caret">▶</span>
+                <div class="swarm-badges">
+                    <span class="swarm-badge swarm-badge-game">ATS</span>
+                    <span class="swarm-badge swarm-badge-mode">Arcade</span>
+                    <span class="swarm-badge swarm-badge-lang">ES</span>
+                </div>
+                <span class="swarm-row-time">22:00</span>
+                <span class="swarm-row-name">Cruce Fronterizo USA-Canadá</span>
+                <span class="swarm-row-channel">#general</span>
+                <span class="swarm-row-author trusted-author">ConvoyRunners_AR</span>
+                <div class="swarm-votes">
+                    <button class="swarm-vote-btn" onclick="event.stopPropagation()">▲</button>
+                    <span class="swarm-score">+8</span>
+                    <button class="swarm-vote-btn" onclick="event.stopPropagation()">▼</button>
+                </div>
+            </div>
+            <div class="swarm-row-details">
+                <div class="swarm-row-info">
+                    <div class="swarm-detail-name">Cruce Fronterizo USA-Canadá</div>
+                    <div class="swarm-detail-type">CRUCE</div>
+                    
+                    <div class="swarm-detail-kicker">Cuándo</div>
+                    <div class="swarm-detail-time">Viernes 29 de Agosto, 22:00</div>
+                    
+                    <div class="swarm-detail-kicker">Autor</div>
+                    <div class="swarm-detail-author">
+                        <span class="rep-dot rep-green"></span>
+                        <span class="swarm-card-nick trusted-author">ConvoyRunners_AR</span>
+                        <span class="swarm-trusted-badge">confianza</span>
+                        <button class="swarm-trust-btn" onclick="event.stopPropagation()">Quitar confianza</button>
+                        <button class="swarm-block-btn" onclick="event.stopPropagation()">🚫</button>
+                    </div>
+                    
+                    <div class="swarm-detail-kicker">Ruta</div>
+                    <div class="swarm-detail-route">
+                        <strong>Salida:</strong> Seattle, WA<br>
+                        <strong>Destino:</strong> Vancouver, BC (Canadá)
+                    </div>
+                    
+                    <div class="swarm-detail-kicker">Descripción</div>
+                    <div class="swarm-detail-description">Cruce internacional relajado. Recuerden tener sus documentos listos para la aduana.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Event 3: Truck Show -->
+        <div class="swarm-event" onclick="this.classList.toggle('open')">
+            <div class="swarm-row">
+                <span class="swarm-row-caret">▶</span>
+                <div class="swarm-badges">
+                    <span class="swarm-badge swarm-badge-game">ETS2</span>
+                    <span class="swarm-badge swarm-badge-mode">Realista</span>
+                    <span class="swarm-badge swarm-badge-lang">EN PT</span>
+                </div>
+                <span class="swarm-row-time">18:00</span>
+                <span class="swarm-row-name">Expo de Camiones Tuneados 2026</span>
+                <span class="swarm-row-channel">#ats</span>
+                <span class="swarm-row-author">TruckLegends</span>
+                <div class="swarm-votes">
+                    <button class="swarm-vote-btn" onclick="event.stopPropagation()">▲</button>
+                    <span class="swarm-score">+25</span>
+                    <button class="swarm-vote-btn" onclick="event.stopPropagation()">▼</button>
+                </div>
+            </div>
+            <div class="swarm-row-details">
+                <div class="swarm-row-info">
+                    <div class="swarm-detail-name">Expo de Camiones Tuneados 2026</div>
+                    <div class="swarm-detail-type">EXPO DE CAMIONES</div>
+                    
+                    <div class="swarm-detail-kicker">Cuándo</div>
+                    <div class="swarm-detail-time">Viernes 29 de Agosto, 18:00</div>
+                    
+                    <div class="swarm-detail-kicker">Autor</div>
+                    <div class="swarm-detail-author">
+                        <span class="rep-dot rep-green"></span>
+                        <span class="swarm-card-nick">TruckLegends</span>
+                        <button class="swarm-trust-btn" onclick="event.stopPropagation()">Confiar</button>
+                        <button class="swarm-block-btn" onclick="event.stopPropagation()">🚫</button>
+                    </div>
+                    
+                    <div class="swarm-detail-kicker">Ubicación</div>
+                    <div class="swarm-detail-route">
+                        <strong>Lugar:</strong> Berlin, Alemania - Estacionamiento principal
+                    </div>
+                    
+                    <div class="swarm-detail-kicker">Descripción</div>
+                    <div class="swarm-detail-description">Traigan sus mejores camiones tuneados. Habrá premios para los más creativos. Se permite todo tipo de modificaciones.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Estado Expandido (con detalles visibles)</div>
+        
+        <!-- Event 4: Already expanded -->
+        <div class="swarm-event open">
+            <div class="swarm-row" onclick="this.parentElement.classList.toggle('open')">
+                <span class="swarm-row-caret">▶</span>
+                <div class="swarm-badges">
+                    <span class="swarm-badge swarm-badge-game">ETS2</span>
+                    <span class="swarm-badge swarm-badge-mode">Simulación</span>
+                    <span class="swarm-badge swarm-badge-lang">ES</span>
+                </div>
+                <span class="swarm-row-time">21:00</span>
+                <span class="swarm-row-name">Convoy Solidario - Ayuda Humanitaria</span>
+                <span class="swarm-row-channel">#convoy</span>
+                <span class="swarm-row-author trusted-author">ETS2_Veteranos</span>
+                <div class="swarm-votes">
+                    <button class="swarm-vote-btn" onclick="event.stopPropagation()">▲</button>
+                    <span class="swarm-score">+45</span>
+                    <button class="swarm-vote-btn" onclick="event.stopPropagation()">▼</button>
+                </div>
+            </div>
+            <div class="swarm-row-details">
+                <div class="swarm-row-info">
+                    <div class="swarm-detail-name">Convoy Solidario - Ayuda Humanitaria</div>
+                    <div class="swarm-detail-type">CONVOY</div>
+                    
+                    <div class="swarm-detail-kicker">Cuándo</div>
+                    <div class="swarm-detail-time">Viernes 29 de Agosto, 21:00</div>
+                    <div class="swarm-detail-zone">Zona del creador: Europe/Madrid</div>
+                    
+                    <div class="swarm-detail-kicker">Autor</div>
+                    <div class="swarm-detail-author">
+                        <span class="rep-dot rep-green"></span>
+                        <span class="swarm-card-nick trusted-author">ETS2_Veteranos</span>
+                        <span class="swarm-trusted-badge">confianza</span>
+                        <button class="swarm-trust-btn" onclick="event.stopPropagation()">Quitar confianza</button>
+                        <button class="swarm-block-btn" onclick="event.stopPropagation()">🚫</button>
+                    </div>
+                    
+                    <div class="swarm-detail-kicker">Ruta</div>
+                    <div class="swarm-detail-route">
+                        <strong>Salida:</strong> Madrid, España - Almacén central<br>
+                        <strong>Destino:</strong> Barcelona, España - Puerto
+                    </div>
+                    
+                    <div class="swarm-detail-kicker">Descripción</div>
+                    <div class="swarm-detail-description">Convoy solidario para recaudar fondos. Cada participante debe traer al menos 1 carga completa. La diversión está garantizada mientras ayudamos a la comunidad.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: #0a0a0a;
+        color: #e0e0e0;
+        padding: 40px 20px;
+    }
+
+    .preview-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    h1 {
+        color: #00aaff;
+        font-size: 1.5rem;
+        margin-bottom: 10px;
+    }
+
+    h2 {
+        color: #888;
+        font-size: 1rem;
+        font-weight: 500;
+        margin-bottom: 30px;
+    }
+
+    .section {
+        margin-bottom: 50px;
+    }
+
+    .section-title {
+        color: #00aaff;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 15px;
+        font-weight: 600;
+    }
+
+    .info-note {
+        background: rgba(0, 170, 255, 0.1);
+        border-left: 3px solid #00aaff;
+        padding: 12px 16px;
+        margin-bottom: 30px;
+        font-size: 0.85rem;
+        color: #aaa;
+    }
+
+    .info-note strong {
+        color: #00aaff;
+    }
+
+    /* Swarm Event Styles */
+    .swarm-event {
+        background: #141414;
+        border: 1px solid #2a2a2a;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        transition: all 0.2s ease;
+    }
+
+    .swarm-event:hover {
+        border-color: #00aaff;
+    }
+
+    .swarm-event.open {
+        border-color: #00aaff;
+    }
+
+    .swarm-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .swarm-row-caret {
+        color: #666;
+        font-size: 0.7rem;
+        flex-shrink: 0;
+        transition: transform 0.2s ease;
+    }
+
+    .swarm-event.open .swarm-row-caret {
+        transform: rotate(90deg);
+    }
+
+    .swarm-badges {
+        display: flex;
+        gap: 6px;
+        flex-shrink: 0;
+    }
+
+    .swarm-badge {
+        font-size: 0.65rem;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .swarm-badge-game {
+        background: rgba(0, 170, 255, 0.15);
+        color: #00aaff;
+    }
+
+    .swarm-badge-mode {
+        background: rgba(255, 255, 255, 0.08);
+        color: #aaa;
+    }
+
+    .swarm-badge-lang {
+        background: rgba(255, 255, 255, 0.08);
+        color: #aaa;
+    }
+
+    .swarm-row-time {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #00aaff;
+        flex-shrink: 0;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .swarm-row-name {
+        flex: 1;
+        min-width: 0;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #eee;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .swarm-row-channel {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: #00aaff;
+        background: rgba(0, 170, 255, 0.1);
+        padding: 2px 8px;
+        border-radius: 4px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .swarm-row-author {
+        font-size: 0.72rem;
+        color: #888;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .swarm-row-author.trusted-author {
+        color: #4caf50;
+        font-weight: 600;
+    }
+
+    .swarm-votes {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .swarm-vote-btn {
+        background: none;
+        border: none;
+        color: #666;
+        cursor: pointer;
+        font-size: 0.9rem;
+        padding: 4px;
+        transition: color 0.2s;
+    }
+
+    .swarm-vote-btn:hover {
+        color: #00aaff;
+    }
+
+    .swarm-score {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #fff;
+        min-width: 20px;
+        text-align: center;
+    }
+
+    /* Details Section */
+    .swarm-row-details {
+        display: none;
+        padding: 0 16px 16px 16px;
+        border-top: 1px solid #2a2a2a;
+    }
+
+    .swarm-event.open .swarm-row-details {
+        display: block;
+    }
+
+    .swarm-row-info {
+        margin-top: 16px;
+    }
+
+    .swarm-detail-name {
+        font-size: 1rem;
+        font-weight: 900;
+        color: #fff;
+        margin-bottom: 10px;
+        letter-spacing: 0.2px;
+    }
+
+    .swarm-detail-type {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+
+    .swarm-detail-kicker {
+        font-size: 0.68rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #00aaff;
+        margin: 10px 0 3px;
+    }
+
+    .swarm-detail-kicker:first-of-type {
+        margin-top: 0;
+    }
+
+    .swarm-detail-time,
+    .swarm-detail-zone,
+    .swarm-detail-author {
+        font-size: 0.8rem;
+        color: #ccc;
+        margin-bottom: 4px;
+    }
+
+    .swarm-detail-author {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .rep-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .rep-green {
+        background: #4caf50;
+    }
+
+    .swarm-card-nick {
+        font-weight: 600;
+        color: #fff;
+    }
+
+    .swarm-trusted-badge {
+        font-size: 0.65rem;
+        font-weight: 600;
+        color: #4caf50;
+        background: rgba(76, 175, 80, 0.15);
+        padding: 2px 6px;
+        border-radius: 3px;
+        text-transform: uppercase;
+    }
+
+    .swarm-trust-btn,
+    .swarm-block-btn {
+        font-size: 0.7rem;
+        padding: 4px 10px;
+        border-radius: 4px;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+        margin-left: 8px;
+    }
+
+    .swarm-trust-btn {
+        background: rgba(76, 175, 80, 0.15);
+        color: #4caf50;
+    }
+
+    .swarm-trust-btn:hover {
+        background: rgba(76, 175, 80, 0.25);
+    }
+
+    .swarm-block-btn {
+        background: rgba(255, 100, 100, 0.15);
+        color: #ff6464;
+    }
+
+    .swarm-block-btn:hover {
+        background: rgba(255, 100, 100, 0.25);
+    }
+
+    .swarm-detail-route {
+        font-size: 0.8rem;
+        color: #ccc;
+        line-height: 1.5;
+    }
+
+    .swarm-detail-description {
+        font-size: 0.8rem;
+        color: #aaa;
+        line-height: 1.5;
+        margin-top: 8px;
+        white-space: pre-wrap;
+    }
+</style>
+
+<script>
+    // Prevent vote buttons from triggering expand/collapse
+    document.querySelectorAll('.swarm-vote-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const scoreEl = e.target.parentElement.querySelector('.swarm-score');
+            let score = parseInt(scoreEl.textContent);
+            if (e.target.textContent === '▲') {
+                scoreEl.textContent = score >= 0 ? `+${score + 1}` : score + 1;
+            } else {
+                scoreEl.textContent = score > 0 ? `+${score - 1}` : score - 1;
+            }
+        });
+    });
+
+    // Prevent trust/block buttons from triggering expand/collapse
+    document.querySelectorAll('.swarm-trust-btn, .swarm-block-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            console.log('Botón de ejemplo - en la app real esto ejecutaría la acción');
+        });
+    });
+</script>
