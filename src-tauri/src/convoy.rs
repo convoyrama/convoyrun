@@ -191,10 +191,11 @@ impl ConvoyRecord {
         schedule: Schedule,
         flyer: Option<FlyerData>,
         channel: String,
+        id: Option<String>,
     ) -> Self {
         Self {
             schema: SCHEMA_EVENT.to_string(),
-            id: uuid::Uuid::new_v4().to_string(),
+            id: id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             peer_id,
             nickname,
             published_at: chrono::Utc::now().timestamp(),

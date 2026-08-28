@@ -114,6 +114,7 @@ export async function swarmPublish(convoy, channel, channelPassword) {
             flyer: convoy.flyer || null,
             channel: channel || null,
             channelPassword: channelPassword || null,
+            id: convoy.id || null,
         });
         return { backend: true, result };
     } catch (err) {

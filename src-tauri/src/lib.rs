@@ -762,6 +762,7 @@ async fn publish_convoy(
     flyer: Option<FlyerData>,
     channel: Option<String>,
     channel_password: Option<String>,
+    id: Option<String>,
 ) -> Result<ConvoyRecord, String> {
     let p2p_guard = state.p2p.read().await;
     let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
@@ -806,6 +807,7 @@ async fn publish_convoy(
         schedule,
         flyer,
         channel_name,
+        id,
     );
 
     let now = chrono::Utc::now().timestamp();
