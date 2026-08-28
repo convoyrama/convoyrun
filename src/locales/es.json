@@ -414,7 +414,7 @@
     "swarm_lang_ko": "Coreano",
     "swarm_lang_zh": "Chino",
     "swarm_lang_ja": "Japonés",
-    "settings_default_languages": "Idiomas por defecto para nuevos eventos",
+    "settings_default_languages": "Mostrar eventos en estos idiomas",
     "ap_events": "eventos",
     "ap_block": "Bloquear",
     "ap_unblock": "Desbloquear",
