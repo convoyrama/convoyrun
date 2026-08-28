@@ -98,6 +98,9 @@ function initTabs() {
         if (tab.dataset.tab === 'slots') {
             requestAnimationFrame(recalcTimeline);
         }
+        if (tab.dataset.tab === 'flyer') {
+            requestAnimationFrame(drawCanvas);
+        }
     }));
 }
 
