@@ -240,9 +240,6 @@ function buildEvent(c) {
     const badges = el('div', 'swarm-badges');
     badges.appendChild(el('span', 'swarm-badge swarm-badge-game', c.event.game));
     badges.appendChild(el('span', `swarm-badge swarm-badge-mode swarm-mode-${c.event.mode}`, modeLabel(c.event.mode)));
-    if (c.channel) {
-        badges.appendChild(el('span', 'swarm-badge swarm-badge-channel', c.channel));
-    }
     if (c.event.languages && c.event.languages.length) {
         const langText = c.event.languages.map(l => l.toUpperCase()).join(' ');
         badges.appendChild(el('span', 'swarm-badge swarm-badge-lang', langText));
@@ -252,6 +249,11 @@ function buildEvent(c) {
     row.appendChild(el('span', 'swarm-row-time', DateTime.fromSeconds(c.schedule.meetingTimestamp).toFormat('HH:mm')));
 
     row.appendChild(el('span', 'swarm-row-name', c.event.name));
+
+    // Canal a la derecha del nombre
+    if (c.channel) {
+        row.appendChild(el('span', 'swarm-row-channel', `#${c.channel}`));
+    }
 
     const authorSpan = el('span', 'swarm-row-author clickable-author', displayName(c.peerId, c.nickname, knownNicks));
     authorSpan.dataset.peerId = c.peerId;
@@ -293,6 +295,12 @@ function buildEvent(c) {
     const info = el('div', 'swarm-row-info');
 
     info.appendChild(el('div', 'swarm-detail-name', c.event.name));
+
+    // Tipo de evento
+    const eventType = c.event.eventType || 'convoy';
+    const eventTypeKey = `event_type_${eventType}`;
+    const eventTypeLabel = label(eventTypeKey, eventType);
+    info.appendChild(el('div', 'swarm-detail-type', eventTypeLabel));
 
     info.appendChild(el('div', 'swarm-detail-kicker', label('swarm_detail_when', 'Cuándo')));
     info.appendChild(el('div', 'swarm-detail-time', formatMeetingTime(c)));
