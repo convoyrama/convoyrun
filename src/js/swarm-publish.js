@@ -474,6 +474,15 @@ export function initSwarmPublish(onPublished) {
             closeWizard();
             try { localStorage.removeItem(FLYER_STORAGE_KEY); } catch {}
             showCopyMessage(state.currentLangData.swarm_published_ok || 'Convoy publicado en el Swarm.');
+            // Guardar idiomas seleccionados como default para la próxima vez
+            const selectedLangs = getSelectedLanguages();
+            if (selectedLangs.length > 0) {
+                try {
+                    const cfg = await swarmGetConfig();
+                    cfg.defaultLanguages = selectedLangs;
+                    await swarmSetConfig(cfg);
+                } catch {}
+            }
             if (onPublished) onPublished();
         } catch (err) {
             console.error('[SWARM-PUBLISH] Failed:', err);
