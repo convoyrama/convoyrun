@@ -241,8 +241,9 @@ export function initSwarmPublish(onPublished) {
         if (imageUrlInput) imageUrlInput.value = '';
 
         if (!file) return;
-        if (!/\.png$/i.test(file.name) && file.type !== 'image/png') {
-            showCopyMessage(state.currentLangData.swarm_wizard_error_image_type || 'La imagen debe ser un PNG.');
+        const validImageTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
+        if (!validImageTypes.includes(file.type)) {
+            showCopyMessage(state.currentLangData.swarm_wizard_error_image_type || 'Formato de imagen no válido.');
             flyerInput.value = '';
             return;
         }
@@ -255,7 +256,9 @@ export function initSwarmPublish(onPublished) {
         file.arrayBuffer().then(async (buffer) => {
             const u8 = new Uint8Array(buffer);
             try {
-                const raw = readMetadataFromPNG(buffer, 'convoyrun-event-v1') || readMetadataFromPNG(buffer, 'convoyrama-event-data');
+                // Solo intentar leer metadatos si es PNG
+                const isPng = file.type === 'image/png';
+                const raw = isPng ? (readMetadataFromPNG(buffer, 'convoyrun-event-v1') || readMetadataFromPNG(buffer, 'convoyrama-event-data')) : null;
                 if (raw) {
                     const m = JSON.parse(raw);
                     if (m.eventName || m.name) nameEl.value = m.eventName || m.name;

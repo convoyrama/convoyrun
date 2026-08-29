@@ -15,13 +15,17 @@ mod convoy;
 use p2p::{NodeStatus, P2pState, GossipMessage, UserConfig};
 use convoy::{ConvoyRecord, ConvoyStore, EventData, FlyerData, Schedule, VoteRecord, ChannelRecord, ChannelStore, BlacklistRecord, BlacklistStore, TrustlistRecord, TrustlistStore, KnownNicksStore, SYSTEM_CHANNELS};
 
-/// Upload de imagen PNG a Catbox.moe (multipart desde Rust, evita CORS del webview)
+/// Upload de imagen a Catbox.moe (multipart desde Rust, evita CORS del webview)
+/// Soporta PNG, JPEG, WebP, GIF
 #[tauri::command]
 async fn upload_to_catbox(bytes: Vec<u8>) -> Result<String, String> {
     // Límite de tamaño (10 MB)
     if bytes.len() > 10 * 1024 * 1024 {
         return Err(format!("FILE_TOO_LARGE:{:.1}", bytes.len() as f64 / (1024.0 * 1024.0)));
     }
+
+    // Detectar tipo de imagen por magic bytes
+    let (filename, mime) = detect_image_type(&bytes)?;
 
     let client = reqwest::Client::builder()
         .user_agent("ConvoyRun/0.3.6")
@@ -31,8 +35,8 @@ async fn upload_to_catbox(bytes: Vec<u8>) -> Result<String, String> {
         .map_err(|e| format!("CLIENT_ERROR:{}", e))?;
 
     let part = reqwest::multipart::Part::bytes(bytes)
-        .file_name("flyer.png")
-        .mime_str("image/png")
+        .file_name(filename)
+        .mime_str(mime)
         .map_err(|e| format!("PART_ERROR:{}", e))?;
 
     let form = reqwest::multipart::Form::new()
@@ -58,6 +62,35 @@ async fn upload_to_catbox(bytes: Vec<u8>) -> Result<String, String> {
     }
 
     Ok(url)
+}
+
+/// Detecta el tipo de imagen por magic bytes y retorna (filename, mime)
+fn detect_image_type(bytes: &[u8]) -> Result<(&'static str, &'static str), String> {
+    if bytes.len() < 12 {
+        return Err("INVALID_IMAGE: archivo demasiado pequeño".to_string());
+    }
+
+    // PNG: 89 50 4E 47 0D 0A 1A 0A
+    if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
+        return Ok(("flyer.png", "image/png"));
+    }
+
+    // JPEG: FF D8 FF
+    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        return Ok(("flyer.jpg", "image/jpeg"));
+    }
+
+    // WebP: 52 49 46 46 ... 57 45 42 50
+    if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
+        return Ok(("flyer.webp", "image/webp"));
+    }
+
+    // GIF: 47 49 46 38 (GIF87a o GIF89a)
+    if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        return Ok(("flyer.gif", "image/gif"));
+    }
+
+    Err("INVALID_IMAGE: formato no soportado (use PNG, JPG, WebP o GIF)".to_string())
 }
 
 /// Master public key para verificar keys de canales Patreon
