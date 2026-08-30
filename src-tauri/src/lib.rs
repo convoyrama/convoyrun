@@ -157,6 +157,7 @@ async fn save_config_cached(data_dir: &Path, config: &Arc<RwLock<UserConfig>>, n
 /// Procesa mensajes de gossip recibidos de otros nodos
 async fn process_gossip_receiver(
     mut receiver: distributed_topic_tracker::GossipReceiver,
+    gossip_sender: distributed_topic_tracker::GossipSender,
     data_dir: PathBuf,
     config_cache: Arc<RwLock<UserConfig>>,
     app_handle: tauri::AppHandle,
@@ -177,6 +178,21 @@ async fn process_gossip_receiver(
                     iroh_gossip::api::Event::NeighborUp(ref peer) => {
                         let count = neighbor_count.fetch_add(1, Ordering::SeqCst) + 1;
                         eprintln!("[P2P] NeighborUp: {} (neighbors: {})", peer, count);
+
+                        // Re-broadcast all known events to new peer
+                        let store = convoy_store.read().await;
+                        let event_count = store.convoys.len();
+                        if event_count > 0 {
+                            eprintln!("[P2P] Re-broadcasting {} events to new peer", event_count);
+                            for record in store.convoys.values() {
+                                if let Ok(json) = serde_json::to_string(record) {
+                                    if let Err(e) = P2pState::publish_convoy_gossip(&gossip_sender, &json).await {
+                                        eprintln!("[P2P] Failed to re-broadcast event: {}", e);
+                                    }
+                                }
+                            }
+                        }
+
                         continue;
                     }
                     iroh_gossip::api::Event::NeighborDown(ref peer) => {
@@ -477,6 +493,7 @@ async fn p2p_init(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<N
 
     match p2p.join_topic().await {
         Ok((sender, receiver)) => {
+            let gossip_sender_for_receiver = sender.clone();
             p2p.gossip_sender = Some(sender);
             let data_dir = state.data_dir.clone();
             let cs = state.convoy_store.clone();
@@ -488,7 +505,7 @@ async fn p2p_init(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<N
             let cc = state.config.clone();
             let ah = app.clone();
             tokio::spawn(async move {
-                process_gossip_receiver(receiver, data_dir, cc, ah, cs, chs, bls, tls, kn, nc).await;
+                process_gossip_receiver(receiver, gossip_sender_for_receiver, data_dir, cc, ah, cs, chs, bls, tls, kn, nc).await;
             });
             eprintln!("[P2P] Joined gossip topic successfully");
         }
