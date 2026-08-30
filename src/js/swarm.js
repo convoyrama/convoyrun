@@ -7,7 +7,7 @@ import * as state from './core/state.js';
 import { showCopyMessage, setVisible, renderMarkdown } from './core/utils.js';
 import { getGameTime, getDetailedDayNightIcon } from './core/time.js';
 import {
-    dayKeyUTC, computeScore, authorReputation, reputationBadge,
+    computeScore, authorReputation, reputationBadge,
     validateConvoy, nowUnix,
 } from './core/convoy.js';
 import { displayName } from './core/display-name.js';
@@ -139,12 +139,19 @@ function sortList(list) {
     return [...list].sort((a, b) => a.schedule.meetingTimestamp - b.schedule.meetingTimestamp);
 }
 
-function buildDayHeader(dayKey) {
-    const dt = DateTime.fromISO(dayKey, { zone: 'UTC' });
+function dayKeyLocal(ts, ianaTimeZone) {
+    const dt = DateTime.fromSeconds(ts, { zone: ianaTimeZone });
+    return dt.toFormat('yyyy-LL-dd');
+}
+
+function buildDayHeader(dayKey, ianaTimeZone) {
+    const dt = DateTime.fromISO(dayKey, { zone: ianaTimeZone });
     const nowTs = nowUnix();
+    const today = dayKeyLocal(nowTs, ianaTimeZone);
+    const tomorrow = dayKeyLocal(nowTs + 86400, ianaTimeZone);
     let title;
-    if (dayKey === dayKeyUTC(nowTs)) title = label('swarm_day_today', 'Hoy');
-    else if (dayKey === dayKeyUTC(nowTs + 86400)) title = label('swarm_day_tomorrow', 'Mañana');
+    if (dayKey === today) title = label('swarm_day_today', 'Hoy');
+    else if (dayKey === tomorrow) title = label('swarm_day_tomorrow', 'Mañana');
     else title = dt.toLocaleString(DateTime.DATE_FULL, { locale: lang });
     return el('div', 'swarm-day', title);
 }
@@ -426,9 +433,13 @@ function renderList() {
     setVisible(emptyEl, showEmpty, 'block');
     setVisible(emptyFilteredEl, showFiltered, 'block');
 
+    // User's local timezone for grouping and display
+    const userTz = DateTime.local().zoneName;
+
+    // Group events by day in USER's timezone
     const groups = new Map();
     for (const c of filtered) {
-        const k = dayKeyUTC(c.schedule.meetingTimestamp);
+        const k = dayKeyLocal(c.schedule.meetingTimestamp, userTz);
         if (!groups.has(k)) groups.set(k, []);
         groups.get(k).push(c);
     }
@@ -436,14 +447,14 @@ function renderList() {
     const dayKeys = [...groups.keys()].sort();
 
     const nowTs = nowUnix();
-    const today = dayKeyUTC(nowTs);
-    const tomorrow = dayKeyUTC(nowTs + 86400);
+    const today = dayKeyLocal(nowTs, userTz);
+    const tomorrow = dayKeyLocal(nowTs + 86400, userTz);
 
     setVisible(listEl, !(showEmpty || showFiltered), 'block');
     listEl.innerHTML = '';
 
     for (const day of dayKeys) {
-        const header = buildDayHeader(day);
+        const header = buildDayHeader(day, userTz);
         if (day === today) header.classList.add('swarm-day-today');
         else if (day === tomorrow) header.classList.add('swarm-day-tomorrow');
         listEl.appendChild(header);
