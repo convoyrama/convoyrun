@@ -123,8 +123,9 @@ export function initSwarmPublish(onPublished) {
     }
 
     function getSelectedLanguages() {
-        if (!languagesGroup) return [];
-        return Array.from(languagesGroup.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        if (!languagesGroup) return ['en'];
+        const selected = Array.from(languagesGroup.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        return selected.length > 0 ? selected : ['en'];
     }
 
     let statusTimeout = null;
