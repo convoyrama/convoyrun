@@ -26,6 +26,16 @@ function localWrite(key, value) {
     }
 }
 
+// Limpiar eventos local-user residuales del cache al cargar
+try {
+    const _cache = localRead(SWARM_CACHE_KEY, []);
+    const _filtered = _cache.filter(c => c.peerId !== 'local-user');
+    if (_filtered.length !== _cache.length) {
+        localWrite(SWARM_CACHE_KEY, _filtered);
+        console.log(`[BRIDGE] Cleaned ${_cache.length - _filtered.length} stale local-user events`);
+    }
+} catch { /* ignore */ }
+
 export async function saveFile(bytes, suggestedName, filters = [{ name: 'PNG Image', extensions: ['png'] }]) {
     const path = await tauri().dialog.save({ defaultPath: suggestedName, filters });
     if (!path) return null; // canceló el diálogo
@@ -108,6 +118,13 @@ export async function swarmStatus() {
 
 export async function swarmPublish(convoy, channel, channelPassword) {
     try {
+        console.log('[BRIDGE] publish_convoy IPC call:', {
+            hasEvent: !!convoy.event,
+            hasSchedule: !!convoy.schedule,
+            hasFlyer: !!convoy.flyer,
+            channel,
+            hasPassword: !!channelPassword,
+        });
         const result = await tauri().core.invoke('publish_convoy', {
             event: convoy.event,
             schedule: convoy.schedule,
@@ -118,11 +135,7 @@ export async function swarmPublish(convoy, channel, channelPassword) {
         });
         return { backend: true, result };
     } catch (err) {
-        console.warn('[BRIDGE] Backend publish_convoy failed, caching locally:', err);
-        const local = { ...convoy, peerId: convoy.peerId || 'local-user' };
-        const cache = localRead(SWARM_CACHE_KEY, []);
-        cache.push(local);
-        localWrite(SWARM_CACHE_KEY, cache);
+        console.warn('[BRIDGE] Backend publish_convoy failed:', err);
         throw err;
     }
 }
@@ -131,7 +144,7 @@ export async function swarmList() {
     const local = localRead(SWARM_CACHE_KEY, []);
     const deleted = localRead(SWARM_DELETED_KEY, []);
     const deletedSet = new Set(deleted);
-    const localFiltered = local.filter(c => !deletedSet.has(c.id));
+    const localFiltered = local.filter(c => !deletedSet.has(c.id) && c.peerId !== 'local-user');
     try {
         const rows = await tauri().core.invoke('list_convoys');
         if (Array.isArray(rows)) {
@@ -196,9 +209,9 @@ export async function swarmDelete(convoyId) {
     try {
         await tauri().core.invoke('delete_convoy', { convoyId });
     } catch (err) {
-        console.warn('[BRIDGE] delete_convoy failed:', err);
-        throw err;
+        console.warn('[BRIDGE] delete_convoy backend failed (cleaning locally):', err);
     }
+    // Siempre limpiar del cache local, aunque el backend falle
     const cache = localRead(SWARM_CACHE_KEY, []);
     localWrite(SWARM_CACHE_KEY, cache.filter(c => c.id !== convoyId));
     const deleted = localRead(SWARM_DELETED_KEY, []);

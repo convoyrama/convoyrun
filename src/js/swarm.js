@@ -369,6 +369,21 @@ function buildEvent(c) {
             }
         });
         author.appendChild(deleteBtn);
+    } else if (c.peerId === 'local-user') {
+        const deleteBtn = el('button', 'swarm-delete-btn',
+            label('swarm_delete', 'Eliminar'));
+        deleteBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm(label('swarm_delete_confirm', '¿Eliminar este convoy? No se puede deshacer.'))) return;
+            try {
+                await swarmDelete(c.id);
+                await renderAll();
+            } catch (err) {
+                console.error('[SWARM] Delete failed:', err);
+                showCopyMessage(label('swarm_delete_fail', 'No se pudo eliminar: ' + (err?.toString() || 'error')));
+            }
+        });
+        author.appendChild(deleteBtn);
     }
 
     info.appendChild(author);

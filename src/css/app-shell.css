@@ -1048,6 +1048,18 @@ button {
 }
 .swarm-wizard-cancel:hover { color: #fff; border-color: rgba(255, 255, 255, 0.5); }
 .swarm-wizard-cancel:disabled { opacity: 0.4; cursor: not-allowed; }
+.swarm-wizard-reset {
+    padding: 8px 16px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: rgba(255, 200, 50, 0.8);
+    background: transparent;
+    border: 1px solid rgba(255, 200, 50, 0.3);
+    border-radius: 6px;
+    cursor: pointer;
+}
+.swarm-wizard-reset:hover { color: #ffc832; border-color: rgba(255, 200, 50, 0.6); }
 
 button.loading { position: relative; pointer-events: none; }
 button.loading::after {

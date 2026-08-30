@@ -421,6 +421,34 @@ export function initSwarmPublish(onPublished) {
         hideStatus();
     }
 
+    function resetWizard() {
+        nameEl.value = '';
+        gameEl.value = 'ATS';
+        modeEl.value = 'simulation';
+        if (typeEl) typeEl.value = 'convoy';
+        serverEl.value = '';
+        startEl.value = '';
+        if (startLocEl) startLocEl.value = '';
+        destEl.value = '';
+        if (destLocEl) destLocEl.value = '';
+        descEl.value = '';
+        const now = DateTime.local();
+        dateEl.value = now.toISODate();
+        timeEl.value = now.plus({ hours: 2 }).toFormat('HH:mm');
+        currentImageUrl = null;
+        currentFlyerSize = 0;
+        flyerInput.value = '';
+        if (imageUrlInput) imageUrlInput.value = '';
+        flyerPreview.hidden = true;
+        flyerPreview.removeAttribute('src');
+        flyerStatus.textContent = '';
+        flyerStatus.classList.remove('ok');
+        if (descPreview) descPreview.innerHTML = '';
+        hideStatus();
+        clearValidation();
+        try { localStorage.removeItem(FLYER_STORAGE_KEY); } catch {}
+    }
+
     async function submit() {
         hideStatus();
         clearValidation();
@@ -466,6 +494,22 @@ export function initSwarmPublish(onPublished) {
             return;
         }
 
+        // Pre-validar nickname antes de llamar al backend
+        try {
+            const cfg = await swarmGetConfig();
+            const nickname = (cfg.nickname || '').trim();
+            if (!nickname) {
+                showStatus(state.currentLangData.swarm_wizard_error_nickname || 'Definí un nickname en Settings antes de publicar.', true);
+                return;
+            }
+            if (nickname.length > 32) {
+                showStatus(state.currentLangData.swarm_wizard_error_nickname_length || 'El nickname no puede tener más de 32 caracteres.', true);
+                return;
+            }
+        } catch {
+            // Si no podemos leer config, dejamos que el backend valide
+        }
+
         submitBtn.disabled = true;
         if (cancelBtn) cancelBtn.disabled = true;
         submitBtn.textContent = label('swarm_wizard_publishing', 'Publicando...');
@@ -490,11 +534,25 @@ export function initSwarmPublish(onPublished) {
             if (onPublished) onPublished();
         } catch (err) {
             console.error('[SWARM-PUBLISH] Failed:', err);
-            const msg = err?.toString() || '';
+            const rawMsg = err?.toString() || String(err) || '';
+            const msg = rawMsg.replace(/^Error:\s*/, '');
+            console.error('[SWARM-PUBLISH] Parsed error message:', msg);
             if (msg.includes('wait') || msg.includes('esperar') || msg.includes('cooldown')) {
                 showStatus(msg, true);
+            } else if (msg.includes('nickname')) {
+                showStatus(state.currentLangData.swarm_wizard_error_nickname || 'Definí un nickname en Settings antes de publicar.', true);
+            } else if (msg.includes('P2P not initialized') || msg.includes('not initialized')) {
+                showStatus(state.currentLangData.swarm_wizard_error_p2p || 'P2P no inicializado. Verificá tu conexión a internet.', true);
+            } else if (msg.includes('Wrong channel password') || msg.includes('wrong password')) {
+                showStatus(state.currentLangData.swarm_wizard_error_channel_password || 'Contraseña de canal incorrecta.', true);
+            } else if (msg.includes('Channel does not exist') || msg.includes('does not exist')) {
+                showStatus(state.currentLangData.swarm_wizard_error_channel_not_found || 'El canal no existe. Elegí otro canal.', true);
+            } else if (msg.includes('32 caracteres') || msg.includes('32 characters')) {
+                showStatus(state.currentLangData.swarm_wizard_error_nickname_length || 'El nickname no puede tener más de 32 caracteres.', true);
+            } else if (msg.length > 0 && msg !== 'undefined') {
+                showStatus(msg, true);
             } else {
-                showStatus(state.currentLangData.swarm_wizard_error || 'Error al publicar el convoy.');
+                showStatus(state.currentLangData.swarm_wizard_error || 'Error al publicar el convoy.', true);
             }
         } finally {
             submitBtn.disabled = false;
@@ -506,6 +564,8 @@ export function initSwarmPublish(onPublished) {
 
     openBtn.addEventListener('click', () => openWizard().catch(e => console.error('[SWARM-PUBLISH] openWizard error:', e)));
     if (cancelBtn) cancelBtn.addEventListener('click', closeWizard);
+    const resetBtn = document.getElementById('swarm-w-reset');
+    if (resetBtn) resetBtn.addEventListener('click', resetWizard);
     submitBtn.addEventListener('click', () => submit().catch(e => console.error('[SWARM-PUBLISH] submit error:', e)));
     flyerInput.addEventListener('change', (e) => handleFlyerFile(e.target.files[0]));
     if (imageUrlInput) imageUrlInput.addEventListener('input', handleImageUrl);
