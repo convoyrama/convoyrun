@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 
 // Auto-discovery via Mainline DHT
-use distributed_topic_tracker::{AutoDiscoveryGossip, RecordPublisher, Config as DttConfig, TopicId as DttTopicId};
+use distributed_topic_tracker::{AutoDiscoveryGossip, RecordPublisher, Config as DttConfig, TopicId as DttTopicId, PublisherConfig, BootstrapConfig, MergeConfig, BubbleMergeConfig};
 
 /// Topic de gossip para el calendario de convoys
 /// Todos los nodos de ConvoyRun se unen a este topic por nombre.
@@ -488,30 +488,26 @@ impl P2pState {
         // RecordPublisher gestiona publicación y descubrimiento en DHT
         let dtt_config = DttConfig::builder()
             .publisher_config(
-                distributed_topic_tracker::config::PublisherConfig::Enabled(
-                    distributed_topic_tracker::config::PublisherConfigInner::builder()
-                        .initial_delay(std::time::Duration::from_secs(3))
-                        .base_interval(std::time::Duration::from_secs(5))
-                        .max_jitter(std::time::Duration::from_secs(5))
-                        .build(),
-                ),
+                PublisherConfig::builder()
+                    .initial_delay(std::time::Duration::from_secs(3))
+                    .base_interval(std::time::Duration::from_secs(5))
+                    .max_jitter(std::time::Duration::from_secs(5))
+                    .build(),
             )
             .bootstrap_config(
-                distributed_topic_tracker::config::BootstrapConfig::builder()
+                BootstrapConfig::builder()
                     .no_peers_retry_interval(std::time::Duration::from_millis(500))
                     .discovery_poll_interval(std::time::Duration::from_secs(1))
                     .build(),
             )
             .merge_config(
-                distributed_topic_tracker::config::MergeConfig::builder()
+                MergeConfig::builder()
                     .bubble_merge(
-                        distributed_topic_tracker::config::BubbleMergeConfig::Enabled(
-                            distributed_topic_tracker::config::BubbleMergeConfigInner::builder()
-                                .initial_interval(std::time::Duration::from_secs(10))
-                                .base_interval(std::time::Duration::from_secs(15))
-                                .max_jitter(std::time::Duration::from_secs(5))
-                                .build(),
-                        ),
+                        BubbleMergeConfig::builder()
+                            .initial_interval(std::time::Duration::from_secs(10))
+                            .base_interval(std::time::Duration::from_secs(15))
+                            .max_jitter(std::time::Duration::from_secs(5))
+                            .build(),
                     )
                     .build(),
             )
