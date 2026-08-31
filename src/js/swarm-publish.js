@@ -1,7 +1,7 @@
 // Asistente de publicación de convoy (pestaña SWARM).
 // El creador elige día y hora en SU zona local; se guarda unix UTC + ianaTimeZone
 // y cada lector lo ve en su propio huso (docs/04_SWARM_CALENDAR.md §4.2).
-// El flyer es opcional. Se puede subir un PNG (máx 2 MB) o pegar una URL directa.
+// El flyer es opcional. Se puede subir un PNG (máx 10 MB) o pegar una URL directa.
 // Si se sube PNG, se leen metadatos incrustados para autocompletar y se sube a catbox.
 import * as state from './core/state.js';
 import { showCopyMessage, renderMarkdown } from './core/utils.js';

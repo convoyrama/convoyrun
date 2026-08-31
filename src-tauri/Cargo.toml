@@ -1,6 +1,6 @@
 [package]
 name = "convoyrun"
-version = "0.3.9"
+version = "0.4.0"
 description = "ATS/ETS2 convoy & event manager"
 authors = ["CONVOYRAMA"]
 edition = "2021"
