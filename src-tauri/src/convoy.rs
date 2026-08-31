@@ -47,6 +47,10 @@ pub enum Game {
     Other,
 }
 
+impl Default for Game {
+    fn default() -> Self { Self::ATS }
+}
+
 /// Modos de servidor
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Mode {
@@ -60,6 +64,10 @@ pub enum Mode {
     Race,
     #[serde(rename = "other")]
     Other,
+}
+
+impl Default for Mode {
+    fn default() -> Self { Self::Simulation }
 }
 
 /// Ruta del evento (ciudades y ubicaciones específicas)
@@ -83,7 +91,9 @@ pub struct EventData {
     pub name: String,
     #[serde(default)]
     pub event_type: EventType,
+    #[serde(default)]
     pub game: Game,
+    #[serde(default)]
     pub mode: Mode,
     #[serde(default)]
     pub link: String,
@@ -123,6 +133,7 @@ pub struct FlyerData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConvoyRecord {
+    #[serde(default)]
     pub schema: String,
     pub id: String,
     pub peer_id: String,

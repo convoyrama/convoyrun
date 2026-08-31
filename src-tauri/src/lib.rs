@@ -303,6 +303,9 @@ async fn process_gossip_receiver(
                                         eprintln!("[P2P] Failed to verify convoy signature: {}", e);
                                     }
                                 }
+                            } else {
+                                eprintln!("[P2P] Failed to deserialize ConvoyRecord from gossip ({} bytes), data preview: {:.200}",
+                                    data.len(), data);
                             }
                         }
                         GossipMessage::Vote { data } => {
