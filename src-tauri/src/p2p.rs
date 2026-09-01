@@ -60,7 +60,9 @@ pub struct NodeStatus {
 #[serde(rename_all = "camelCase")]
 pub struct UserConfig {
     pub nickname: Option<String>,
+    #[serde(default)]
     pub blocked_authors: HashSet<String>,
+    #[serde(default)]
     pub followed_blacklists: Vec<String>,
     #[serde(default)]
     pub trusted_peers: Vec<String>,
