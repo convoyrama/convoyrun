@@ -205,6 +205,7 @@ async fn process_gossip_receiver(
                         continue;
                     }
                     iroh_gossip::api::Event::Received(message) => {
+                eprintln!("[P2P] Received gossip message: {} bytes, sender={}", message.content.len(), message.delivered_from);
                 if message.content.len() > 1024 * 1024 {
                     eprintln!("[P2P] Gossip message too large ({} bytes), ignoring", message.content.len());
                     continue;
@@ -271,6 +272,7 @@ async fn process_gossip_receiver(
                     }
                     match gossip_msg {
                         GossipMessage::Convoy { data } => {
+                            eprintln!("[P2P] Received Convoy gossip: {} bytes", data.len());
                             if let Ok(record) = serde_json::from_str::<ConvoyRecord>(&data) {
                                 // Validar longitud de campos para prevenir abuso
                                 if record.nickname.len() > 64 || record.event.name.len() > 200
@@ -281,10 +283,14 @@ async fn process_gossip_receiver(
                                 // Validar expiración antes de almacenar
                                 let now = chrono::Utc::now().timestamp();
                                 if !record.is_retained(now) || !record.is_within_publish_window(now) {
+                                    eprintln!("[P2P] Convoy {} rejected: is_retained={}, is_within_publish_window={}, meeting_ts={}, now={}",
+                                        record.id, record.is_retained(now), record.is_within_publish_window(now),
+                                        record.schedule.meeting_timestamp, now);
                                     continue;
                                 }
                                 match record.verify() {
                                     Ok(true) => {
+                                        eprintln!("[P2P] Convoy {} verified OK from peer {}", record.id, record.peer_id);
                                         // Almacenar nick conocido
                                         if !record.nickname.is_empty() {
                                             let mut nicks = known_nicks.write().await;
