@@ -338,16 +338,10 @@ async fn process_gossip_receiver(
                             }
                         }
                         GossipMessage::DeleteConvoy { convoy_id, peer_id, signature } => {
-                            // Verificar firma del delete
+                            // Verificar firma del delete (soporta hex y base64)
                             use ed25519_dalek::{Verifier, VerifyingKey};
                             let sig_valid = (|| -> anyhow::Result<bool> {
-                                let peer_bytes = base64::Engine::decode(
-                                    &base64::engine::general_purpose::STANDARD,
-                                    &peer_id,
-                                )?;
-                                if peer_bytes.len() != 32 { return Ok(false); }
-                                let mut key_array = [0u8; 32];
-                                key_array.copy_from_slice(&peer_bytes);
+                                let key_array = convoy::decode_peer_id_bytes(&peer_id)?;
                                 let verifying_key = VerifyingKey::from_bytes(&key_array)?;
                                 let sig_bytes = base64::Engine::decode(
                                     &base64::engine::general_purpose::STANDARD,

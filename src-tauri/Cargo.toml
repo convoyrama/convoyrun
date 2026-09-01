@@ -1,6 +1,6 @@
 [package]
 name = "convoyrun"
-version = "0.4.1"
+version = "0.4.2"
 description = "ATS/ETS2 convoy & event manager"
 authors = ["CONVOYRAMA"]
 edition = "2021"
@@ -56,6 +56,7 @@ bytes = "1"
 sha2 = "0.10"
 futures-lite = "2"
 blake3 = "1"
+hex = "0.4"
 distributed-topic-tracker = { version = "0.3.5", features = ["iroh-gossip"] }
 
 [profile.release]

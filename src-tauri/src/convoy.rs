@@ -31,7 +31,6 @@ pub enum EventType {
     TruckShow,
     Exploration,
     Competition,
-    Cruise,
     Other,
 }
 
@@ -258,19 +257,11 @@ impl ConvoyRecord {
             return Ok(false);
         }
 
-        // Decodificar peer_id a public key
-        let peer_id_bytes = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
-            &self.peer_id,
-        )
-        .context("Failed to decode peer_id")?;
-
-        if peer_id_bytes.len() != 32 {
-            return Ok(false);
-        }
-
-        let mut key_array = [0u8; 32];
-        key_array.copy_from_slice(&peer_id_bytes);
+        // Decodificar peer_id a public key (soporta hex y base64)
+        let key_array = match decode_peer_id_bytes(&self.peer_id) {
+            Ok(k) => k,
+            Err(_) => return Ok(false),
+        };
         let verifying_key = VerifyingKey::from_bytes(&key_array).context("Invalid public key")?;
 
         // Decodificar firma
@@ -357,18 +348,10 @@ impl VoteRecord {
             return Ok(false);
         }
 
-        let peer_id_bytes = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
-            &self.voter_peer_id,
-        )
-        .context("Failed to decode voter_peer_id")?;
-
-        if peer_id_bytes.len() != 32 {
-            return Ok(false);
-        }
-
-        let mut key_array = [0u8; 32];
-        key_array.copy_from_slice(&peer_id_bytes);
+        let key_array = match decode_peer_id_bytes(&self.voter_peer_id) {
+            Ok(k) => k,
+            Err(_) => return Ok(false),
+        };
         let verifying_key = VerifyingKey::from_bytes(&key_array).context("Invalid public key")?;
 
         let sig_bytes = base64::Engine::decode(
@@ -753,16 +736,7 @@ impl BlacklistRecord {
             return Ok(false);
         }
 
-        let peer_bytes = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
-            &self.author_peer_id,
-        )?;
-        if peer_bytes.len() != 32 {
-            return Ok(false);
-        }
-
-        let mut key_array = [0u8; 32];
-        key_array.copy_from_slice(&peer_bytes);
+        let key_array = decode_peer_id_bytes(&self.author_peer_id)?;
         let verifying_key = VerifyingKey::from_bytes(&key_array)?;
 
         let sig_bytes = base64::Engine::decode(
@@ -864,15 +838,7 @@ impl TrustlistRecord {
         if self.signature.is_empty() {
             return Ok(false);
         }
-        let peer_bytes = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
-            &self.author_peer_id,
-        )?;
-        if peer_bytes.len() != 32 {
-            return Ok(false);
-        }
-        let mut key_array = [0u8; 32];
-        key_array.copy_from_slice(&peer_bytes);
+        let key_array = decode_peer_id_bytes(&self.author_peer_id)?;
         let verifying_key = VerifyingKey::from_bytes(&key_array)?;
         let sig_bytes = base64::Engine::decode(
             &base64::engine::general_purpose::STANDARD,
@@ -991,6 +957,32 @@ impl KnownNicksStore {
             self.aliases.insert(peer_id, alias);
         }
     }
+}
+
+/// Decodifica un peer_id (hex o base64) a 32 bytes.
+/// iroh usa formato hex (64 chars), pero algunos formatos usan base64.
+pub fn decode_peer_id_bytes(peer_id: &str) -> Result<[u8; 32]> {
+    // Hex format: 64 hex chars = 32 bytes (iroh default)
+    if peer_id.len() == 64 && peer_id.chars().all(|c| c.is_ascii_hexdigit()) {
+        let bytes = hex::decode(peer_id).context("Failed to decode hex peer_id")?;
+        if bytes.len() != 32 {
+            anyhow::bail!("Invalid peer_id length: expected 32, got {}", bytes.len());
+        }
+        let mut key_array = [0u8; 32];
+        key_array.copy_from_slice(&bytes);
+        return Ok(key_array);
+    }
+    // Base64 format: fallback
+    let bytes = base64::Engine::decode(
+        &base64::engine::general_purpose::STANDARD,
+        peer_id,
+    ).context("Failed to decode base64 peer_id")?;
+    if bytes.len() != 32 {
+        anyhow::bail!("Invalid peer_id length: expected 32, got {}", bytes.len());
+    }
+    let mut key_array = [0u8; 32];
+    key_array.copy_from_slice(&bytes);
+    Ok(key_array)
 }
 
 /// Serialización canónica JSON (claves ordenadas recursivamente)

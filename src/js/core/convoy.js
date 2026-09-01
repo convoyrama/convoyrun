@@ -4,7 +4,7 @@
 
 export const SCHEMA_EVENT = 'convoyrun/event/v1';
 
-export const EVENT_TYPES = ['convoy', 'truck_show', 'exploration', 'competition', 'cruise', 'other'];
+export const EVENT_TYPES = ['convoy', 'truck_show', 'exploration', 'competition', 'other'];
 export const GAME_IDS = ['ATS', 'ETS2', 'other'];
 export const MODE_IDS = ['simulation', 'realistic', 'arcade', 'race', 'other'];
 
