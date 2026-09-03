@@ -315,7 +315,6 @@ function buildEvent(c) {
     info.appendChild(el('div', 'swarm-detail-name', c.event.name));
 
     // Tipo de evento
-    const eventType = c.event.eventType || 'convoy';
     const eventTypeKey = `event_type_${eventType}`;
     const eventTypeLabel = label(eventTypeKey, eventType);
     info.appendChild(el('div', 'swarm-detail-type', eventTypeLabel));
