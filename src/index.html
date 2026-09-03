@@ -77,6 +77,17 @@
                         </select>
                     </div>
                     <div class="swarm-filter-group">
+                        <label class="swarm-filter-label" for="filter-type" data-i18n="swarm_filter_type">Tipo</label>
+                        <select id="filter-type">
+                            <option value="all" data-i18n="swarm_filter_all">Todos</option>
+                            <option value="convoy" data-i18n="event_type_convoy">Convoy</option>
+                            <option value="truck_show" data-i18n="event_type_truck_show">Truck Show</option>
+                            <option value="exploration" data-i18n="event_type_exploration">Exploración</option>
+                            <option value="competition" data-i18n="event_type_competition">Competencia</option>
+                            <option value="other" data-i18n="event_type_other">Otro</option>
+                        </select>
+                    </div>
+                    <div class="swarm-filter-group">
                         <label class="swarm-filter-label" for="filter-author" data-i18n="swarm_filter_author">Autor</label>
                         <select id="filter-author">
                             <option value="all" data-i18n="swarm_filter_all">Todos</option>
@@ -670,7 +681,7 @@
             <span class="footer-peers" id="footer-peers" data-i18n="footer_peers">0 peers</span>
             <span class="footer-action" id="footer-action"></span>
         </div>
-        <span class="footer-version">v0.4.4</span>
+        <span class="footer-version">v0.4.5</span>
     </footer>
 
     <div class="swarm-wizard-overlay" id="swarm-wizard">

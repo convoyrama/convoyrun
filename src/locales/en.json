@@ -206,6 +206,7 @@
     "swarm_filter_label": "Filters",
     "swarm_filter_game": "Game",
     "swarm_filter_mode": "Mode",
+    "swarm_filter_type": "Type",
     "swarm_filter_author": "Author",
     "swarm_filter_score": "Quality",
     "swarm_filter_all": "All",

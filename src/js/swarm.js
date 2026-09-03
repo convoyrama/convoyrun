@@ -23,6 +23,7 @@ const { DateTime } = luxon;
 const FILTER_LABELS = {
     'filter-game':   { all: 'swarm_filter_all', ATS: 'swarm_game_ats', ETS2: 'swarm_game_ets2', other: 'swarm_filter_other' },
     'filter-mode':   { all: 'swarm_filter_all', race: 'swarm_mode_race', simulation: 'swarm_mode_simulation', realistic: 'swarm_mode_realistic', arcade: 'swarm_mode_arcade', other: 'swarm_filter_other' },
+    'filter-type':   { all: 'swarm_filter_all', convoy: 'event_type_convoy', truck_show: 'event_type_truck_show', exploration: 'event_type_exploration', competition: 'event_type_competition', other: 'event_type_other' },
     'filter-author': { all: 'swarm_filter_all', trusted: 'swarm_filter_trusted' },
     'filter-score':  { all: 'swarm_filter_all', positive: 'swarm_filter_positive' },
     'filter-channel': { all: 'swarm_channel_filter_all' },
@@ -97,6 +98,7 @@ function readFilters() {
     return {
         game: val('filter-game'),
         mode: val('filter-mode'),
+        type: val('filter-type'),
         trust: val('filter-author'),
         score: val('filter-score'),
         channel: val('filter-channel'),
@@ -113,6 +115,7 @@ function applyFilters(list) {
     if (blockedAuthorsSet.size > 0) out = out.filter(c => !blockedAuthorsSet.has(c.peerId));
     if (f.game !== 'all') out = out.filter(c => c.event.game === f.game);
     if (f.mode !== 'all') out = out.filter(c => c.event.mode === f.mode);
+    if (f.type !== 'all') out = out.filter(c => (c.event.eventType || 'convoy') === f.type);
     if (f.trust === 'trusted') out = out.filter(c => (config.trustedPeers || []).includes(c.peerId));
     if (f.score === 'positive') out = out.filter(c => computeScore(votes[c.id]) >= 0);
     if (f.channel !== 'all') out = out.filter(c => c.channel === f.channel);
