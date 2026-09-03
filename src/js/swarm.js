@@ -232,6 +232,7 @@ function toggleExpand(wrap, convoyId) {
 function buildEvent(c) {
     const wrap = el('div', 'swarm-event');
     wrap.dataset.convoyId = c.id;
+    wrap.classList.add(`swarm-event-type-${c.event.eventType || 'convoy'}`);
 
     const row = el('div', 'swarm-row');
     row.tabIndex = 0;

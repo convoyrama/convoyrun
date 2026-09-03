@@ -1144,6 +1144,24 @@ async fn delete_convoy(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "windows")]
+    {
+        use std::net::TcpListener;
+        static INSTANCE_LOCK: std::sync::OnceLock<TcpListener> = std::sync::OnceLock::new();
+        if INSTANCE_LOCK.get().is_none() {
+            match TcpListener::bind("127.0.0.1:28745") {
+                Ok(listener) => {
+                    listener.set_nonblocking(true).ok();
+                    let _ = INSTANCE_LOCK.set(listener);
+                }
+                Err(_) => {
+                    eprintln!("[SINGLE-INSTANCE] Another instance is already running. Exiting.");
+                    std::process::exit(0);
+                }
+            }
+        }
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())

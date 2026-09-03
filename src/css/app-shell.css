@@ -597,6 +597,12 @@ button {
 .swarm-event-tomorrow .swarm-row { border-left: 3px solid #60a5fa; }
 .swarm-event-past { opacity: 0.5; }
 
+.swarm-event-type-convoy .swarm-row { border-left: 3px solid #00aaff; }
+.swarm-event-type-truck_show .swarm-row { border-left: 3px solid #ff9800; }
+.swarm-event-type-exploration .swarm-row { border-left: 3px solid #4caf50; }
+.swarm-event-type-competition .swarm-row { border-left: 3px solid #ef5350; }
+.swarm-event-type-other .swarm-row { border-left: 3px solid #78909c; }
+
 /* Pestaña SWARM — fila colapsada de convoy (una línea por evento) */
 .swarm-event { margin-bottom: 4px; }
 
@@ -1740,12 +1746,11 @@ button.loading::after {
     left: 0;
     right: 0;
     height: 28px;
-    background: #1a1a2e;
+    background: #141414;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 8px;
+    justify-content: space-between;
     font-size: 0.72rem;
     color: rgba(255,255,255,0.45);
     z-index: 100;
@@ -1753,16 +1758,54 @@ button.loading::after {
     user-select: none;
 }
 
+.footer-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .footer-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     color: #888;
+}
+
+.footer-status::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #666;
+    flex-shrink: 0;
 }
 
 .footer-status[data-mode="online"] {
     color: #4ade80;
 }
+.footer-status[data-mode="online"]::before {
+    background: #4ade80;
+    box-shadow: 0 0 6px #4ade80;
+}
+
+.footer-status[data-mode="searching"] {
+    color: #facc15;
+}
+.footer-status[data-mode="searching"]::before {
+    background: #facc15;
+    animation: footerPulse 1.5s infinite;
+}
 
 .footer-status[data-mode="local"] {
     color: #fbbf24;
+}
+.footer-status[data-mode="local"]::before {
+    background: #fbbf24;
+}
+
+@keyframes footerPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
 }
 
 .footer-sep {
@@ -1775,7 +1818,12 @@ button.loading::after {
 
 .footer-action {
     color: #00aaff;
-    font-style: italic;
+    font-weight: 600;
+}
+
+.footer-version {
+    color: #555;
+    font-weight: 600;
 }
 
 .contenedor {
