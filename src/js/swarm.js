@@ -144,6 +144,8 @@ function dayKeyLocal(ts, ianaTimeZone) {
     return dt.toFormat('yyyy-LL-dd');
 }
 
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
 function buildDayHeader(dayKey, ianaTimeZone) {
     const dt = DateTime.fromISO(dayKey, { zone: ianaTimeZone });
     const nowTs = nowUnix();
@@ -152,12 +154,12 @@ function buildDayHeader(dayKey, ianaTimeZone) {
     let title;
     if (dayKey === today) title = label('swarm_day_today', 'Hoy');
     else if (dayKey === tomorrow) title = label('swarm_day_tomorrow', 'Mañana');
-    else title = dt.toLocaleString(DateTime.DATE_FULL, { locale: lang });
+    else title = capitalize(dt.toLocaleString(DateTime.DATE_FULL, { locale: lang }));
     return el('div', 'swarm-day', title);
 }
 
 function formatMeetingTime(c) {
-    return DateTime.fromSeconds(c.schedule.meetingTimestamp).toFormat('EEEE d · HH:mm', { locale: lang });
+    return capitalize(DateTime.fromSeconds(c.schedule.meetingTimestamp).toFormat('EEEE d · HH:mm', { locale: lang }));
 }
 
 function creatorZoneLabel(c) {

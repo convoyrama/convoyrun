@@ -216,7 +216,7 @@
     "swarm_game_ets2": "ETS2",
     "swarm_mode_simulation": "Simulation",
     "swarm_mode_realistic": "Realistic",
-    "swarm_mode_arcade": "No Collisions",
+    "swarm_mode_arcade": "Arcade",
     "swarm_mode_race": "Race",
     "swarm_wizard_title": "Publish convoy",
     "swarm_wizard_event_name": "Event name",

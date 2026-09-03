@@ -216,7 +216,7 @@
     "swarm_game_ets2": "ETS2",
     "swarm_mode_simulation": "Simulação",
     "swarm_mode_realistic": "Realista",
-    "swarm_mode_arcade": "Sem colisões",
+    "swarm_mode_arcade": "Livre",
     "swarm_mode_race": "Corrida",
     "swarm_wizard_title": "Publicar comboio",
     "swarm_wizard_event_name": "Nome do evento",
