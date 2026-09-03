@@ -229,10 +229,20 @@ function toggleExpand(wrap, convoyId) {
     expandedConvoyId = wasOpen ? null : convoyId;
 }
 
+const EVENT_TYPE_COLORS = {
+    convoy: '#00aaff',
+    truck_show: '#ff9800',
+    exploration: '#4caf50',
+    competition: '#ef5350',
+    other: '#78909c',
+};
+
 function buildEvent(c) {
     const wrap = el('div', 'swarm-event');
     wrap.dataset.convoyId = c.id;
-    wrap.classList.add(`swarm-event-type-${c.event.eventType || 'convoy'}`);
+    const eventType = c.event.eventType || 'convoy';
+    wrap.classList.add(`swarm-event-type-${eventType}`);
+    wrap.style.setProperty('--event-color', EVENT_TYPE_COLORS[eventType] || EVENT_TYPE_COLORS.convoy);
 
     const row = el('div', 'swarm-row');
     row.tabIndex = 0;
