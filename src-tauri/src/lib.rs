@@ -179,13 +179,17 @@ async fn process_gossip_receiver(
                         let count = neighbor_count.fetch_add(1, Ordering::SeqCst) + 1;
                         eprintln!("[P2P] NeighborUp: {} (neighbors: {})", peer, count);
 
-                        // Re-broadcast all known events to new peer
+                        // Re-broadcast all known events to new peer (including deleted for sync)
                         let store = convoy_store.read().await;
                         let event_count = store.convoys.len();
                         if event_count > 0 {
                             eprintln!("[P2P] Re-broadcasting {} events to new peer", event_count);
                             for record in store.convoys.values() {
-                                if let Ok(json) = serde_json::to_string(record) {
+                                let gossip_record = convoy::ConvoyGossipRecord {
+                                    record: record.clone(),
+                                    deleted: record.deleted,
+                                };
+                                if let Ok(json) = serde_json::to_string(&gossip_record) {
                                     if let Err(e) = P2pState::publish_convoy_gossip(&gossip_sender, &json).await {
                                         eprintln!("[P2P] Failed to re-broadcast event: {}", e);
                                     }
@@ -273,7 +277,18 @@ async fn process_gossip_receiver(
                     match gossip_msg {
                         GossipMessage::Convoy { data } => {
                             eprintln!("[P2P] Received Convoy gossip: {} bytes", data.len());
-                            if let Ok(record) = serde_json::from_str::<ConvoyRecord>(&data) {
+                            // Try ConvoyGossipRecord first (includes deleted flag for sync),
+                            // fall back to ConvoyRecord for backward compatibility
+                            let (mut record, deleted_flag) = if let Ok(gr) = serde_json::from_str::<convoy::ConvoyGossipRecord>(&data) {
+                                (gr.record, gr.deleted)
+                            } else if let Ok(r) = serde_json::from_str::<ConvoyRecord>(&data) {
+                                (r, false)
+                            } else {
+                                eprintln!("[P2P] Failed to parse convoy from gossip data");
+                                continue;
+                            };
+                            record.deleted = deleted_flag;
+                            {
                                 // Validar longitud de campos para prevenir abuso
                                 if record.nickname.len() > 64 || record.event.name.len() > 200
                                     || record.event.description.len() > 5000 || record.event.server.len() > 100 {
@@ -298,6 +313,13 @@ async fn process_gossip_receiver(
                                             nicks.save(&data_dir);
                                         }
                                         let mut store = convoy_store.write().await;
+                                        // Guard: don't resurrect deleted convoys from old clients
+                                        if let Some(existing) = store.convoys.get(&record.id) {
+                                            if existing.deleted && !record.deleted {
+                                                eprintln!("[P2P] Convoy {} is deleted, ignoring re-broadcast from old client", record.id);
+                                                continue;
+                                            }
+                                        }
                                         store.upsert_convoy(record);
                                         flush_convoy_store(&store, &data_dir);
                                         let _ = app_handle.emit("convoy-new", serde_json::Value::Null);
@@ -309,9 +331,6 @@ async fn process_gossip_receiver(
                                         eprintln!("[P2P] Failed to verify convoy signature: {}", e);
                                     }
                                 }
-                            } else {
-                                eprintln!("[P2P] Failed to deserialize ConvoyRecord from gossip ({} bytes), data preview: {:.200}",
-                                    data.len(), data);
                             }
                         }
                         GossipMessage::Vote { data } => {
@@ -366,7 +385,8 @@ async fn process_gossip_receiver(
                                 if convoy.peer_id == peer_id {
                                     store.delete_convoy(&convoy_id);
                                     flush_convoy_store(&store, &data_dir);
-                                    eprintln!("[P2P] Convoy deleted by author: {}", convoy_id);
+                                    eprintln!("[P2P] Convoy soft-deleted by author: {}", convoy_id);
+                                    let _ = app_handle.emit("convoy-new", serde_json::Value::Null);
                                 }
                             }
                         }
@@ -774,7 +794,7 @@ async fn get_author_profile(
     let store = state.convoy_store.read().await;
     let config = load_config_cached(&state.config).await;
 
-    let convoys: Vec<&ConvoyRecord> = store.convoys.values().filter(|c| c.peer_id == peer_id).collect();
+    let convoys: Vec<&ConvoyRecord> = store.convoys.values().filter(|c| c.peer_id == peer_id && !c.deleted).collect();
     let reputation: i32 = convoys.iter().map(|c| store.compute_score(&c.id)).sum();
 
     let nickname = convoys.first().map(|c| c.nickname.as_str()).unwrap_or("");
@@ -783,6 +803,7 @@ async fn get_author_profile(
     let is_blocked = config.blocked_authors.contains(&peer_id);
 
     let convoy_list: Vec<serde_json::Value> = convoys.iter().map(|c| {
+        let (vUp, vDown) = store.compute_vote_counts(&c.id);
         serde_json::json!({
             "id": c.id,
             "name": c.event.name,
@@ -791,6 +812,8 @@ async fn get_author_profile(
             "meetingTimestamp": c.schedule.meeting_timestamp,
             "channel": c.channel,
             "score": store.compute_score(&c.id),
+            "voteUp": vUp,
+            "voteDown": vDown,
         })
     }).collect();
 
@@ -1063,6 +1086,9 @@ async fn vote_convoy(
     if let Some(convoy) = store.convoys.get(&convoy_id) {
         if convoy.peer_id == my_peer_id {
             return Err("Cannot vote on your own convoy".to_string());
+        }
+        if convoy.deleted {
+            return Err("Cannot vote on a deleted convoy".to_string());
         }
     }
 

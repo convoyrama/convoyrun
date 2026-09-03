@@ -75,9 +75,16 @@ export function computeScore(votes) {
     return (votes.up || 0) - (votes.down || 0);
 }
 
+export function computeVoteCounts(votes) {
+    if (!votes || !Array.isArray(votes)) return { up: 0, down: 0 };
+    const up = votes.filter(v => v.vote === 1).length;
+    const down = votes.filter(v => v.vote === -1).length;
+    return { up, down };
+}
+
 export function authorReputation(convoys, votesByConvoy, peerId) {
     return convoys
-        .filter(c => c.peerId === peerId)
+        .filter(c => c.peerId === peerId && !c.deleted)
         .reduce((acc, c) => acc + computeScore(votesByConvoy[c.id]), 0);
 }
 

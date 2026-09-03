@@ -172,8 +172,9 @@ async function openProfile(peerId) {
             row.appendChild(el('span', 'ap-convoy-time', timeStr));
             row.appendChild(el('span', 'ap-convoy-name', c.name));
             row.appendChild(el('span', 'ap-convoy-game', `${c.game} · ${modeLabel(c.mode)}`));
-            const score = c.score || 0;
-            row.appendChild(el('span', 'ap-convoy-score' + (score > 0 ? ' positive' : score < 0 ? ' negative' : ''), score > 0 ? `+${score}` : String(score)));
+            const vUp = c.voteUp || 0;
+            const vDown = c.voteDown || 0;
+            row.appendChild(el('span', 'ap-convoy-score', `\u25B2 ${vUp} \u25BC ${vDown}`));
             convoysEl.appendChild(row);
         }
     } else {

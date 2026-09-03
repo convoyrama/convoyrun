@@ -148,6 +148,19 @@ pub struct ConvoyRecord {
     /// Firma ed25519 del payload canónico (sin este campo)
     #[serde(default)]
     pub signature: String,
+    /// Soft delete flag — not serialized to gossip, not in canonical JSON
+    #[serde(skip)]
+    pub deleted: bool,
+}
+
+/// Wrapper for gossip broadcast — includes deleted flag for sync
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConvoyGossipRecord {
+    #[serde(flatten)]
+    pub record: ConvoyRecord,
+    #[serde(default)]
+    pub deleted: bool,
 }
 
 /// Registro de voto
@@ -214,6 +227,7 @@ impl ConvoyRecord {
             channel,
             flyer,
             signature: String::new(),
+            deleted: false,
         }
     }
 
@@ -418,6 +432,12 @@ impl ConvoyStore {
 
     /// Agrega o actualiza un convoy
     pub fn upsert_convoy(&mut self, convoy: ConvoyRecord) {
+        // Don't resurrect deleted convoys
+        if let Some(existing) = self.convoys.get(&convoy.id) {
+            if existing.deleted && !convoy.deleted {
+                return;
+            }
+        }
         self.convoys.insert(convoy.id.clone(), convoy);
     }
 
@@ -427,13 +447,14 @@ impl ConvoyStore {
         convoy_votes.insert(vote.voter_peer_id.clone(), vote);
     }
 
-    /// Elimina un convoy y sus votos del store local
+    /// Soft delete: marks convoy as deleted instead of removing
     pub fn delete_convoy(&mut self, convoy_id: &str) -> bool {
-        let removed = self.convoys.remove(convoy_id).is_some();
-        if removed {
-            self.votes.remove(convoy_id);
+        if let Some(convoy) = self.convoys.get_mut(convoy_id) {
+            convoy.deleted = true;
+            true
+        } else {
+            false
         }
-        removed
     }
 
     /// Calcula el score de un convoy
@@ -444,14 +465,27 @@ impl ConvoyStore {
             .unwrap_or(0)
     }
 
-    /// Lista convoys vigentes (no expirados)
+    /// Calcula conteo de votos (upvotes, downvotes) de un convoy
+    pub fn compute_vote_counts(&self, convoy_id: &str) -> (i32, i32) {
+        self.votes
+            .get(convoy_id)
+            .map(|votes| {
+                let up = votes.values().filter(|v| v.vote == 1).count() as i32;
+                let down = votes.values().filter(|v| v.vote == -1).count() as i32;
+                (up, down)
+            })
+            .unwrap_or((0, 0))
+    }
+
+    /// Lista convoys vigentes (no expirados, no borrados)
     pub fn list_convoys(&self, from_date: Option<i64>, to_date: Option<i64>) -> Vec<&ConvoyRecord> {
         let now = chrono::Utc::now().timestamp();
         let mut convoys: Vec<_> = self
             .convoys
             .values()
             .filter(|c| {
-                c.is_retained(now)
+                !c.deleted
+                    && c.is_retained(now)
                     && from_date.map_or(true, |from| c.schedule.meeting_timestamp >= from)
                     && to_date.map_or(true, |to| c.schedule.meeting_timestamp <= to)
             })
@@ -465,7 +499,14 @@ impl ConvoyStore {
     /// Purge convoys expirados
     pub fn purge_expired(&mut self) {
         let now = chrono::Utc::now().timestamp();
-        self.convoys.retain(|_, c| c.is_retained(now));
+        self.convoys.retain(|_, c| {
+            if c.deleted {
+                // Keep deleted convoys 7 days for tombstone propagation
+                c.published_at + 7 * 86400 > now
+            } else {
+                c.is_retained(now)
+            }
+        });
         self.votes.retain(|id, _| self.convoys.contains_key(id));
     }
 }

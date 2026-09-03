@@ -7,7 +7,7 @@ import * as state from './core/state.js';
 import { showCopyMessage, setVisible, renderMarkdown } from './core/utils.js';
 import { getGameTime, getDetailedDayNightIcon } from './core/time.js';
 import {
-    computeScore, authorReputation, reputationBadge,
+    computeScore, computeVoteCounts, authorReputation, reputationBadge,
     validateConvoy, nowUnix,
 } from './core/convoy.js';
 import { displayName } from './core/display-name.js';
@@ -285,7 +285,8 @@ function buildEvent(c) {
 
     const votesBox = el('div', 'swarm-votes');
     votesBox.appendChild(buildVoteBtn(c, 1));
-    votesBox.appendChild(el('span', 'swarm-score', String(computeScore(votes[c.id]))));
+    const vc = computeVoteCounts(votes[c.id]);
+    votesBox.appendChild(el('span', 'swarm-score', `▲ ${vc.up} ▼ ${vc.down}`));
     votesBox.appendChild(buildVoteBtn(c, -1));
     row.appendChild(votesBox);
 
