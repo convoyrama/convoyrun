@@ -21,6 +21,7 @@ export let startX, startY;
 
 export let currentLangData = {};
 export let currentLang = 'en';
+export let loadedFlyerDocument = null;
 
 const ORIENTATION_KEY = 'convoyrun-is-vertical';
 let isVertical = localStorage.getItem(ORIENTATION_KEY) === 'true';
@@ -103,7 +104,8 @@ export function setStartY(val) { startY = val; }
 
 export function setCurrentLangData(data) { currentLangData = data; }
 export function setCurrentLang(lang) { currentLang = lang; }
+export function setLoadedFlyerDocument(doc) { loadedFlyerDocument = doc; }
+export function clearLoadedFlyerDocument() { loadedFlyerDocument = null; }
 export function setIsWaypointVisible(val) { isWaypointVisible = val; }
 export function setIsDepartureVisible(val) { isDepartureVisible = val; }
 export function setIsDestinationVisible(val) { isDestinationVisible = val; }
-

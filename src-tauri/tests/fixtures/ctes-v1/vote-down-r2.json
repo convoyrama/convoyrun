@@ -1,0 +1,13 @@
+{
+  "specVersion": "1.0",
+  "kind": "vote",
+  "eventId": "018f1f2e-7c3b-7a10-8000-000000000001",
+  "revision": 2,
+  "authorId": "ed25519:6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw",
+  "createdAt": "2026-09-04T15:05:00Z",
+  "updatedAt": "2026-09-04T15:06:00Z",
+  "data": {
+    "value": -1
+  },
+  "signature": "LkT0ryO7MarWVwq8nPSKo8UdV7MMi8pUAjGabGo-YAAfXQLt26NIXaIWn0kimL8HJFsSsntbX_aFWzeBT3FhCw"
+}

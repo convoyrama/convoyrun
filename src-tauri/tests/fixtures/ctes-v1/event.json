@@ -1,0 +1,64 @@
+{
+  "specVersion": "1.0",
+  "kind": "event",
+  "id": "018f1f2e-7c3b-7a10-8000-000000000001",
+  "revision": 1,
+  "authorId": "ed25519:6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw",
+  "createdAt": "2026-09-04T15:00:00Z",
+  "updatedAt": "2026-09-04T15:00:00Z",
+  "data": {
+    "title": "Convoy del Sur",
+    "description": "Montevideo → Buenos Aires\nSalida puntual.",
+    "language": "es-UY",
+    "translations": {
+      "en": {
+        "title": "Southern Convoy"
+      }
+    },
+    "eventType": "convoy",
+    "game": "ets2",
+    "network": {
+      "server": "Simulation 1"
+    },
+    "schedule": {
+      "meetingAt": "2026-11-07T20:30:00Z",
+      "startAt": "2026-11-07T21:00:00Z",
+      "endAt": "2026-11-07T22:00:00Z",
+      "timeZone": "America/Montevideo"
+    },
+    "route": {
+      "origins": [
+        {
+          "city": "Montevideo",
+          "location": "Puerto",
+          "country": "UY"
+        }
+      ],
+      "waypoints": [
+        {
+          "city": "Colonia del Sacramento",
+          "country": "UY"
+        }
+      ],
+      "destination": {
+        "city": "Buenos Aires",
+        "location": "Terminal",
+        "country": "AR"
+      }
+    },
+    "requirements": {
+      "dlcs": [
+        "Going East!"
+      ],
+      "mods": [],
+      "notes": "Carga libre"
+    },
+    "links": [
+      {
+        "rel": "details",
+        "url": "https://example.org/events/sur"
+      }
+    ]
+  },
+  "signature": "GHVYxQY-VqTY4V8AIjSkwg7VSN5gGNozBDDsnPWEuV3k7x8jcjwFaFXOqv7f7ZdsIqYqvLJiB0bJ9pK9T_1VCQ"
+}

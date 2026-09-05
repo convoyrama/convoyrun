@@ -26,32 +26,96 @@ export function isValidMode(mode) {
 }
 
 export function createConvoy({
-    name, type = 'convoy', game, mode, meetingTimestamp, ianaTimeZone,
-    link = '', server = '',
+    title, type = 'convoy', game, mode, meetingTimestamp, ianaTimeZone,
+    link = '', server = '', language = 'es',
     startCity = '', startLocation = '', destCity = '', destLocation = '',
-    description = '', languages = [], channel = '',
+    description = '', channel = '',
     nickname = '', peerId = null, id = null, publishedAt = null, flyer = null,
 }) {
-    if (!name || !isValidGame(game) || !isValidMode(mode) || !Number.isFinite(meetingTimestamp) || !ianaTimeZone) {
-        throw new Error('Evento incompleto: name, game, mode, meetingTimestamp y ianaTimeZone son obligatorios.');
+    if (!title || !isValidGame(game) || !isValidMode(mode) || !Number.isFinite(meetingTimestamp) || !ianaTimeZone) {
+        throw new Error('Evento incompleto: title, game, mode, meetingTimestamp y ianaTimeZone son obligatorios.');
     }
-    const record = {
-        schema: SCHEMA_EVENT,
-        id: id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `demo-${Date.now()}-${Math.floor(Math.random() * 1e9)}`),
-        peerId,
-        nickname,
-        publishedAt: publishedAt ?? Math.floor(Date.now() / 1000),
-        event: {
-            name,
-            eventType: type,
-            game, mode, link, server,
-            route: { startCity, startLocation, destCity, destLocation },
-            description, languages,
-        },
-        schedule: { meetingTimestamp, ianaTimeZone },
+    const meetingAt = new Date(meetingTimestamp * 1000).toISOString();
+    const route = {
+        origins: startCity ? [{
+            city: startCity,
+            ...(startLocation ? { location: startLocation } : {}),
+        }] : [],
+        ...(destCity || destLocation ? {
+            destination: {
+                city: destCity || '',
+                ...(destLocation ? { location: destLocation } : {}),
+            },
+        } : {}),
     };
-    if (channel) record.channel = channel;
-    if (flyer) record.flyer = flyer;
+    Object.defineProperties(route, {
+        startCity: { enumerable: false, get() { return this.origins?.[0]?.city || ''; } },
+        startLocation: { enumerable: false, get() { return this.origins?.[0]?.location || ''; } },
+        destCity: { enumerable: false, get() { return this.destination?.city || ''; } },
+        destLocation: { enumerable: false, get() { return this.destination?.location || ''; } },
+    });
+    const data = {
+        title,
+        description,
+        language,
+        translations: {},
+        eventType: type,
+        game,
+        network: {
+            server: server || '',
+            name: server || '',
+            access: '',
+        },
+        schedule: {
+            meetingAt,
+            startAt: meetingAt,
+            endAt: null,
+            timeZone: ianaTimeZone,
+        },
+        route,
+        requirements: null,
+        links: link ? [{ rel: 'details', url: link }] : [],
+        flyer,
+        extensions: {},
+    };
+    Object.defineProperties(data.schedule, {
+        meetingTimestamp: {
+            enumerable: false,
+            get() { return Math.floor(Date.parse(this.meetingAt) / 1000); },
+        },
+        ianaTimeZone: {
+            enumerable: false,
+            get() { return this.timeZone; },
+        },
+    });
+    Object.defineProperties(data, {
+        mode: { enumerable: false, get() { return mode; } },
+        link: { enumerable: false, get() { return link; } },
+        server: { enumerable: false, get() { return this.network?.server || ''; } },
+    });
+    const record = {
+        specVersion: '1.0',
+        kind: 'event',
+        id: id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `demo-${Date.now()}-${Math.floor(Math.random() * 1e9)}`),
+        revision: 1,
+        authorId: peerId || '',
+        createdAt: new Date((publishedAt ?? Math.floor(Date.now() / 1000)) * 1000).toISOString(),
+        updatedAt: new Date((publishedAt ?? Math.floor(Date.now() / 1000)) * 1000).toISOString(),
+        data,
+        signature: '',
+    };
+    Object.defineProperties(record, {
+        schema: { enumerable: false, configurable: true, get() { return SCHEMA_EVENT; } },
+        event: { enumerable: false, configurable: true, get() { return this.data; } },
+        schedule: { enumerable: false, configurable: true, get() { return this.data.schedule; } },
+        peerId: { enumerable: false, configurable: true, writable: true, value: peerId || '' },
+        nickname: { enumerable: false, configurable: true, writable: true, value: nickname },
+        publishedAt: { enumerable: false, configurable: true, writable: true, value: publishedAt ?? Math.floor(Date.now() / 1000) },
+        channel: { enumerable: false, configurable: true, writable: true, value: channel },
+        flyer: { enumerable: false, configurable: true, writable: true, value: flyer },
+        deleteSignature: { enumerable: false, configurable: true, writable: true, value: '' },
+        deleted: { enumerable: false, configurable: true, writable: true, value: false },
+    });
     return record;
 }
 
@@ -64,7 +128,13 @@ export function nowUnix() {
 }
 
 export function isWithinPublishWindow(c, now = nowUnix()) {
-    return c.schedule.meetingTimestamp <= now + PUBLISH_HORIZON_DAYS * 86400;
+    const schedule = c.schedule || c.data?.schedule;
+    const meetingTimestamp = Number.isFinite(schedule?.meetingTimestamp)
+        ? schedule.meetingTimestamp
+        : schedule?.meetingAt
+            ? Math.floor(Date.parse(schedule.meetingAt) / 1000)
+            : 0;
+    return meetingTimestamp <= now + PUBLISH_HORIZON_DAYS * 86400;
 }
 
 export function computeScore(votes) {
@@ -96,12 +166,14 @@ export function reputationBadge(rep) {
 
 // Validación estructural mínima de un registro recibido.
 export function validateConvoy(c) {
+    const event = c.event || c.data;
+    const schedule = c.schedule || c.data?.schedule;
     return !!c
-        && c.schema === SCHEMA_EVENT
+        && (c.schema === SCHEMA_EVENT || c.specVersion === '1.0')
         && typeof c.id === 'string'
-        && !!c.event && typeof c.event.name === 'string'
-        && isValidGame(c.event.game)
-        && isValidMode(c.event.mode)
-        && !!c.schedule && Number.isFinite(c.schedule.meetingTimestamp)
-        && typeof c.schedule.ianaTimeZone === 'string';
+        && !!event && typeof event.title === 'string'
+        && isValidGame(event.game)
+        && isValidMode(event.mode)
+        && !!schedule && typeof schedule.meetingAt === 'string'
+        && typeof schedule.timeZone === 'string';
 }

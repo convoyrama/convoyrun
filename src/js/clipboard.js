@@ -1,6 +1,6 @@
 import { dom } from './dom.js';
 import * as state from './core/state.js';
-import { getGameTime, getDetailedDayNightIcon, resolveMeetingDateTime } from './core/time.js';
+import { resolveMeetingDateTime } from './core/time.js';
 import { showCopyMessage, getZoneLabel, showFooterAction } from './core/utils.js';
 import { copyToClipboard } from './native/tauri-bridge.js';
 
@@ -41,21 +41,6 @@ function validateDate(values) {
     return meetingDateTime;
 }
 
-function computeGameEmojis(meetingDateTime) {
-    const departureOffsetMinutes = parseInt(dom.departureTimeOffset.value, 10);
-    const departureDateTime = meetingDateTime.plus({ minutes: departureOffsetMinutes });
-    const arrivalDateTime = departureDateTime.plus({ minutes: 50 });
-
-    const meetingGameTime = getGameTime(meetingDateTime.toUTC());
-    const meetingEmoji = getDetailedDayNightIcon(meetingGameTime.hours);
-    const departureGameTime = getGameTime(departureDateTime.toUTC());
-    const departureEmoji = getDetailedDayNightIcon(departureGameTime.hours);
-    const arrivalGameTime = getGameTime(arrivalDateTime.toUTC());
-    const arrivalEmoji = getDetailedDayNightIcon(arrivalGameTime.hours);
-
-    return { meetingEmoji, departureEmoji, arrivalEmoji, departureDateTime, arrivalDateTime, departureOffsetMinutes };
-}
-
 export function initClipboard() {
     dom.copyCustomInfo.onclick = () => {
         const values = getCommonValues();
@@ -63,19 +48,15 @@ export function initClipboard() {
         if (!meetingDateTime) return;
 
         const meetingTimestamp = meetingDateTime.toUnixInteger();
-        const { meetingEmoji, departureEmoji, arrivalEmoji, departureDateTime, arrivalDateTime } = computeGameEmojis(meetingDateTime);
+        const departureOffsetMinutes = parseInt(dom.departureTimeOffset.value, 10);
+        const departureDateTime = meetingDateTime.plus({ minutes: departureOffsetMinutes });
+        const arrivalDateTime = departureDateTime.plus({ minutes: 50 });
         const departureTimestamp = departureDateTime.toUnixInteger();
         const arrivalTimestamp = arrivalDateTime.toUnixInteger();
 
-        const itKey = state.currentLangData.ingame_time_title || 'Hora ingame';
-        const mKey = state.currentLangData.meeting_label || 'Reunión';
-        const sKey = state.currentLangData.departure_label || 'Salida';
-        const aKey = state.currentLangData.arrival_label || 'Llegada aprox';
         const dtKey = state.currentLangData.discord_arrival_time || 'Llegada Aprox.:';
 
-        const ingameTimeLine = `**${itKey}:** ${mKey}: ${meetingEmoji} ${sKey}: ${departureEmoji} ${aKey}: ${arrivalEmoji}`;
-
-        const convoyInfo = `[**${values.customEventNameValue}**](${values.customEventLinkValue})\nServidor: ${values.customServerValue}\nPartida: ${values.customStartPlaceValue}\nDestino: ${values.customDestinationValue}\n\n**Reunión:** <t:${meetingTimestamp}:F> (<t:${meetingTimestamp}:R>)\n**Salida:** <t:${departureTimestamp}:t> (<t:${departureTimestamp}:R>)\n**${dtKey}** <t:${arrivalTimestamp}:t> (<t:${arrivalTimestamp}:R>)\n${ingameTimeLine}\n\nDescripción: ${values.customEventDescriptionValue}`;
+        const convoyInfo = `[**${values.customEventNameValue}**](${values.customEventLinkValue})\nServidor: ${values.customServerValue}\nPartida: ${values.customStartPlaceValue}\nDestino: ${values.customDestinationValue}\n\n**Reunión:** <t:${meetingTimestamp}:F> (<t:${meetingTimestamp}:R>)\n**Salida:** <t:${departureTimestamp}:t> (<t:${departureTimestamp}:R>)\n**${dtKey}** <t:${arrivalTimestamp}:t> (<t:${arrivalTimestamp}:R>)\n\nDescripción: ${values.customEventDescriptionValue}`;
         showFooterAction(state.currentLangData.footer_action_copying || 'Copying...');
         copyToClipboard(convoyInfo).then(() => showCopyMessage()).catch(err => console.error("[CLIPBOARD] Failed:", err));
     };
@@ -85,9 +66,8 @@ export function initClipboard() {
         const meetingDateTime = validateDate(values);
         if (!meetingDateTime) return;
 
-        const { meetingEmoji, departureEmoji, arrivalEmoji, departureDateTime, departureOffsetMinutes } = computeGameEmojis(meetingDateTime);
-        const arrivalGameTime = getGameTime(meetingDateTime.plus({ minutes: departureOffsetMinutes + 50 }).toUTC());
-        const arrivalEmojiFinal = getDetailedDayNightIcon(arrivalGameTime.hours);
+        const departureOffsetMinutes = parseInt(dom.departureTimeOffset.value, 10);
+        const departureDateTime = meetingDateTime.plus({ minutes: departureOffsetMinutes });
 
         const includeImages = dom.tmpImagesToggle.checked;
         const activeZones = state.getActiveZones();
@@ -121,15 +101,7 @@ export function initClipboard() {
             });
         }
 
-        const itKey = state.currentLangData.ingame_time_title || 'Hora ingame';
-        const mKey = state.currentLangData.meeting_label || 'Reunión';
-        const sKey = state.currentLangData.departure_label || 'Salida';
-        const aKey = state.currentLangData.arrival_label || 'Llegada aprox';
-        const rKey = state.currentLangData.tmp_rules_reminder || 'Recuerden seguir las normas de TruckersMP';
-
-        tmpInfo += `* ${itKey}: ${mKey}: ${meetingEmoji} ${sKey}: ${departureEmoji} ${aKey}: ${arrivalEmojiFinal}\n\n`;
         if (includeImages) tmpInfo += `![](https://convoyrama.github.io/event/images/default/orange.png)\n\n`;
-        tmpInfo += `[${rKey}](https://truckersmp.com/rules)`;
         showFooterAction(state.currentLangData.footer_action_copying || 'Copying...');
         copyToClipboard(tmpInfo).then(() => showCopyMessage()).catch(err => console.error("[CLIPBOARD] Failed:", err));
     };

@@ -1,5 +1,5 @@
 // Resolución de nombres humanos para peer IDs
-// Prioridad: alias local > nick del evento > nick conocido > peer ID truncado
+// Prioridad: alias local > nick conocido desde perfil firmado > nick del evento > peer ID truncado
 
 /**
  * Resuelve el nombre a mostrar para un peer_id
@@ -11,10 +11,10 @@
 export function displayName(peerId, eventNick, knownNicks) {
     // Alias local tiene máxima prioridad
     if (knownNicks?.aliases?.[peerId]) return knownNicks.aliases[peerId];
-    // Nick del evento (del convoy actual)
-    if (eventNick) return eventNick;
     // Nick conocido (almacenado de gossip anterior)
     if (knownNicks?.nicks?.[peerId]) return knownNicks.nicks[peerId];
+    // Nick del evento (snapshot de compatibilidad)
+    if (eventNick) return eventNick;
     // Fallback: peer ID truncado
     if (peerId && peerId.length > 12) return peerId.slice(0, 6) + '…' + peerId.slice(-4);
     return peerId || '?';

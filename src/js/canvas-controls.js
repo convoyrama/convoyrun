@@ -55,6 +55,7 @@ export function initCanvasControls(onTimeChange) {
 
     dom.resetCanvas.addEventListener("click", () => {
         revokeAllObjectUrls();
+        state.clearLoadedFlyerDocument();
         state.setMapImage(null); state.setCircleImageTop(null); state.setCircleImageBottom(null);
         state.setLogoImage(null); state.setBackgroundImage(null); state.setDetailImage(null); state.setCircleImageWaypoint(null);
         state.imageX = 0; state.imageY = 0; state.imageScale = 1;

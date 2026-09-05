@@ -5,7 +5,7 @@
 // Si se sube PNG, se leen metadatos incrustados para autocompletar y se sube a catbox.
 import * as state from './core/state.js';
 import { showCopyMessage, renderMarkdown } from './core/utils.js';
-import { readMetadataFromPNG } from './core/png-metadata.js';
+import { readCtesFlyerDocumentFromPNG } from './core/png-metadata.js';
 import { createConvoy, isWithinPublishWindow } from './core/convoy.js';
 import { swarmPublish, swarmGetConfig, swarmSetConfig, swarmValidateChannel, swarmListChannels, uploadToCatbox } from './native/tauri-bridge.js';
 import { AVAILABLE_LANGUAGES } from './core/config.js';
@@ -236,6 +236,7 @@ export function initSwarmPublish(onPublished) {
     function handleFlyerFile(file) {
         flyerStatus.textContent = '';
         flyerStatus.classList.remove('ok');
+        state.clearLoadedFlyerDocument();
         currentImageUrl = null;
         currentFlyerSize = 0;
         flyerPreview.hidden = true;
@@ -259,38 +260,50 @@ export function initSwarmPublish(onPublished) {
             try {
                 // Solo intentar leer metadatos si es PNG
                 const isPng = file.type === 'image/png';
-                const raw = isPng ? (readMetadataFromPNG(buffer, 'convoyrun-event-v1') || readMetadataFromPNG(buffer, 'convoyrama-event-data')) : null;
-                if (raw) {
-                    const m = JSON.parse(raw);
-                    if (m.eventName || m.name) nameEl.value = m.eventName || m.name;
-                    if (m.server) serverEl.value = m.server;
-                    if (m.route) {
-                        if (m.route.startCity) startEl.value = m.route.startCity;
-                        if (m.route.startLocation && startLocEl) startLocEl.value = m.route.startLocation;
-                        if (m.route.destCity) destEl.value = m.route.destCity;
-                        if (m.route.destLocation && destLocEl) destLocEl.value = m.route.destLocation;
+                const flyerDocument = isPng ? readCtesFlyerDocumentFromPNG(buffer) : null;
+                if (flyerDocument) {
+                    const event = flyerDocument.event || {};
+                    if (event.title) nameEl.value = event.title;
+                    if (event.network?.server) serverEl.value = event.network.server;
+                    if (event.route) {
+                        const origin = Array.isArray(event.route.origins) ? event.route.origins[0] : null;
+                        const destination = event.route.destination || {};
+                        if (origin?.city) startEl.value = origin.city;
+                        if (origin?.location && startLocEl) startLocEl.value = origin.location;
+                        if (destination.city) destEl.value = destination.city;
+                        if (destination.location && destLocEl) destLocEl.value = destination.location;
                     }
-                    if (m.eventType && typeEl) {
-                        typeEl.value = m.eventType;
+                    if (event.eventType && typeEl) {
+                        typeEl.value = event.eventType;
                     }
-                    if (m.description) { descEl.value = m.description; if (descPreview) descPreview.innerHTML = renderMarkdown(descEl.value); }
-                    const meetingTs = m.meetingTimestamp || (m.schedule && m.schedule.meetingTimestamp);
-                    const tz = m.ianaTimeZone || (m.schedule && m.schedule.ianaTimeZone);
-                    if (meetingTs && tz) {
-                        const meeting = DateTime.fromSeconds(meetingTs, { zone: tz });
+                    if (event.game && gameEl) {
+                        const gameKey = String(event.game).toLowerCase();
+                        if (gameKey === 'ats') gameEl.value = 'ATS';
+                        else if (gameKey === 'ets2') gameEl.value = 'ETS2';
+                        else gameEl.value = 'other';
+                    }
+                    if (event.description) {
+                        descEl.value = event.description;
+                        if (descPreview) descPreview.innerHTML = renderMarkdown(descEl.value);
+                    }
+                    const meetingAt = event.schedule?.meetingAt;
+                    const timeZone = event.schedule?.timeZone;
+                    if (meetingAt && timeZone) {
+                        const meeting = DateTime.fromISO(meetingAt, { zone: timeZone });
                         if (meeting.isValid) {
                             dateEl.value = meeting.toISODate();
                             timeEl.value = meeting.toFormat('HH:mm');
                         }
                     }
+                    state.setLoadedFlyerDocument(flyerDocument);
                     flyerStatus.textContent = state.currentLangData.swarm_wizard_image_meta_ok || 'Metadatos del flyer cargados.';
                     flyerStatus.classList.add('ok');
                 } else {
-                    flyerStatus.textContent = state.currentLangData.swarm_wizard_image_meta_none || 'Imagen sin metadatos de ConvoyRun.';
+                    flyerStatus.textContent = state.currentLangData.swarm_wizard_image_meta_none || 'Imagen sin metadatos CTES.';
                 }
             } catch (err) {
                 console.error('[SWARM-FLYER-META] Failed:', err);
-                flyerStatus.textContent = state.currentLangData.swarm_wizard_image_meta_none || 'Imagen sin metadatos de ConvoyRun.';
+                flyerStatus.textContent = state.currentLangData.swarm_wizard_image_meta_none || 'Imagen sin metadatos CTES.';
             }
 
             currentFlyerSize = u8.byteLength;
@@ -469,19 +482,19 @@ export function initSwarmPublish(onPublished) {
         }
 
         const convoy = createConvoy({
-            name,
+            title: name,
             type: typeEl ? typeEl.value : 'convoy',
             game: gameEl.value,
             mode: modeEl.value,
             meetingTimestamp: meeting.toUnixInteger(),
             ianaTimeZone: DateTime.local().zoneName || 'UTC',
             server: serverEl.value.trim(),
+            language: getSelectedLanguages()[0] || 'es',
             startCity: startEl.value.trim(),
             startLocation: startLocEl ? startLocEl.value.trim() : '',
             destCity: destEl.value.trim(),
             destLocation: destLocEl ? destLocEl.value.trim() : '',
             description: descEl.value.trim(),
-            languages: getSelectedLanguages(),
             flyer: currentImageUrl ? { url: currentImageUrl, size: currentFlyerSize } : null,
         });
 

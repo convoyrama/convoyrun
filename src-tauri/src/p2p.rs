@@ -14,9 +14,9 @@ use std::sync::atomic::AtomicUsize;
 // Auto-discovery via Mainline DHT
 use distributed_topic_tracker::{AutoDiscoveryGossip, RecordPublisher, Config as DttConfig, TopicId as DttTopicId, PublisherConfig, BootstrapConfig, MergeConfig, BubbleMergeConfig};
 
-/// Topic de gossip para el calendario de convoys
+/// Topic de gossip para CTES.
 /// Todos los nodos de ConvoyRun se unen a este topic por nombre.
-pub const CONVOY_TOPIC: &str = "convoyrama.convoyrun.v3";
+pub const CONVOY_TOPIC: &str = "ctes-gossip/1";
 
 /// Passphrase compartido para discovery por DHT.
 /// Todos los clientes de ConvoyRun lo usan para encontrarse automáticamente
@@ -464,14 +464,94 @@ pub enum GossipMessage {
     Convoy { data: String },
     #[serde(rename = "vote")]
     Vote { data: String },
-    #[serde(rename = "delete_convoy")]
-    DeleteConvoy { convoy_id: String, peer_id: String, signature: String },
+    #[serde(rename = "profile")]
+    Profile { data: String },
+    #[serde(rename = "tombstone")]
+    Tombstone {
+        convoy_id: String,
+        peer_id: String,
+        revision: u64,
+        signature: String,
+    },
     #[serde(rename = "channel")]
     Channel { data: String },
     #[serde(rename = "blacklist")]
     Blacklist { data: String },
     #[serde(rename = "trustlist")]
     Trustlist { data: String },
+}
+
+fn ctes_gossip_envelope(document: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "protocol": CONVOY_TOPIC,
+        "type": "document",
+        "document": document,
+    })
+}
+
+fn ctes_document_kind(document: &serde_json::Value) -> Option<&str> {
+    document.get("kind").and_then(|value| value.as_str())
+}
+
+fn gossip_message_to_envelope(message: &GossipMessage) -> Result<Vec<u8>> {
+    let envelope = match message {
+        GossipMessage::Convoy { data } => {
+            ctes_gossip_envelope(serde_json::from_str::<serde_json::Value>(data)?)
+        }
+        GossipMessage::Vote { data } => {
+            ctes_gossip_envelope(serde_json::from_str::<serde_json::Value>(data)?)
+        }
+        GossipMessage::Profile { data } => {
+            ctes_gossip_envelope(serde_json::from_str::<serde_json::Value>(data)?)
+        }
+        GossipMessage::Tombstone {
+            convoy_id,
+            peer_id,
+            revision,
+            signature,
+        } => {
+            let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+            let author_id = crate::convoy::otes_author_id(peer_id).unwrap_or_else(|_| peer_id.clone());
+            ctes_gossip_envelope(serde_json::json!({
+                "specVersion": crate::convoy::CTES_VERSION,
+                "kind": "tombstone",
+                "eventId": convoy_id,
+                "revision": revision,
+                "authorId": author_id,
+                "createdAt": now,
+                "updatedAt": now,
+                "signature": signature,
+            }))
+        }
+        GossipMessage::Channel { .. }
+        | GossipMessage::Blacklist { .. }
+        | GossipMessage::Trustlist { .. } => serde_json::to_value(message)?,
+    };
+    Ok(serde_json::to_vec(&envelope)?)
+}
+
+pub fn parse_gossip_message(json: &str) -> Option<GossipMessage> {
+    let value: serde_json::Value = serde_json::from_str(json).ok()?;
+    let obj = value.as_object()?;
+    if obj.get("protocol").and_then(|value| value.as_str()) == Some(CONVOY_TOPIC)
+        && obj.get("type").and_then(|value| value.as_str()) == Some("document")
+    {
+        let document = obj.get("document")?.clone();
+        return match ctes_document_kind(&document)? {
+            "event" => Some(GossipMessage::Convoy { data: document.to_string() }),
+            "vote" => Some(GossipMessage::Vote { data: document.to_string() }),
+            "profile" => Some(GossipMessage::Profile { data: document.to_string() }),
+            "tombstone" => {
+                let convoy_id = document.get("eventId").and_then(|value| value.as_str())?.to_string();
+                let peer_id = document.get("authorId").and_then(|value| value.as_str())?.to_string();
+                let revision = document.get("revision").and_then(|value| value.as_u64())?;
+                let signature = document.get("signature").and_then(|value| value.as_str())?.to_string();
+                Some(GossipMessage::Tombstone { convoy_id, peer_id, revision, signature })
+            }
+            _ => None,
+        };
+    }
+    None
 }
 
 impl P2pState {
@@ -540,32 +620,34 @@ impl P2pState {
 
     /// Publica un mensaje por gossip usando el sender
     pub async fn publish_gossip(sender: &distributed_topic_tracker::GossipSender, message: GossipMessage) -> Result<()> {
-        let data = serde_json::to_vec(&message)?;
+        let data = gossip_message_to_envelope(&message)?;
         sender.broadcast(data).await?;
         Ok(())
     }
 
     /// Publica un convoy por gossip
     pub async fn publish_convoy_gossip(sender: &distributed_topic_tracker::GossipSender, convoy_json: &str) -> Result<()> {
-        let message = GossipMessage::Convoy {
-            data: convoy_json.to_string(),
-        };
+        let message = GossipMessage::Convoy { data: convoy_json.to_string() };
         Self::publish_gossip(sender, message).await
     }
 
     /// Publica un voto por gossip
     pub async fn publish_vote_gossip(sender: &distributed_topic_tracker::GossipSender, vote_json: &str) -> Result<()> {
-        let message = GossipMessage::Vote {
-            data: vote_json.to_string(),
-        };
+        let message = GossipMessage::Vote { data: vote_json.to_string() };
+        Self::publish_gossip(sender, message).await
+    }
+
+    pub async fn publish_profile_gossip(sender: &distributed_topic_tracker::GossipSender, profile_json: &str) -> Result<()> {
+        let message = GossipMessage::Profile { data: profile_json.to_string() };
         Self::publish_gossip(sender, message).await
     }
 
     /// Publica un delete de convoy por gossip
-    pub async fn publish_delete_gossip(sender: &distributed_topic_tracker::GossipSender, convoy_id: &str, peer_id: &str, signature: &str) -> Result<()> {
-        let message = GossipMessage::DeleteConvoy {
+    pub async fn publish_delete_gossip(sender: &distributed_topic_tracker::GossipSender, convoy_id: &str, peer_id: &str, revision: u64, signature: &str) -> Result<()> {
+        let message = GossipMessage::Tombstone {
             convoy_id: convoy_id.to_string(),
             peer_id: peer_id.to_string(),
+            revision,
             signature: signature.to_string(),
         };
         Self::publish_gossip(sender, message).await
@@ -587,4 +669,67 @@ impl P2pState {
         Self::publish_gossip(sender, message).await
     }
 
+}
+
+#[cfg(test)]
+mod ctes_gossip_tests {
+    use super::{gossip_message_to_envelope, parse_gossip_message, GossipMessage, CONVOY_TOPIC};
+
+    const DOCUMENTS: [(&str, &str); 4] = [
+        ("event", include_str!("../../../../ctes/fixtures/valid/event.json")),
+        ("profile", include_str!("../../../../ctes/fixtures/valid/profile.json")),
+        ("vote", include_str!("../../../../ctes/fixtures/valid/vote-up-r1.json")),
+        ("tombstone", include_str!("../../../../ctes/fixtures/valid/tombstone-r2.json")),
+    ];
+
+    #[test]
+    fn parses_and_publishes_ctes_envelopes_for_core_documents() {
+        for (kind, source) in DOCUMENTS {
+            let envelope = serde_json::json!({
+                "protocol": CONVOY_TOPIC,
+                "type": "document",
+                "document": serde_json::from_str::<serde_json::Value>(source).unwrap(),
+            });
+            let envelope_json = envelope.to_string();
+            let parsed = parse_gossip_message(&envelope_json).expect("expected CTES envelope");
+
+            match (kind, parsed) {
+                ("event", GossipMessage::Convoy { data })
+                | ("profile", GossipMessage::Profile { data })
+                | ("vote", GossipMessage::Vote { data }) => {
+                    let document: serde_json::Value = serde_json::from_str(&data).unwrap();
+                    assert_eq!(document["kind"], kind);
+                }
+                ("tombstone", GossipMessage::Tombstone { convoy_id, peer_id, revision, signature }) => {
+                    let document: serde_json::Value = serde_json::from_str(source).unwrap();
+                    assert_eq!(convoy_id, document["eventId"]);
+                    assert_eq!(peer_id, document["authorId"]);
+                    assert_eq!(revision, document["revision"]);
+                    assert_eq!(signature, document["signature"]);
+                }
+                other => panic!("unexpected gossip variant: {:?}", other),
+            }
+
+            let message = match kind {
+                "event" => GossipMessage::Convoy { data: source.to_string() },
+                "profile" => GossipMessage::Profile { data: source.to_string() },
+                "vote" => GossipMessage::Vote { data: source.to_string() },
+                "tombstone" => {
+                    let document: serde_json::Value = serde_json::from_str(source).unwrap();
+                    GossipMessage::Tombstone {
+                        convoy_id: document["eventId"].as_str().unwrap().to_string(),
+                        peer_id: document["authorId"].as_str().unwrap().to_string(),
+                        revision: document["revision"].as_u64().unwrap(),
+                        signature: document["signature"].as_str().unwrap().to_string(),
+                    }
+                }
+                _ => unreachable!(),
+            };
+            let bytes = gossip_message_to_envelope(&message).unwrap();
+            let published: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(published["protocol"], CONVOY_TOPIC);
+            assert_eq!(published["type"], "document");
+            assert_eq!(published["document"]["kind"], kind);
+        }
+    }
 }

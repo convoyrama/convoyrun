@@ -13,7 +13,7 @@ use tokio::sync::RwLock;
 mod p2p;
 mod convoy;
 use p2p::{NodeStatus, P2pState, GossipMessage, UserConfig};
-use convoy::{ConvoyRecord, ConvoyStore, EventData, FlyerData, Schedule, VoteRecord, ChannelRecord, ChannelStore, BlacklistRecord, BlacklistStore, TrustlistRecord, TrustlistStore, KnownNicksStore, SYSTEM_CHANNELS};
+use convoy::{ConvoyRecord, ConvoyStore, EventData, FlyerData, Schedule, VoteRecord, ProfileRecord, ChannelRecord, ChannelStore, BlacklistRecord, BlacklistStore, TrustlistRecord, TrustlistStore, KnownNicksStore, SYSTEM_CHANNELS};
 
 /// Upload de imagen a Catbox.moe (multipart desde Rust, evita CORS del webview)
 /// Soporta PNG, JPEG, WebP, GIF
@@ -159,7 +159,7 @@ async fn process_gossip_receiver(
     mut receiver: distributed_topic_tracker::GossipReceiver,
     gossip_sender: distributed_topic_tracker::GossipSender,
     data_dir: PathBuf,
-    config_cache: Arc<RwLock<UserConfig>>,
+    _config_cache: Arc<RwLock<UserConfig>>,
     app_handle: tauri::AppHandle,
     convoy_store: Arc<RwLock<ConvoyStore>>,
     channel_store: Arc<RwLock<ChannelStore>>,
@@ -179,21 +179,46 @@ async fn process_gossip_receiver(
                         let count = neighbor_count.fetch_add(1, Ordering::SeqCst) + 1;
                         eprintln!("[P2P] NeighborUp: {} (neighbors: {})", peer, count);
 
-                        // Re-broadcast all known events to new peer (including deleted for sync)
+                        // Re-broadcast all known events to new peer.
                         let store = convoy_store.read().await;
                         let event_count = store.convoys.len();
                         if event_count > 0 {
                             eprintln!("[P2P] Re-broadcasting {} events to new peer", event_count);
                             for record in store.convoys.values() {
-                                let gossip_record = convoy::ConvoyGossipRecord {
-                                    record: record.clone(),
-                                    deleted: record.deleted,
-                                };
-                                if let Ok(json) = serde_json::to_string(&gossip_record) {
+                                if record.deleted {
+                                    if record.delete_signature.is_empty() {
+                                        eprintln!("[P2P] Skipping tombstone without delete signature {}", record.id);
+                                        continue;
+                                    }
+                                    if let Err(e) = P2pState::publish_delete_gossip(
+                                        &gossip_sender,
+                                        &record.id,
+                                        &record.author_id,
+                                        record.revision,
+                                        &record.delete_signature,
+                                    ).await {
+                                        eprintln!("[P2P] Failed to re-broadcast delete: {}", e);
+                                    }
+                                    continue;
+                                }
+                                if let Ok(json) = serde_json::to_string(record) {
                                     if let Err(e) = P2pState::publish_convoy_gossip(&gossip_sender, &json).await {
                                         eprintln!("[P2P] Failed to re-broadcast event: {}", e);
                                     }
                                 }
+                            }
+                        }
+
+                        for votes in store.votes.values() {
+                            for vote in votes.values() {
+                                if let Ok(json) = serde_json::to_string(vote) {
+                                    let _ = P2pState::publish_vote_gossip(&gossip_sender, &json).await;
+                                }
+                            }
+                        }
+                        for profile in store.profiles.values() {
+                            if let Ok(json) = serde_json::to_string(profile) {
+                                let _ = P2pState::publish_profile_gossip(&gossip_sender, &json).await;
                             }
                         }
 
@@ -214,17 +239,19 @@ async fn process_gossip_receiver(
                     eprintln!("[P2P] Gossip message too large ({} bytes), ignoring", message.content.len());
                     continue;
                 }
-                if let Ok(gossip_msg) = serde_json::from_slice::<GossipMessage>(&message.content) {
+                if let Some(gossip_msg) = p2p::parse_gossip_message(std::str::from_utf8(&message.content).unwrap_or("")) {
                     // Deduplicación: generar key única por mensaje
                     let dedup_key = match &gossip_msg {
                         GossipMessage::Convoy { data } => {
                             serde_json::from_str::<ConvoyRecord>(data).ok().map(|r| format!("convoy:{}", r.id))
                         }
                         GossipMessage::Vote { data } => {
-                            serde_json::from_str::<VoteRecord>(data).ok().map(|r| format!("vote:{}:{}", r.convoy_id, r.voter_peer_id))
+                            let _ = data;
+                            None
                         }
-                        GossipMessage::DeleteConvoy { convoy_id, peer_id, .. } => {
-                            Some(format!("delete:{}:{}", convoy_id, peer_id))
+                        GossipMessage::Profile { .. } => None,
+                        GossipMessage::Tombstone { convoy_id, peer_id, revision, .. } => {
+                            Some(format!("delete:{}:{}:{}", convoy_id, peer_id, revision))
                         }
                         GossipMessage::Channel { data } => {
                             serde_json::from_str::<ChannelRecord>(data).ok().map(|r| format!("channel:{}", r.name))
@@ -248,50 +275,19 @@ async fn process_gossip_receiver(
                         }
                     }
 
-                    // Verificar si el autor está bloqueado
-                    let author_peer_id = match &gossip_msg {
-                        GossipMessage::Convoy { data } => {
-                            serde_json::from_str::<ConvoyRecord>(data).ok().map(|r| r.peer_id)
-                        }
-                        GossipMessage::Vote { data } => {
-                            serde_json::from_str::<VoteRecord>(data).ok().map(|r| r.voter_peer_id)
-                        }
-                        GossipMessage::DeleteConvoy { peer_id, .. } => Some(peer_id.clone()),
-                        GossipMessage::Channel { data } => {
-                            serde_json::from_str::<ChannelRecord>(data).ok().map(|r| r.creator_peer_id)
-                        }
-                        GossipMessage::Blacklist { data } => {
-                            serde_json::from_str::<BlacklistRecord>(data).ok().map(|r| r.author_peer_id)
-                        }
-                        GossipMessage::Trustlist { data } => {
-                            serde_json::from_str::<TrustlistRecord>(data).ok().map(|r| r.author_peer_id)
-                        }
-                    };
-                    if let Some(ref pid) = author_peer_id {
-                        let config = config_cache.read().await;
-                        if config.blocked_authors.contains(pid) {
-                            eprintln!("[P2P] Blocked author {}, ignoring message", pid);
-                            continue;
-                        }
-                    }
                     match gossip_msg {
                         GossipMessage::Convoy { data } => {
                             eprintln!("[P2P] Received Convoy gossip: {} bytes", data.len());
-                            // Try ConvoyGossipRecord first (includes deleted flag for sync),
-                            // fall back to ConvoyRecord for backward compatibility
-                            let (mut record, deleted_flag) = if let Ok(gr) = serde_json::from_str::<convoy::ConvoyGossipRecord>(&data) {
-                                (gr.record, gr.deleted)
-                            } else if let Ok(r) = serde_json::from_str::<ConvoyRecord>(&data) {
-                                (r, false)
+                            let record = if let Ok(r) = serde_json::from_str::<ConvoyRecord>(&data) {
+                                r
                             } else {
                                 eprintln!("[P2P] Failed to parse convoy from gossip data");
                                 continue;
                             };
-                            record.deleted = deleted_flag;
                             {
                                 // Validar longitud de campos para prevenir abuso
-                                if record.nickname.len() > 64 || record.event.name.len() > 200
-                                    || record.event.description.len() > 5000 || record.event.server.len() > 100 {
+                                if record.nickname.len() > 64 || record.event.title.len() > 200
+                                    || record.event.description.len() > 5000 || record.event.network.server.len() > 100 {
                                     eprintln!("[P2P] Convoy fields too large, ignoring");
                                     continue;
                                 }
@@ -300,24 +296,24 @@ async fn process_gossip_receiver(
                                 if !record.is_retained(now) || !record.is_within_publish_window(now) {
                                     eprintln!("[P2P] Convoy {} rejected: is_retained={}, is_within_publish_window={}, meeting_ts={}, now={}",
                                         record.id, record.is_retained(now), record.is_within_publish_window(now),
-                                        record.schedule.meeting_timestamp, now);
+                                        record.event.schedule.meeting_timestamp, now);
                                     continue;
                                 }
                                 match record.verify() {
                                     Ok(true) => {
                                         eprintln!("[P2P] Convoy {} verified OK from peer {}", record.id, record.peer_id);
-                                        // Almacenar nick conocido
-                                        if !record.nickname.is_empty() {
-                                            let mut nicks = known_nicks.write().await;
-                                            nicks.update_nick(record.peer_id.clone(), record.nickname.clone());
-                                            nicks.save(&data_dir);
-                                        }
                                         let mut store = convoy_store.write().await;
-                                        // Guard: don't resurrect deleted convoys from old clients
-                                        if let Some(existing) = store.convoys.get(&record.id) {
-                                            if existing.deleted && !record.deleted {
-                                                eprintln!("[P2P] Convoy {} is deleted, ignoring re-broadcast from old client", record.id);
-                                                continue;
+                                        // Preserve the signed profile nickname when available.
+                                        if !record.nickname.is_empty() {
+                                            let preferred_nick = store
+                                                .profiles
+                                                .get(&record.author_id)
+                                                .map(|profile| profile.data.nickname.clone())
+                                                .unwrap_or_else(|| record.nickname.clone());
+                                            if !preferred_nick.is_empty() {
+                                                let mut nicks = known_nicks.write().await;
+                                                nicks.update_nick(record.author_id.clone(), preferred_nick);
+                                                nicks.save(&data_dir);
                                             }
                                         }
                                         store.upsert_convoy(record);
@@ -334,7 +330,15 @@ async fn process_gossip_receiver(
                             }
                         }
                         GossipMessage::Vote { data } => {
+                            if data.len() > 262_144 {
+                                eprintln!("[P2P] CTES vote exceeds 262144 bytes");
+                                continue;
+                            }
                             if let Ok(record) = serde_json::from_str::<VoteRecord>(&data) {
+                                if !record.validate() {
+                                    eprintln!("[P2P] Received invalid CTES vote");
+                                    continue;
+                                }
                                 match record.verify() {
                                     Ok(true) => {}
                                     Ok(false) => {
@@ -346,17 +350,37 @@ async fn process_gossip_receiver(
                                         continue;
                                     }
                                 }
-                                if record.vote != 1 && record.vote != -1 {
-                                    eprintln!("[P2P] Received vote with invalid value: {}", record.vote);
-                                    continue;
-                                }
                                 let mut store = convoy_store.write().await;
-                                store.upsert_vote(record);
-                                flush_convoy_store(&store, &data_dir);
-                                let _ = app_handle.emit("vote-new", serde_json::Value::Null);
+                                if store.upsert_vote(record) {
+                                    flush_convoy_store(&store, &data_dir);
+                                    let _ = app_handle.emit("vote-new", serde_json::Value::Null);
+                                }
                             }
                         }
-                        GossipMessage::DeleteConvoy { convoy_id, peer_id, signature } => {
+                        GossipMessage::Profile { data } => {
+                            if data.len() > 262_144 {
+                                continue;
+                            }
+                            let record = match serde_json::from_str::<ProfileRecord>(&data) {
+                                Ok(record) if record.verify().unwrap_or(false) => record,
+                                _ => continue,
+                            };
+                            let author_id = record.author_id.clone();
+                            let nickname = record.data.nickname.clone();
+                            let mut store = convoy_store.write().await;
+                            if store.upsert_profile(record) {
+                                flush_convoy_store(&store, &data_dir);
+                                drop(store);
+                                let mut nicks = known_nicks.write().await;
+                                nicks.update_nick(author_id.clone(), nickname.clone());
+                                if let Ok(bytes) = convoy::decode_peer_id_bytes(&author_id) {
+                                    nicks.update_nick(hex::encode(bytes), nickname);
+                                }
+                                nicks.save(&data_dir);
+                                let _ = app_handle.emit("profile-new", author_id);
+                            }
+                        }
+                        GossipMessage::Tombstone { convoy_id, peer_id, revision, signature } => {
                             // Verificar firma del delete (soporta hex y base64)
                             use ed25519_dalek::{Verifier, VerifyingKey};
                             let sig_valid = (|| -> anyhow::Result<bool> {
@@ -370,7 +394,7 @@ async fn process_gossip_receiver(
                                 let mut sig_array = [0u8; 64];
                                 sig_array.copy_from_slice(&sig_bytes);
                                 let sig = ed25519_dalek::Signature::from_bytes(&sig_array);
-                                let msg = format!("{}:{}", convoy_id, peer_id);
+                                let msg = format!("{}:{}:{}", convoy_id, peer_id, revision);
                                 Ok(verifying_key.verify(msg.as_bytes(), &sig).is_ok())
                             })();
                             match sig_valid {
@@ -381,13 +405,66 @@ async fn process_gossip_receiver(
                                 }
                             }
                             let mut store = convoy_store.write().await;
-                            if let Some(convoy) = store.convoys.get(&convoy_id) {
-                                if convoy.peer_id == peer_id {
-                                    store.delete_convoy(&convoy_id);
-                                    flush_convoy_store(&store, &data_dir);
-                                    eprintln!("[P2P] Convoy soft-deleted by author: {}", convoy_id);
-                                    let _ = app_handle.emit("convoy-new", serde_json::Value::Null);
+                            let tombstone = if let Some(convoy) = store.convoys.get(&convoy_id) {
+                                let mut record = convoy.clone();
+                                record.revision = revision;
+                                record.deleted = true;
+                                record.delete_signature = signature.clone();
+                                record
+                            } else {
+                                ConvoyRecord {
+                                    schema: convoy::SCHEMA_EVENT.to_string(),
+                                    spec_version: convoy::CTES_VERSION.to_string(),
+                                    kind: "event".to_string(),
+                                    id: convoy_id.clone(),
+                                    revision,
+                                    author_id: convoy::otes_author_id(&peer_id).unwrap_or(peer_id.clone()),
+                                    created_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                                    updated_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                                    event: convoy::EventData {
+                                        title: String::new(),
+                                        description: String::new(),
+                                        language: "es".to_string(),
+                                        translations: std::collections::HashMap::new(),
+                                        event_type: convoy::EventType::Convoy,
+                                        custom_event_type: None,
+                                        game: convoy::Game::ATS,
+                                        custom_game: None,
+                                        network: convoy::NetworkData { server: String::new(), name: String::new(), access: String::new() },
+                                        schedule: convoy::Schedule {
+                                            meeting_timestamp: 0,
+                                            start_timestamp: Some(0),
+                                            end_timestamp: None,
+                                            iana_time_zone: String::new(),
+                                        },
+                                        route: None,
+                                        requirements: None,
+                                        links: Vec::new(),
+                                        flyer: None,
+                                        extensions: std::collections::HashMap::new(),
+                                        mode: convoy::Mode::Simulation,
+                                        link: String::new(),
+                                        server: String::new(),
+                                    },
+                                    signature: String::new(),
+                                    peer_id: peer_id.clone(),
+                                    nickname: String::new(),
+                                    published_at: chrono::Utc::now().timestamp(),
+                                    channel: String::new(),
+                                    flyer: None,
+                                    delete_signature: signature.clone(),
+                                    deleted: true,
                                 }
+                            };
+                            if store
+                                .convoys
+                                .get(&convoy_id)
+                                .is_none_or(|existing| tombstone.wins_over(existing))
+                            {
+                                store.upsert_convoy(tombstone);
+                                flush_convoy_store(&store, &data_dir);
+                                eprintln!("[P2P] Convoy tombstoned: {} @ r{}", convoy_id, revision);
+                                let _ = app_handle.emit("convoy-new", serde_json::Value::Null);
                             }
                         }
                         GossipMessage::Channel { data } => {
@@ -538,6 +615,26 @@ async fn p2p_init(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<N
     }
 
     let config = load_config_cached(&state.config).await;
+    if let Some(nickname) = config.nickname.as_deref().map(str::trim).filter(|nick| !nick.is_empty()) {
+        let author_id = convoy::otes_author_id(&p2p.peer_id()).map_err(|e| e.to_string())?;
+        let mut store = state.convoy_store.write().await;
+        let current = store.profiles.get(&author_id);
+        let profile = if current.is_some_and(|profile| profile.data.nickname == nickname) {
+            current.cloned()
+        } else {
+            let mut profile = ProfileRecord::new(author_id, nickname.to_string(), current);
+            profile.sign(&p2p.secret_key).map_err(|e| e.to_string())?;
+            store.upsert_profile(profile.clone());
+            flush_convoy_store(&store, &state.data_dir);
+            Some(profile)
+        };
+        drop(store);
+        if let (Some(sender), Some(profile)) = (&p2p.gossip_sender, profile) {
+            if let Ok(json) = serde_json::to_string(&profile) {
+                let _ = P2pState::publish_profile_gossip(sender, &json).await;
+            }
+        }
+    }
     let status = p2p.status(config.nickname);
 
     *p2p_guard = Some(Arc::new(p2p));
@@ -628,9 +725,34 @@ async fn get_config(state: State<'_, AppState>) -> Result<UserConfig, String> {
 #[tauri::command]
 async fn set_config(
     state: State<'_, AppState>,
-    config: UserConfig,
+    mut config: UserConfig,
 ) -> Result<(), String> {
-    save_config_cached(&state.data_dir, &state.config, &config).await
+    let nickname = config.nickname.as_deref().map(str::trim).filter(|nick| !nick.is_empty()).map(str::to_owned);
+    if nickname.as_deref().is_some_and(|nick| nick.chars().count() > 32) {
+        return Err("Nickname must contain 1 to 32 characters".to_string());
+    }
+    config.nickname = nickname.clone();
+    let old_nickname = state.config.read().await.nickname.clone();
+    save_config_cached(&state.data_dir, &state.config, &config).await?;
+    if old_nickname.as_deref().map(str::trim) == nickname.as_deref() {
+        return Ok(());
+    }
+    let Some(nickname) = nickname else { return Ok(()); };
+    let p2p_guard = state.p2p.read().await;
+    let Some(p2p) = p2p_guard.as_ref() else { return Ok(()); };
+    let author_id = convoy::otes_author_id(&p2p.peer_id()).map_err(|e| e.to_string())?;
+    let mut store = state.convoy_store.write().await;
+    let previous = store.profiles.get(&author_id);
+    let mut profile = ProfileRecord::new(author_id, nickname.to_string(), previous);
+    profile.sign(&p2p.secret_key).map_err(|e| e.to_string())?;
+    store.upsert_profile(profile.clone());
+    flush_convoy_store(&store, &state.data_dir);
+    drop(store);
+    if let Some(sender) = &p2p.gossip_sender {
+        let json = serde_json::to_string(&profile).map_err(|e| e.to_string())?;
+        let _ = P2pState::publish_profile_gossip(sender, &json).await;
+    }
+    Ok(())
 }
 
 // --- Comandos de moderación comunitaria ---
@@ -794,26 +916,30 @@ async fn get_author_profile(
     let store = state.convoy_store.read().await;
     let config = load_config_cached(&state.config).await;
 
-    let convoys: Vec<&ConvoyRecord> = store.convoys.values().filter(|c| c.peer_id == peer_id && !c.deleted).collect();
+    let author_id = convoy::otes_author_id(&peer_id).map_err(|e| e.to_string())?;
+    let convoys: Vec<&ConvoyRecord> = store.convoys.values().filter(|c| c.author_id == author_id && !c.deleted).collect();
     let reputation: i32 = convoys.iter().map(|c| store.compute_score(&c.id)).sum();
-
-    let nickname = convoys.first().map(|c| c.nickname.as_str()).unwrap_or("");
+    let nickname = store
+        .profiles
+        .get(&peer_id)
+        .map(|profile| profile.data.nickname.as_str())
+        .unwrap_or_else(|| convoys.first().map(|c| c.nickname.as_str()).unwrap_or(""));
 
     let is_friend = config.trusted_peers.contains(&peer_id);
     let is_blocked = config.blocked_authors.contains(&peer_id);
 
     let convoy_list: Vec<serde_json::Value> = convoys.iter().map(|c| {
-        let (vUp, vDown) = store.compute_vote_counts(&c.id);
+        let (v_up, v_down) = store.compute_vote_counts(&c.id);
         serde_json::json!({
             "id": c.id,
-            "name": c.event.name,
+            "title": c.event.title,
             "game": c.event.game,
             "mode": c.event.mode,
-            "meetingTimestamp": c.schedule.meeting_timestamp,
+            "meetingTimestamp": c.event.schedule.meeting_timestamp,
             "channel": c.channel,
             "score": store.compute_score(&c.id),
-            "voteUp": vUp,
-            "voteDown": vDown,
+            "voteUp": v_up,
+            "voteDown": v_down,
         })
     }).collect();
 
@@ -876,8 +1002,18 @@ async fn publish_convoy(
         }
     }
 
+    let revision = {
+        let store = state.convoy_store.read().await;
+        if let Some(existing_id) = id.as_deref() {
+            store.convoys.get(existing_id).map_or(1, |convoy| convoy.revision.saturating_add(1))
+        } else {
+            1
+        }
+    };
+
     let mut record = ConvoyRecord::new(
         p2p.peer_id(),
+        revision,
         nickname,
         event,
         schedule,
@@ -1068,8 +1204,8 @@ async fn vote_convoy(
     convoy_id: String,
     vote: i32,
 ) -> Result<(), String> {
-    if vote != 1 && vote != -1 {
-        return Err("Vote must be 1 or -1".to_string());
+    if !matches!(vote, -1..=1) {
+        return Err("Vote must be -1, 0 or 1".to_string());
     }
 
     let p2p_guard = state.p2p.read().await;
@@ -1084,7 +1220,8 @@ async fn vote_convoy(
     }
 
     if let Some(convoy) = store.convoys.get(&convoy_id) {
-        if convoy.peer_id == my_peer_id {
+        let my_author_id = convoy::otes_author_id(&my_peer_id).map_err(|e| e.to_string())?;
+        if convoy.author_id != my_author_id {
             return Err("Cannot vote on your own convoy".to_string());
         }
         if convoy.deleted {
@@ -1092,7 +1229,9 @@ async fn vote_convoy(
         }
     }
 
-    let mut vote_record = VoteRecord::new(convoy_id, my_peer_id, vote);
+    let author_id = convoy::otes_author_id(&my_peer_id).map_err(|e| e.to_string())?;
+    let previous = store.votes.get(&convoy_id).and_then(|votes| votes.get(&author_id));
+    let mut vote_record = VoteRecord::new(convoy_id, author_id, vote, previous);
     vote_record.sign(&p2p.secret_key).map_err(|e| format!("Failed to sign vote: {}", e))?;
 
     store.upsert_vote(vote_record.clone());
@@ -1112,14 +1251,14 @@ async fn vote_convoy(
 async fn get_my_votes(state: State<'_, AppState>) -> Result<HashMap<String, i32>, String> {
     let p2p_guard = state.p2p.read().await;
     let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
-    let my_peer_id = p2p.peer_id();
+    let my_peer_id = convoy::otes_author_id(&p2p.peer_id()).map_err(|e| e.to_string())?;
 
     let store = state.convoy_store.read().await;
     let my_votes: HashMap<String, i32> = store
         .votes
         .iter()
         .filter_map(|(convoy_id, votes)| {
-            votes.get(&my_peer_id).map(|v| (convoy_id.clone(), v.vote))
+            votes.get(&my_peer_id).map(|v| (convoy_id.clone(), v.data.value))
         })
         .collect();
 
@@ -1127,7 +1266,7 @@ async fn get_my_votes(state: State<'_, AppState>) -> Result<HashMap<String, i32>
 }
 
 #[tauri::command]
-async fn delete_convoy(
+async fn delete_tombstone(
     state: State<'_, AppState>,
     convoy_id: String,
 ) -> Result<(), String> {
@@ -1138,14 +1277,17 @@ async fn delete_convoy(
     let convoy = store.convoys.get(&convoy_id)
         .ok_or("Convoy not found")?;
 
-    if convoy.peer_id != p2p.peer_id() {
+    let my_author_id = convoy::otes_author_id(&p2p.peer_id()).map_err(|e| e.to_string())?;
+    if convoy.author_id != my_author_id {
         return Err("Can only delete your own convoys".to_string());
     }
 
-    store.delete_convoy(&convoy_id);
-    flush_convoy_store(&store, &state.data_dir);
+    let mut tombstone = convoy.clone();
+    tombstone.revision = convoy.revision.saturating_add(1);
+    tombstone.deleted = true;
+    tombstone.sign(&p2p.secret_key).map_err(|e| format!("Failed to sign tombstone: {}", e))?;
 
-    let delete_msg = format!("{}:{}", convoy_id, p2p.peer_id());
+    let delete_msg = format!("{}:{}:{}", convoy_id, my_author_id, tombstone.revision);
     let delete_sig = {
         use ed25519_dalek::{Signer, SigningKey};
         let key_bytes = p2p.secret_key.to_bytes();
@@ -1157,9 +1299,13 @@ async fn delete_convoy(
         )
     };
 
+    tombstone.delete_signature = delete_sig.clone();
+    store.upsert_convoy(tombstone.clone());
+    flush_convoy_store(&store, &state.data_dir);
+
     if let Some(sender) = &p2p.gossip_sender {
         if let Err(e) = P2pState::publish_delete_gossip(
-            sender, &convoy_id, &p2p.peer_id(), &delete_sig
+            sender, &convoy_id, &my_author_id, tombstone.revision, &delete_sig
         ).await {
             eprintln!("[P2P] Failed to publish delete via gossip: {}", e);
         }
@@ -1372,7 +1518,7 @@ pub fn run() {
             activate_channel,
             change_channel_password,
             delete_channel,
-            delete_convoy,
+            delete_tombstone,
             upload_to_catbox,
             get_known_nicks,
             set_nick_alias,

@@ -8,7 +8,7 @@ use std::path::Path;
 
 /// Schema version
 pub const SCHEMA_EVENT: &str = "convoyrun/event/v1";
-pub const SCHEMA_VOTE: &str = "convoyrun/vote/v1";
+pub const CTES_VERSION: &str = "1.0";
 pub const SCHEMA_CHANNEL: &str = "convoyrun/channel/v1";
 
 /// Canales predefinidos del sistema (públicos, sin owner)
@@ -23,7 +23,7 @@ pub const SYSTEM_CHANNELS: &[&str] = &[
 /// Peer ID especial para canales del sistema
 pub const SYSTEM_PEER_ID: &str = "system";
 
-/// Tipos de evento
+/// Tipos de evento CTES.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum EventType {
@@ -31,15 +31,206 @@ pub enum EventType {
     TruckShow,
     Exploration,
     Competition,
+    Meetup,
     Other,
+}
+
+fn is_one(value: &u64) -> bool {
+    *value == 1
+}
+#[cfg(test)]
+mod ctes_fixture_tests {
+    use super::{
+        canonical_json, ConvoyRecord, ConvoyStore, EventData, EventType, Game, Mode, ProfileRecord,
+        Schedule, VoteRecord,
+    };
+    use base64::Engine as _;
+    use ed25519_dalek::{Verifier, VerifyingKey};
+    use std::collections::HashMap;
+
+    const VECTORS: &str = include_str!("../tests/fixtures/ctes-v1/vectors.json");
+    const DOCUMENTS: [(&str, &str); 5] = [
+        ("event", include_str!("../tests/fixtures/ctes-v1/event.json")),
+        ("profile", include_str!("../tests/fixtures/ctes-v1/profile.json")),
+        ("voteUp", include_str!("../tests/fixtures/ctes-v1/vote-up-r1.json")),
+        ("voteDown", include_str!("../tests/fixtures/ctes-v1/vote-down-r2.json")),
+        ("tombstone", include_str!("../tests/fixtures/ctes-v1/tombstone-r2.json")),
+    ];
+
+    #[test]
+    fn verifies_ctes_signed_fixtures() {
+        let vectors: serde_json::Value = serde_json::from_str(VECTORS).unwrap();
+        let author_id = vectors["testKey"]["authorId"].as_str().unwrap();
+        let public_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(author_id.strip_prefix("ed25519:").unwrap())
+            .unwrap();
+        let public_key: [u8; 32] = public_bytes.try_into().unwrap();
+        let verifying_key = VerifyingKey::from_bytes(&public_key).unwrap();
+
+        for (name, source) in DOCUMENTS {
+            let mut document: serde_json::Value = serde_json::from_str(source).unwrap();
+            let signature_text = document
+                .as_object_mut()
+                .unwrap()
+                .remove("signature")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string();
+            let canonical = canonical_json(&document);
+            assert_eq!(canonical, vectors["documents"][name]["canonical"]);
+            assert_eq!(signature_text, vectors["documents"][name]["signature"]);
+
+            let signature_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .decode(signature_text)
+                .unwrap();
+            let signature_array: [u8; 64] = signature_bytes.try_into().unwrap();
+            let signature = ed25519_dalek::Signature::from_bytes(&signature_array);
+            verifying_key.verify(canonical.as_bytes(), &signature).unwrap();
+        }
+    }
+
+    #[test]
+    fn vote_revisions_converge_in_every_delivery_order() {
+        let up: VoteRecord = serde_json::from_str(DOCUMENTS[2].1).unwrap();
+        let down: VoteRecord = serde_json::from_str(DOCUMENTS[3].1).unwrap();
+
+        for order in [[up.clone(), down.clone()], [down.clone(), up.clone()]] {
+            let mut store = ConvoyStore::default();
+            for vote in order {
+                store.upsert_vote(vote);
+            }
+            assert_eq!(store.compute_vote_counts(&up.event_id), (0, 1));
+            assert_eq!(store.votes[&up.event_id][&up.author_id].revision, 2);
+        }
+    }
+
+    #[test]
+    fn verifies_typed_otes_profile_fixture() {
+        let profile: ProfileRecord = serde_json::from_str(DOCUMENTS[1].1).unwrap();
+        assert!(profile.validate());
+        assert!(profile.verify().unwrap());
+        assert_eq!(profile.data.nickname, "Ruta Ñ");
+    }
+
+    #[test]
+    fn profile_revisions_converge_in_every_delivery_order() {
+        let older: ProfileRecord = serde_json::from_str(DOCUMENTS[1].1).unwrap();
+        let mut newer = older.clone();
+        newer.revision = 2;
+        newer.updated_at = "2026-09-04T15:10:00Z".to_string();
+        newer.data.nickname = "Ruta Ñ 2".to_string();
+        newer.signature = "zzzzzz".to_string();
+
+        for order in [[older.clone(), newer.clone()], [newer.clone(), older.clone()]] {
+            let mut store = ConvoyStore::default();
+            for profile in order {
+                store.upsert_profile(profile);
+            }
+            let stored = store.profiles.get(&older.author_id).unwrap();
+            assert_eq!(stored.revision, 2);
+            assert_eq!(stored.data.nickname, "Ruta Ñ 2");
+        }
+    }
+
+    #[test]
+    fn convoy_revisions_and_tombstones_converge_in_every_delivery_order() {
+        let live = convoy_record(1, false, "aaa");
+        let tombstone = convoy_record(2, true, "bbb");
+        let resurrected = convoy_record(3, false, "ccc");
+
+        for (order, expected_revision, expected_deleted, expected_signature) in [
+            ([live.clone(), tombstone.clone()], 2, true, "bbb"),
+            ([tombstone.clone(), live.clone()], 2, true, "bbb"),
+            ([tombstone.clone(), resurrected.clone()], 3, false, "ccc"),
+            ([resurrected.clone(), tombstone.clone()], 3, false, "ccc"),
+        ] {
+            let mut store = ConvoyStore::default();
+            for convoy in order {
+                store.upsert_convoy(convoy);
+            }
+            let stored = store.convoys.get("convoy-test").unwrap();
+            assert_eq!(stored.revision, expected_revision);
+            assert_eq!(stored.deleted, expected_deleted);
+            assert_eq!(stored.signature, expected_signature);
+        }
+    }
+
+    fn convoy_record(revision: u64, deleted: bool, signature: &str) -> ConvoyRecord {
+        let schedule = Schedule {
+            meeting_timestamp: 1_700_000_100,
+            start_timestamp: Some(1_700_000_100),
+            end_timestamp: None,
+            iana_time_zone: "UTC".to_string(),
+        };
+        ConvoyRecord {
+            schema: super::SCHEMA_EVENT.to_string(),
+            spec_version: super::CTES_VERSION.to_string(),
+            kind: "event".to_string(),
+            id: "convoy-test".to_string(),
+            revision,
+            author_id: "ed25519:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+            created_at: "2026-09-04T15:00:00Z".to_string(),
+            updated_at: "2026-09-04T15:00:00Z".to_string(),
+            event: EventData {
+                title: "Ruta estable".to_string(),
+                description: String::new(),
+                language: "es".to_string(),
+                translations: HashMap::new(),
+                event_type: EventType::Convoy,
+                custom_event_type: None,
+                game: Game::ATS,
+                custom_game: None,
+                network: super::NetworkData {
+                    server: "Simulation 1".to_string(),
+                    name: "Simulation 1".to_string(),
+                    access: String::new(),
+                },
+                schedule: schedule.clone(),
+                route: Some(super::Route {
+                    origins: vec![super::Place {
+                        city: "Montevideo".to_string(),
+                        location: "Puerto".to_string(),
+                        country: "UY".to_string(),
+                    }],
+                    waypoints: Vec::new(),
+                    destination: Some(super::Place {
+                        city: "Buenos Aires".to_string(),
+                        location: "Terminal".to_string(),
+                        country: "AR".to_string(),
+                    }),
+                    start_city: String::new(),
+                    start_location: String::new(),
+                    dest_city: String::new(),
+                    dest_location: String::new(),
+                }),
+                requirements: None,
+                links: Vec::new(),
+                flyer: None,
+                extensions: HashMap::new(),
+                mode: Mode::Simulation,
+                link: String::new(),
+                server: String::new(),
+            },
+            signature: signature.to_string(),
+            peer_id: "peer-a".to_string(),
+            nickname: "Driver".to_string(),
+            published_at: 1_700_000_000,
+            channel: String::new(),
+            flyer: None,
+            delete_signature: String::new(),
+            deleted,
+        }
+    }
 }
 
 impl Default for EventType {
     fn default() -> Self { Self::Convoy }
 }
 
-/// Juegos soportados
+/// Juegos soportados.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
 pub enum Game {
     ATS,
     ETS2,
@@ -50,7 +241,7 @@ impl Default for Game {
     fn default() -> Self { Self::ATS }
 }
 
-/// Modos de servidor
+/// Modos de servidor legados.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Mode {
     #[serde(rename = "simulation")]
@@ -69,55 +260,86 @@ impl Default for Mode {
     fn default() -> Self { Self::Simulation }
 }
 
-/// Ruta del evento (ciudades y ubicaciones específicas)
+/// Lugar dentro de una ruta CTES.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Place {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub city: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub location: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub country: String,
+}
+
+/// Red CTES del evento.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkData {
+    pub server: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub access: String,
+}
+
+/// Requisitos del evento.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Requirements {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dlcs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mods: Vec<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub vehicles: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
+}
+
+/// Ruta CTES.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Route {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub origins: Vec<Place>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub waypoints: Vec<Place>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination: Option<Place>,
+
+    #[serde(skip)]
     pub start_city: String,
-    #[serde(default)]
+    #[serde(skip)]
     pub start_location: String,
-    #[serde(default)]
+    #[serde(skip)]
     pub dest_city: String,
-    #[serde(default)]
+    #[serde(skip)]
     pub dest_location: String,
 }
 
-/// Datos del evento
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Enlace público CTES.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct EventData {
-    pub name: String,
-    #[serde(default)]
-    pub event_type: EventType,
-    #[serde(default)]
-    pub game: Game,
-    #[serde(default)]
-    pub mode: Mode,
-    #[serde(default)]
-    pub link: String,
-    #[serde(default)]
-    pub server: String,
-    #[serde(default)]
-    pub route: Route,
-    #[serde(default)]
+pub struct Link {
+    pub rel: String,
+    pub url: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
+}
+
+/// Traducción opcional de título y descripción.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Translation {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub title: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
-    #[serde(default)]
-    pub languages: Vec<String>,
 }
 
-/// Horarios del evento
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Schedule {
-    /// Timestamp Unix (UTC) de la reunión
-    pub meeting_timestamp: i64,
-    /// Zona horaria IANA del creador (ej: "America/Argentina/Buenos_Aires")
-    pub iana_time_zone: String,
-}
-
-/// Imagen del flyer
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Datos opcionales del flyer CTES.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FlyerData {
     /// URL de la imagen (catbox o externa). Alias "thumb" para compatibilidad con datos viejos.
@@ -126,54 +348,214 @@ pub struct FlyerData {
     /// Tamaño en bytes
     #[serde(default)]
     pub size: u64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub media_type: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub digest: String,
 }
 
-/// Registro de convoy (publicado por un autor)
+mod rfc3339_unix_seconds {
+    use super::*;
+    use serde::{Deserializer, Serializer};
+
+    pub fn serialize<S>(value: &i64, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let dt = chrono::DateTime::<chrono::Utc>::from_timestamp(*value, 0)
+            .ok_or_else(|| serde::ser::Error::custom("invalid unix timestamp"))?;
+        serializer.serialize_str(&dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<i64, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let text = String::deserialize(deserializer)?;
+        let parsed = chrono::DateTime::parse_from_rfc3339(&text)
+            .map_err(serde::de::Error::custom)?;
+        Ok(parsed.timestamp())
+    }
+}
+
+mod opt_rfc3339_unix_seconds {
+    use super::*;
+    use serde::{Deserializer, Serializer};
+
+    pub fn serialize<S>(value: &Option<i64>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match value {
+            Some(ts) => super::rfc3339_unix_seconds::serialize(ts, serializer),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let opt = Option::<String>::deserialize(deserializer)?;
+        match opt {
+            Some(text) => {
+                let parsed = chrono::DateTime::parse_from_rfc3339(&text)
+                    .map_err(serde::de::Error::custom)?;
+                Ok(Some(parsed.timestamp()))
+            }
+            None => Ok(None),
+        }
+    }
+}
+
+/// Horarios del evento.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Schedule {
+    /// Timestamp Unix (UTC) de la reunión
+    #[serde(rename = "meetingAt", with = "rfc3339_unix_seconds")]
+    pub meeting_timestamp: i64,
+    #[serde(default, rename = "startAt", skip_serializing_if = "Option::is_none", with = "opt_rfc3339_unix_seconds")]
+    pub start_timestamp: Option<i64>,
+    #[serde(default, rename = "endAt", skip_serializing_if = "Option::is_none", with = "opt_rfc3339_unix_seconds")]
+    pub end_timestamp: Option<i64>,
+    /// Zona horaria IANA del creador (ej: "America/Argentina/Buenos_Aires")
+    #[serde(rename = "timeZone")]
+    pub iana_time_zone: String,
+}
+
+/// Datos del evento.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EventData {
+    #[serde(rename = "title")]
+    pub title: String,
+    #[serde(default, rename = "description", skip_serializing_if = "String::is_empty")]
+    pub description: String,
+    #[serde(default, rename = "language", skip_serializing_if = "String::is_empty")]
+    pub language: String,
+    #[serde(default, rename = "translations", skip_serializing_if = "HashMap::is_empty")]
+    pub translations: HashMap<String, Translation>,
+    #[serde(default, rename = "eventType")]
+    pub event_type: EventType,
+    #[serde(default, rename = "customEventType", skip_serializing_if = "Option::is_none")]
+    pub custom_event_type: Option<String>,
+    #[serde(default, rename = "game")]
+    pub game: Game,
+    #[serde(default, rename = "customGame", skip_serializing_if = "Option::is_none")]
+    pub custom_game: Option<String>,
+    #[serde(default, rename = "network")]
+    pub network: NetworkData,
+    #[serde(default, rename = "schedule")]
+    pub schedule: Schedule,
+    #[serde(default, rename = "route", skip_serializing_if = "Option::is_none")]
+    pub route: Option<Route>,
+    #[serde(default, rename = "requirements", skip_serializing_if = "Option::is_none")]
+    pub requirements: Option<Requirements>,
+    #[serde(default, rename = "links", skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<Link>,
+    #[serde(default, rename = "flyer", skip_serializing_if = "Option::is_none")]
+    pub flyer: Option<FlyerData>,
+    #[serde(default, rename = "extensions", skip_serializing_if = "HashMap::is_empty")]
+    pub extensions: HashMap<String, serde_json::Value>,
+
+    #[serde(default, skip)]
+    pub mode: Mode,
+    #[serde(default, skip)]
+    pub link: String,
+    #[serde(default, skip)]
+    pub server: String,
+}
+
+/// Registro de evento CTES (publicado por un autor).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConvoyRecord {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub schema: String,
+    #[serde(rename = "specVersion")]
+    pub spec_version: String,
+    #[serde(rename = "kind")]
+    pub kind: String,
     pub id: String,
-    pub peer_id: String,
-    #[serde(default)]
-    pub nickname: String,
-    pub published_at: i64,
+    #[serde(default, skip_serializing_if = "is_one")]
+    pub revision: u64,
+    #[serde(rename = "authorId")]
+    pub author_id: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+    #[serde(rename = "data")]
     pub event: EventData,
-    pub schedule: Schedule,
-    #[serde(default)]
+    #[serde(rename = "signature")]
+    pub signature: String,
+    #[serde(default, skip)]
+    pub peer_id: String,
+    #[serde(default, skip)]
+    pub nickname: String,
+    #[serde(default, skip)]
+    pub published_at: i64,
+    #[serde(default, skip)]
     pub channel: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub flyer: Option<FlyerData>,
-    /// Firma ed25519 del payload canónico (sin este campo)
-    #[serde(default)]
-    pub signature: String,
-    /// Soft delete flag — not serialized to gossip, not in canonical JSON
+    #[serde(default, skip)]
+    pub delete_signature: String,
     #[serde(skip)]
-    pub deleted: bool,
-}
-
-/// Wrapper for gossip broadcast — includes deleted flag for sync
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ConvoyGossipRecord {
-    #[serde(flatten)]
-    pub record: ConvoyRecord,
-    #[serde(default)]
     pub deleted: bool,
 }
 
 /// Registro de voto
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct VoteRecord {
-    pub schema: String,
-    pub convoy_id: String,
-    pub voter_peer_id: String,
-    /// +1 o -1
-    pub vote: i32,
-    pub ts: i64,
+    pub spec_version: String,
+    pub kind: String,
+    pub event_id: String,
+    pub revision: u64,
+    pub author_id: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub data: VoteData,
     pub signature: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VoteData {
+    pub value: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfileRecord {
+    pub spec_version: String,
+    pub kind: String,
+    pub revision: u64,
+    pub author_id: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub data: ProfileData,
+    pub signature: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProfileData {
+    pub nickname: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<ProfileLink>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProfileLink {
+    pub rel: String,
+    pub url: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
 }
 
 /// Registro de canal (propagado por gossip)
@@ -203,12 +585,15 @@ pub struct ChannelRecord {
 pub struct ConvoyStore {
     pub convoys: HashMap<String, ConvoyRecord>,
     pub votes: HashMap<String, HashMap<String, VoteRecord>>, // convoy_id -> voter_peer_id -> vote
+    #[serde(default)]
+    pub profiles: HashMap<String, ProfileRecord>,
 }
 
 impl ConvoyRecord {
     /// Crea un nuevo registro de convoy
     pub fn new(
         peer_id: String,
+        revision: u64,
         nickname: String,
         event: EventData,
         schedule: Schedule,
@@ -216,17 +601,58 @@ impl ConvoyRecord {
         channel: String,
         id: Option<String>,
     ) -> Self {
+        let now = chrono::Utc::now();
+        let now_rfc3339 = now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        let author_id = otes_author_id(&peer_id).unwrap_or_else(|_| peer_id.clone());
+        let mut event = event;
+        if event.language.is_empty() {
+            event.language = "es".to_string();
+        }
+        if event.network.server.is_empty() {
+            event.network.server = event.server.clone();
+        }
+        if event.network.name.is_empty() {
+            event.network.name = event.network.server.clone();
+        }
+        if event.links.is_empty() && !event.link.is_empty() {
+            event.links.push(Link {
+                rel: "details".to_string(),
+                url: event.link.clone(),
+                label: String::new(),
+            });
+        }
+        if event.route.is_none() {
+            let mut route = Route::default();
+            if !event.route.as_ref().is_some_and(|r| !r.origins.is_empty()) && !event.server.is_empty() {
+                route.origins.push(Place {
+                    city: event.server.clone(),
+                    location: String::new(),
+                    country: String::new(),
+                });
+            }
+            event.route = Some(route);
+        }
+        event.schedule = schedule;
+        let meeting_timestamp = event.schedule.meeting_timestamp;
+        event.schedule.start_timestamp.get_or_insert(meeting_timestamp);
+
         Self {
             schema: SCHEMA_EVENT.to_string(),
-            id: id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            spec_version: CTES_VERSION.to_string(),
+            kind: "event".to_string(),
+            id: id.unwrap_or_else(|| uuid::Uuid::now_v7().to_string()),
+            revision,
+            author_id,
+            created_at: now_rfc3339.clone(),
+            updated_at: now_rfc3339,
+            event,
+            signature: String::new(),
             peer_id,
             nickname,
             published_at: chrono::Utc::now().timestamp(),
-            event,
-            schedule,
             channel,
             flyer,
-            signature: String::new(),
+            delete_signature: String::new(),
             deleted: false,
         }
     }
@@ -236,10 +662,52 @@ impl ConvoyRecord {
         // Crear copia sin signature
         let mut copy = self.clone();
         copy.signature = String::new();
+        copy.delete_signature = String::new();
+        if copy.event.network.server.is_empty() {
+            copy.event.network.server = copy.event.server.clone();
+        }
+        if copy.event.network.name.is_empty() {
+            copy.event.network.name = copy.event.network.server.clone();
+        }
+        if copy.event.links.is_empty() && !copy.event.link.is_empty() {
+            copy.event.links.push(Link {
+                rel: "details".to_string(),
+                url: copy.event.link.clone(),
+                label: String::new(),
+            });
+        }
+        if copy.event.route.is_none() {
+            let mut route = Route::default();
+            if !copy.event.server.is_empty() {
+                route.origins.push(Place {
+                    city: copy.event.server.clone(),
+                    location: String::new(),
+                    country: String::new(),
+                });
+            }
+            copy.event.route = Some(route);
+        }
+        let meeting_timestamp = copy.event.schedule.meeting_timestamp;
+        copy.event.schedule.start_timestamp.get_or_insert(meeting_timestamp);
+        if copy.created_at.is_empty() {
+            copy.created_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        }
+        if copy.updated_at.is_empty() {
+            copy.updated_at = copy.created_at.clone();
+        }
+        if copy.revision == 1 {
+            copy.revision = 0;
+        }
 
         // Serializar con claves ordenadas
         let value = serde_json::to_value(&copy)
             .context("Failed to serialize ConvoyRecord for canonical JSON")?;
+        let mut value = value;
+        if let Some(obj) = value.as_object_mut() {
+            if obj.get("revision").and_then(|v| v.as_u64()) == Some(0) {
+                obj.remove("revision");
+            }
+        }
         Ok(canonical_json(&value))
     }
 
@@ -272,7 +740,12 @@ impl ConvoyRecord {
         }
 
         // Decodificar peer_id a public key (soporta hex y base64)
-        let key_array = match decode_peer_id_bytes(&self.peer_id) {
+        let signer_id = if self.author_id.is_empty() {
+            &self.peer_id
+        } else {
+            &self.author_id
+        };
+        let key_array = match decode_peer_id_bytes(signer_id) {
             Ok(k) => k,
             Err(_) => return Ok(false),
         };
@@ -300,38 +773,50 @@ impl ConvoyRecord {
         Ok(verifying_key.verify(message, &signature).is_ok())
     }
 
+    pub fn wins_over(&self, existing: &Self) -> bool {
+        if self.revision != existing.revision {
+            return self.revision > existing.revision;
+        }
+        if self.deleted != existing.deleted {
+            return self.deleted;
+        }
+        self.signature > existing.signature
+    }
+
     /// Verifica si el convoy aún es válido (no expiró)
     pub fn is_retained(&self, now: i64) -> bool {
         const RETENTION_DAYS: i64 = 3;
-        self.schedule.meeting_timestamp + RETENTION_DAYS * 86400 > now
+        self.event.schedule.meeting_timestamp + RETENTION_DAYS * 86400 > now
     }
 
     /// Verifica si el convoy se puede publicar (dentro del horizonte)
     pub fn is_within_publish_window(&self, now: i64) -> bool {
         const PUBLISH_HORIZON_DAYS: i64 = 90;
-        self.schedule.meeting_timestamp <= now + PUBLISH_HORIZON_DAYS * 86400
+        self.event.schedule.meeting_timestamp <= now + PUBLISH_HORIZON_DAYS * 86400
     }
 }
 
 impl VoteRecord {
-    /// Crea un nuevo registro de voto
-    pub fn new(convoy_id: String, voter_peer_id: String, vote: i32) -> Self {
+    pub fn new(event_id: String, author_id: String, value: i32, previous: Option<&Self>) -> Self {
+        let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         Self {
-            schema: SCHEMA_VOTE.to_string(),
-            convoy_id,
-            voter_peer_id,
-            vote,
-            ts: chrono::Utc::now().timestamp(),
+            spec_version: CTES_VERSION.to_string(),
+            kind: "vote".to_string(),
+            event_id,
+            revision: previous.map_or(1, |vote| vote.revision.saturating_add(1)),
+            author_id,
+            created_at: previous.map_or_else(|| now.clone(), |vote| vote.created_at.clone()),
+            updated_at: now,
+            data: VoteData { value },
             signature: String::new(),
         }
     }
 
     /// Serialización canónica para firma
     pub fn canonical_json(&self) -> Result<String> {
-        let mut copy = self.clone();
-        copy.signature = String::new();
-        let value = serde_json::to_value(&copy)
+        let mut value = serde_json::to_value(self)
             .context("Failed to serialize VoteRecord for canonical JSON")?;
+        value.as_object_mut().context("VoteRecord must be an object")?.remove("signature");
         Ok(canonical_json(&value))
     }
 
@@ -347,7 +832,7 @@ impl VoteRecord {
 
         let signature = signing_key.sign(message);
         self.signature = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
+            &base64::engine::general_purpose::URL_SAFE_NO_PAD,
             signature.to_bytes(),
         );
 
@@ -362,14 +847,14 @@ impl VoteRecord {
             return Ok(false);
         }
 
-        let key_array = match decode_peer_id_bytes(&self.voter_peer_id) {
+        let key_array = match decode_peer_id_bytes(&self.author_id) {
             Ok(k) => k,
             Err(_) => return Ok(false),
         };
         let verifying_key = VerifyingKey::from_bytes(&key_array).context("Invalid public key")?;
 
         let sig_bytes = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
+            &base64::engine::general_purpose::URL_SAFE_NO_PAD,
             &self.signature,
         )
         .context("Failed to decode signature")?;
@@ -386,6 +871,104 @@ impl VoteRecord {
         let message = canonical.as_bytes();
 
         Ok(verifying_key.verify(message, &signature).is_ok())
+    }
+
+    pub fn validate(&self) -> bool {
+        let event_id = uuid::Uuid::parse_str(&self.event_id);
+        let created = chrono::DateTime::parse_from_rfc3339(&self.created_at);
+        let updated = chrono::DateTime::parse_from_rfc3339(&self.updated_at);
+        self.spec_version == CTES_VERSION
+            && self.kind == "vote"
+            && (1..=9_007_199_254_740_991).contains(&self.revision)
+            && event_id.is_ok_and(|id| id.get_version_num() == 7)
+            && self.author_id.starts_with("ed25519:")
+            && self.author_id.len() == 51
+            && decode_peer_id_bytes(&self.author_id).is_ok()
+            && matches!(self.data.value, -1..=1)
+            && self.created_at.ends_with('Z')
+            && self.updated_at.ends_with('Z')
+            && created.is_ok()
+            && updated.is_ok()
+            && created.unwrap() <= updated.unwrap()
+    }
+
+    pub fn wins_over(&self, existing: &Self) -> bool {
+        if self.revision != existing.revision {
+            return self.revision > existing.revision;
+        }
+        self.signature > existing.signature
+    }
+}
+
+impl ProfileRecord {
+    pub fn new(author_id: String, nickname: String, previous: Option<&Self>) -> Self {
+        let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        Self {
+            spec_version: CTES_VERSION.to_string(),
+            kind: "profile".to_string(),
+            revision: previous.map_or(1, |profile| profile.revision.saturating_add(1)),
+            author_id,
+            created_at: previous.map_or_else(|| now.clone(), |profile| profile.created_at.clone()),
+            updated_at: now,
+            data: ProfileData { nickname, links: Vec::new() },
+            signature: String::new(),
+        }
+    }
+
+    pub fn canonical_json(&self) -> Result<String> {
+        let mut value = serde_json::to_value(self).context("Failed to serialize CTES profile")?;
+        value.as_object_mut().context("ProfileRecord must be an object")?.remove("signature");
+        Ok(canonical_json(&value))
+    }
+
+    pub fn sign(&mut self, secret_key: &SecretKey) -> Result<()> {
+        use ed25519_dalek::{Signer, SigningKey};
+        let signing_key = SigningKey::from_bytes(&secret_key.to_bytes());
+        let signature = signing_key.sign(self.canonical_json()?.as_bytes());
+        self.signature = base64::Engine::encode(
+            &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+            signature.to_bytes(),
+        );
+        Ok(())
+    }
+
+    pub fn verify(&self) -> Result<bool> {
+        use ed25519_dalek::{Verifier, VerifyingKey};
+        if !self.validate() {
+            return Ok(false);
+        }
+        let verifying_key = VerifyingKey::from_bytes(&decode_peer_id_bytes(&self.author_id)?)?;
+        let bytes = base64::Engine::decode(
+            &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+            &self.signature,
+        )?;
+        let signature: [u8; 64] = bytes.try_into().map_err(|_| anyhow::anyhow!("Invalid signature length"))?;
+        Ok(verifying_key.verify(
+            self.canonical_json()?.as_bytes(),
+            &ed25519_dalek::Signature::from_bytes(&signature),
+        ).is_ok())
+    }
+
+    pub fn validate(&self) -> bool {
+        let created = chrono::DateTime::parse_from_rfc3339(&self.created_at);
+        let updated = chrono::DateTime::parse_from_rfc3339(&self.updated_at);
+        self.spec_version == CTES_VERSION
+            && self.kind == "profile"
+            && (1..=9_007_199_254_740_991).contains(&self.revision)
+            && self.author_id.len() == 51
+            && decode_peer_id_bytes(&self.author_id).is_ok()
+            && !self.data.nickname.trim().is_empty()
+            && self.data.nickname.chars().count() <= 32
+            && self.data.links.len() <= 10
+            && self.created_at.ends_with('Z')
+            && self.updated_at.ends_with('Z')
+            && created.is_ok() && updated.is_ok()
+            && created.unwrap() <= updated.unwrap()
+    }
+
+    pub fn wins_over(&self, existing: &Self) -> bool {
+        self.revision > existing.revision
+            || (self.revision == existing.revision && self.signature > existing.signature)
     }
 }
 
@@ -432,36 +1015,37 @@ impl ConvoyStore {
 
     /// Agrega o actualiza un convoy
     pub fn upsert_convoy(&mut self, convoy: ConvoyRecord) {
-        // Don't resurrect deleted convoys
         if let Some(existing) = self.convoys.get(&convoy.id) {
-            if existing.deleted && !convoy.deleted {
+            if !convoy.wins_over(existing) {
                 return;
             }
         }
         self.convoys.insert(convoy.id.clone(), convoy);
     }
 
-    /// Agrega o actualiza un voto (reemplaza el anterior del mismo votante)
-    pub fn upsert_vote(&mut self, vote: VoteRecord) {
-        let convoy_votes = self.votes.entry(vote.convoy_id.clone()).or_default();
-        convoy_votes.insert(vote.voter_peer_id.clone(), vote);
+    pub fn upsert_vote(&mut self, vote: VoteRecord) -> bool {
+        let event_votes = self.votes.entry(vote.event_id.clone()).or_default();
+        if event_votes.get(&vote.author_id).is_some_and(|current| !vote.wins_over(current)) {
+            return false;
+        }
+        event_votes.insert(vote.author_id.clone(), vote);
+        true
     }
 
-    /// Soft delete: marks convoy as deleted instead of removing
-    pub fn delete_convoy(&mut self, convoy_id: &str) -> bool {
-        if let Some(convoy) = self.convoys.get_mut(convoy_id) {
-            convoy.deleted = true;
-            true
-        } else {
-            false
+    pub fn upsert_profile(&mut self, profile: ProfileRecord) -> bool {
+        if self.profiles.get(&profile.author_id)
+            .is_some_and(|current| !profile.wins_over(current)) {
+            return false;
         }
+        self.profiles.insert(profile.author_id.clone(), profile);
+        true
     }
 
     /// Calcula el score de un convoy
     pub fn compute_score(&self, convoy_id: &str) -> i32 {
         self.votes
             .get(convoy_id)
-            .map(|votes| votes.values().map(|v| v.vote).sum())
+            .map(|votes| votes.values().map(|v| v.data.value).sum())
             .unwrap_or(0)
     }
 
@@ -470,8 +1054,8 @@ impl ConvoyStore {
         self.votes
             .get(convoy_id)
             .map(|votes| {
-                let up = votes.values().filter(|v| v.vote == 1).count() as i32;
-                let down = votes.values().filter(|v| v.vote == -1).count() as i32;
+                let up = votes.values().filter(|v| v.data.value == 1).count() as i32;
+                let down = votes.values().filter(|v| v.data.value == -1).count() as i32;
                 (up, down)
             })
             .unwrap_or((0, 0))
@@ -486,13 +1070,13 @@ impl ConvoyStore {
             .filter(|c| {
                 !c.deleted
                     && c.is_retained(now)
-                    && from_date.map_or(true, |from| c.schedule.meeting_timestamp >= from)
-                    && to_date.map_or(true, |to| c.schedule.meeting_timestamp <= to)
+                    && from_date.map_or(true, |from| c.event.schedule.meeting_timestamp >= from)
+                    && to_date.map_or(true, |to| c.event.schedule.meeting_timestamp <= to)
             })
             .collect();
 
         // Ordenar por meeting_timestamp
-        convoys.sort_by_key(|c| c.schedule.meeting_timestamp);
+        convoys.sort_by_key(|c| c.event.schedule.meeting_timestamp);
         convoys
     }
 
@@ -1003,6 +1587,13 @@ impl KnownNicksStore {
 /// Decodifica un peer_id (hex o base64) a 32 bytes.
 /// iroh usa formato hex (64 chars), pero algunos formatos usan base64.
 pub fn decode_peer_id_bytes(peer_id: &str) -> Result<[u8; 32]> {
+    if let Some(encoded) = peer_id.strip_prefix("ed25519:") {
+        let bytes = base64::Engine::decode(
+            &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+            encoded,
+        ).context("Failed to decode CTES author_id")?;
+        return bytes.try_into().map_err(|_| anyhow::anyhow!("Invalid CTES author_id length"));
+    }
     // Hex format: 64 hex chars = 32 bytes (iroh default)
     if peer_id.len() == 64 && peer_id.chars().all(|c| c.is_ascii_hexdigit()) {
         let bytes = hex::decode(peer_id).context("Failed to decode hex peer_id")?;
@@ -1024,6 +1615,14 @@ pub fn decode_peer_id_bytes(peer_id: &str) -> Result<[u8; 32]> {
     let mut key_array = [0u8; 32];
     key_array.copy_from_slice(&bytes);
     Ok(key_array)
+}
+
+pub fn otes_author_id(peer_id: &str) -> Result<String> {
+    let bytes = decode_peer_id_bytes(peer_id)?;
+    Ok(format!(
+        "ed25519:{}",
+        base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, bytes)
+    ))
 }
 
 /// Serialización canónica JSON (claves ordenadas recursivamente)

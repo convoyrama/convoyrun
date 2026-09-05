@@ -1,0 +1,10 @@
+{
+  "specVersion": "1.0",
+  "kind": "tombstone",
+  "eventId": "018f1f2e-7c3b-7a10-8000-000000000001",
+  "revision": 2,
+  "authorId": "ed25519:6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw",
+  "createdAt": "2026-09-04T15:00:00Z",
+  "updatedAt": "2026-09-04T15:10:00Z",
+  "signature": "K-J9Bqq0tEyfCG5YEzD8Zhi9-w2a9xKa-0J28Ya0DZOaQMqpmO8xeNoOYNTWEwm9blo-rXRgry1dZy7Qge25Cw"
+}

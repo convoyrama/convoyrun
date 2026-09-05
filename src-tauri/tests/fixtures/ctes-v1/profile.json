@@ -1,0 +1,18 @@
+{
+  "specVersion": "1.0",
+  "kind": "profile",
+  "revision": 1,
+  "authorId": "ed25519:6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw",
+  "createdAt": "2026-09-04T15:00:00Z",
+  "updatedAt": "2026-09-04T15:00:00Z",
+  "data": {
+    "nickname": "Ruta Ñ",
+    "links": [
+      {
+        "rel": "contact",
+        "url": "https://example.org/ruta"
+      }
+    ]
+  },
+  "signature": "6_EzAccLJ2QGRbBwztg5TuF_HNIqhqvVOclUMNU5S1TkaxomUFP_jCr8X_UnFdrUETe07XoORiqTddCkYxzGAw"
+}

@@ -1,0 +1,33 @@
+{
+  "testKey": {
+    "seedHex": "0707070707070707070707070707070707070707070707070707070707070707",
+    "authorId": "ed25519:6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw"
+  },
+  "documents": {
+    "event": {
+      "canonical": "{\"authorId\":\"ed25519:6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\",\"createdAt\":\"2026-09-04T15:00:00Z\",\"data\":{\"description\":\"Montevideo → Buenos Aires\\nSalida puntual.\",\"eventType\":\"convoy\",\"game\":\"ets2\",\"language\":\"es-UY\",\"links\":[{\"rel\":\"details\",\"url\":\"https://example.org/events/sur\"}],\"network\":{\"server\":\"Simulation 1\"},\"requirements\":{\"dlcs\":[\"Going East!\"],\"mods\":[],\"notes\":\"Carga libre\"},\"route\":{\"destination\":{\"city\":\"Buenos Aires\",\"country\":\"AR\",\"location\":\"Terminal\"},\"origins\":[{\"city\":\"Montevideo\",\"country\":\"UY\",\"location\":\"Puerto\"}],\"waypoints\":[{\"city\":\"Colonia del Sacramento\",\"country\":\"UY\"}]},\"schedule\":{\"endAt\":\"2026-11-07T22:00:00Z\",\"meetingAt\":\"2026-11-07T20:30:00Z\",\"startAt\":\"2026-11-07T21:00:00Z\",\"timeZone\":\"America/Montevideo\"},\"title\":\"Convoy del Sur\",\"translations\":{\"en\":{\"title\":\"Southern Convoy\"}}},\"id\":\"018f1f2e-7c3b-7a10-8000-000000000001\",\"kind\":\"event\",\"revision\":1,\"specVersion\":\"1.0\",\"updatedAt\":\"2026-09-04T15:00:00Z\"}",
+      "sha256": "29b7dbc237cd2f69097fa7547e3ae5b18b4ae8602a31dc39538adfd3812b8c08",
+      "signature": "GHVYxQY-VqTY4V8AIjSkwg7VSN5gGNozBDDsnPWEuV3k7x8jcjwFaFXOqv7f7ZdsIqYqvLJiB0bJ9pK9T_1VCQ"
+    },
+    "profile": {
+      "canonical": "{\"authorId\":\"ed25519:6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\",\"createdAt\":\"2026-09-04T15:00:00Z\",\"data\":{\"links\":[{\"rel\":\"contact\",\"url\":\"https://example.org/ruta\"}],\"nickname\":\"Ruta Ñ\"},\"kind\":\"profile\",\"revision\":1,\"specVersion\":\"1.0\",\"updatedAt\":\"2026-09-04T15:00:00Z\"}",
+      "sha256": "361977eb478a990f1360b272efed3aa862228e310d93cf947082a28be85d28c8",
+      "signature": "6_EzAccLJ2QGRbBwztg5TuF_HNIqhqvVOclUMNU5S1TkaxomUFP_jCr8X_UnFdrUETe07XoORiqTddCkYxzGAw"
+    },
+    "voteUp": {
+      "canonical": "{\"authorId\":\"ed25519:6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\",\"createdAt\":\"2026-09-04T15:05:00Z\",\"data\":{\"value\":1},\"eventId\":\"018f1f2e-7c3b-7a10-8000-000000000001\",\"kind\":\"vote\",\"revision\":1,\"specVersion\":\"1.0\",\"updatedAt\":\"2026-09-04T15:05:00Z\"}",
+      "sha256": "395dea1a685a0f7f0ef0ae21f6995efecd23553974ebbee4182f080c250b3e13",
+      "signature": "FmdwJ1pJScQnEVIL3JslROFghJTjzApC0GIczpBGX_2IIE1JC23bibRnXZeK7wSPzXU94Y5qrkEYEcyuReRWDA"
+    },
+    "voteDown": {
+      "canonical": "{\"authorId\":\"ed25519:6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\",\"createdAt\":\"2026-09-04T15:05:00Z\",\"data\":{\"value\":-1},\"eventId\":\"018f1f2e-7c3b-7a10-8000-000000000001\",\"kind\":\"vote\",\"revision\":2,\"specVersion\":\"1.0\",\"updatedAt\":\"2026-09-04T15:06:00Z\"}",
+      "sha256": "5d28c96521891ad8b59be1c3df074e77f3c19b8b76e6996cb2bf4f33a05b33b6",
+      "signature": "LkT0ryO7MarWVwq8nPSKo8UdV7MMi8pUAjGabGo-YAAfXQLt26NIXaIWn0kimL8HJFsSsntbX_aFWzeBT3FhCw"
+    },
+    "tombstone": {
+      "canonical": "{\"authorId\":\"ed25519:6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\",\"createdAt\":\"2026-09-04T15:00:00Z\",\"eventId\":\"018f1f2e-7c3b-7a10-8000-000000000001\",\"kind\":\"tombstone\",\"revision\":2,\"specVersion\":\"1.0\",\"updatedAt\":\"2026-09-04T15:10:00Z\"}",
+      "sha256": "4c76878924e00e632d27e813c609575b65484ce2d4121c555ddfac0c186b2d1d",
+      "signature": "K-J9Bqq0tEyfCG5YEzD8Zhi9-w2a9xKa-0J28Ya0DZOaQMqpmO8xeNoOYNTWEwm9blo-rXRgry1dZy7Qge25Cw"
+    }
+  }
+}

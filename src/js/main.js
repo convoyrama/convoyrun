@@ -1,6 +1,6 @@
 import { dom } from './dom.js';
 import * as state from './core/state.js';
-import { updateLiveClocks, getGameTime, getDetailedDayNightIcon, formatDateForDisplay, resolveMeetingDateTime } from './core/time.js';
+import { updateLiveClocks, formatDateForDisplay, resolveMeetingDateTime } from './core/time.js';
 import { initI18n } from './i18n.js';
 import { drawCanvas, initCanvasEventListeners } from './canvas.js';
 import { initTimezoneSettings, refreshZoneSettingsUI } from './timezone-picker.js';
@@ -22,43 +22,11 @@ const { DateTime } = luxon;
 let _footerInterval = null;
 let _clockInterval = null;
 
-function updateInGameTimeEmojis() {
-    if (!dom.ingameEmojiDisplay) return;
-    const customDateValue = dom.customDate.value;
-    const customTimeValue = dom.customTime.value;
-
-    if (!customDateValue || !customTimeValue) {
-        dom.ingameEmojiDisplay.textContent = '';
-        return;
-    }
-
-    const meetingDateTime = resolveMeetingDateTime(customDateValue, customTimeValue, dom.manualOffsetSelect.value);
-
-    if (!meetingDateTime.isValid) {
-        dom.ingameEmojiDisplay.textContent = '';
-        return;
-    }
-
-    const meetingGameTime = getGameTime(meetingDateTime.toUTC());
-    const meetingEmoji = getDetailedDayNightIcon(meetingGameTime.hours);
-
-    const departureOffsetMinutes = parseInt(dom.departureTimeOffset.value, 10);
-    const departureDateTime = meetingDateTime.plus({ minutes: departureOffsetMinutes });
-    const departureGameTime = getGameTime(departureDateTime.toUTC());
-    const departureEmoji = getDetailedDayNightIcon(departureGameTime.hours);
-
-    const arrivalDateTime = departureDateTime.plus({ minutes: 50 });
-    const arrivalGameTime = getGameTime(arrivalDateTime.toUTC());
-    const arrivalEmoji = getDetailedDayNightIcon(arrivalGameTime.hours);
-
-    dom.ingameEmojiDisplay.textContent = `${meetingEmoji} ${departureEmoji} ${arrivalEmoji}`;
-}
-
 window.addEventListener('languageChanged', (e) => {
     const { translations } = e.detail;
     state.setCurrentLangData(translations);
 
-    refreshZoneSettingsUI(() => { drawCanvas(); updateInGameTimeEmojis(); });
+    refreshZoneSettingsUI(() => { drawCanvas(); });
 
     if (dom.customDateDisplay && dom.customDate.value) {
         const d = DateTime.fromISO(dom.customDate.value);
@@ -86,7 +54,6 @@ window.addEventListener('languageChanged', (e) => {
     }
 
     drawCanvas();
-    updateInGameTimeEmojis();
 });
 
 function initTabs() {
@@ -128,7 +95,10 @@ async function checkNickRequired() {
             }
             try {
                 const config = await swarmGetConfig();
-                await swarmSetConfig({ ...config, nickname: nick });
+                const result = await swarmSetConfig({ ...config, nickname: nick });
+                if (result?.persisted === false) {
+                    alert(t('settings_persistence_error', 'No se pudo guardar en disco. El cambio quedará solo en esta sesión.'));
+                }
                 overlay.classList.remove('visible');
                 resolve();
             } catch (err) {
@@ -167,9 +137,6 @@ async function init() {
     dom.loadFlyerInput = document.getElementById("load-flyer-input");
     dom.departureTimeOffset = document.getElementById("departure-time-offset");
     dom.localTimeDisplay = document.getElementById("local-time-display");
-    dom.gameTimeDisplay = document.getElementById("game-time-display");
-    dom.gameTimeEmoji = document.getElementById("game-time-emoji");
-    dom.ingameEmojiDisplay = document.getElementById("ingame-emoji-display");
     dom.manualOffsetSelect = document.getElementById("manual-offset-select");
     dom.customDateDisplay = document.getElementById("custom-date-display");
 
@@ -216,9 +183,9 @@ async function init() {
     dom.zoomInWaypoint = document.getElementById("zoom-in-waypoint");
     dom.zoomOutWaypoint = document.getElementById("zoom-out-waypoint");
 
-    dom.manualOffsetSelect.addEventListener('change', () => { drawCanvas(); updateInGameTimeEmojis(); });
+    dom.manualOffsetSelect.addEventListener('change', () => { drawCanvas(); });
 
-    try { initTimezoneSettings(() => { drawCanvas(); updateInGameTimeEmojis(); }); } catch (e) { console.error('[INIT] timezoneSettings failed:', e); }
+    try { initTimezoneSettings(() => { drawCanvas(); }); } catch (e) { console.error('[INIT] timezoneSettings failed:', e); }
     try { initTimeSync(); } catch (e) { console.error('[INIT] timeSync failed:', e); }
     try { initAbout(); } catch (e) { console.error('[INIT] about failed:', e); }
     try { initStylePicker(); } catch (e) { console.error('[INIT] stylePicker failed:', e); }
@@ -264,9 +231,9 @@ async function init() {
     if (_footerInterval) clearInterval(_footerInterval);
     _footerInterval = setInterval(refreshFooter, 30000);
 
-    initFlyerLoad(() => { drawCanvas(); updateInGameTimeEmojis(); });
+    initFlyerLoad(() => { drawCanvas(); });
     initClipboard();
-    initCanvasControls(() => updateInGameTimeEmojis());
+    initCanvasControls(() => drawCanvas());
 
     const userNow = DateTime.local();
     dom.customDate.value = userNow.toISODate();
@@ -280,7 +247,6 @@ async function init() {
     initCanvasEventListeners();
 
     drawCanvas();
-    updateInGameTimeEmojis();
 
     document.fonts.ready.then(() => drawCanvas());
     state.watermarkImage.onload = () => drawCanvas();

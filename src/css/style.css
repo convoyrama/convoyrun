@@ -28,7 +28,7 @@ body { font-family: 'Inter', Arial, sans-serif; min-height: 100vh; display: flex
     border: none; color: #888;
     white-space: nowrap; align-items: center;
 }
-#local-time-display, #game-time-display { color: #00aaff; font-weight: 800; }
+#local-time-display { color: #00aaff; font-weight: 800; }
 
 /* TIEMPO */
 #manual-offset-container { display: flex; align-items: center; gap: 8px; }

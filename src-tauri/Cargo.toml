@@ -1,6 +1,6 @@
 [package]
 name = "convoyrun"
-version = "0.4.5"
+version = "0.5.0"
 description = "ATS/ETS2 convoy & event manager"
 authors = ["CONVOYRAMA"]
 edition = "2021"
@@ -50,7 +50,7 @@ reqwest = { version = "0.12", features = ["multipart", "native-tls"] }
 
 # Utilidades
 anyhow = "1"
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v7"] }
 chrono = "0.4"
 bytes = "1"
 sha2 = "0.10"
@@ -65,4 +65,3 @@ lto = true            # Link Time Optimization (~5-10 MB de ahorro)
 codegen-units = 1     # Mejor optimización (compilación más lenta)
 panic = "abort"       # Sin unwind tables (~5% de ahorro)
 opt-level = 3         # Máxima optimización de velocidad
-

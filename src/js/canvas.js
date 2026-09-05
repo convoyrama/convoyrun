@@ -1,6 +1,6 @@
 import { dom } from './dom.js';
 import * as state from './core/state.js';
-import { getGameTime, getDetailedDayNightIcon, formatDateForDisplayShort, formatTime, resolveMeetingDateTime } from './core/time.js';
+import { formatDateForDisplayShort, formatTime, resolveMeetingDateTime } from './core/time.js';
 
 let _canvasListenersInitialized = false;
 

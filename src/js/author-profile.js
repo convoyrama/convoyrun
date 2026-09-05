@@ -170,7 +170,7 @@ async function openProfile(peerId) {
             const meeting = DateTime.fromSeconds(c.meetingTimestamp);
             const timeStr = meeting.toFormat('EEE d MMM · HH:mm', { locale: state.currentLang || 'es' });
             row.appendChild(el('span', 'ap-convoy-time', timeStr));
-            row.appendChild(el('span', 'ap-convoy-name', c.name));
+            row.appendChild(el('span', 'ap-convoy-name', c.title));
             row.appendChild(el('span', 'ap-convoy-game', `${c.game} · ${modeLabel(c.mode)}`));
             const vUp = c.voteUp || 0;
             const vDown = c.voteDown || 0;

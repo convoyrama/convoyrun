@@ -2,6 +2,10 @@ function writeUint32(view, offset, value) {
     view.setUint32(offset, value, false); // PNG usa big-endian
 }
 
+export const CTES_FLYER_KEY = 'ctes:event';
+export const LEGACY_FLYER_KEYS = ['convoyrun-event-v1', 'convoyrama-event-data'];
+export const MAX_FLYER_METADATA_BYTES = 64 * 1024;
+
 const crc32 = (function() {
     const table = new Uint32Array(256);
     for (let i = 0; i < 256; i++) {
@@ -20,10 +24,75 @@ const crc32 = (function() {
     };
 })();
 
+function readITextChunks(pngBuffer, key) {
+    const matches = [];
+    if (!pngBuffer || pngBuffer.byteLength < 8) {
+        return matches;
+    }
+    const dataView = new DataView(pngBuffer);
+    if (dataView.getUint32(0) !== 0x89504E47 || dataView.getUint32(4) !== 0x0D0A1A0A) {
+        return matches;
+    }
+
+    const decoder = new TextDecoder('utf-8');
+    let offset = 8;
+    while (offset + 8 <= pngBuffer.byteLength) {
+        const length = dataView.getUint32(offset);
+        const type = String.fromCharCode(
+            dataView.getUint8(offset + 4),
+            dataView.getUint8(offset + 5),
+            dataView.getUint8(offset + 6),
+            dataView.getUint8(offset + 7)
+        );
+
+        if (type === 'iTXt') {
+            const chunkBytes = new Uint8Array(pngBuffer, offset + 8, length);
+            let pos = chunkBytes.indexOf(0);
+            if (pos !== -1) {
+                const keyword = decoder.decode(chunkBytes.subarray(0, pos));
+                pos += 1; // null separator
+
+                if (keyword === key) {
+                    pos += 2; // compression flag + method
+                    const langEnd = chunkBytes.indexOf(0, pos);
+                    if (langEnd === -1) {
+                        offset += 12 + length;
+                        continue;
+                    }
+                    pos = langEnd + 1;
+                    const transEnd = chunkBytes.indexOf(0, pos);
+                    if (transEnd === -1) {
+                        offset += 12 + length;
+                        continue;
+                    }
+                    pos = transEnd + 1;
+                    matches.push(decoder.decode(chunkBytes.subarray(pos)));
+                }
+            }
+        }
+
+        if (type === 'IEND') break;
+        offset += 12 + length;
+    }
+    return matches;
+}
+
 // Inyecta un chunk iTXt (metadata custom en UTF-8) en un PNG.
 export function injectMetadataIntoPNG(pngBuffer, key, value) {
     const IEND_CHUNK_TYPE = 'IEND';
     const ITXT_CHUNK_TYPE = 'iTXt';
+    const encoder = new TextEncoder();
+    const valueBytes = encoder.encode(value);
+
+    if (valueBytes.byteLength > MAX_FLYER_METADATA_BYTES) {
+        console.error('[PNG] Metadata too large.');
+        return pngBuffer;
+    }
+
+    if (!pngBuffer || pngBuffer.byteLength < 8) {
+        console.error("[PNG] Invalid signature.");
+        return pngBuffer;
+    }
 
     const dataView = new DataView(pngBuffer);
     if (dataView.getUint32(0) !== 0x89504E47 || dataView.getUint32(4) !== 0x0D0A1A0A) {
@@ -46,9 +115,7 @@ export function injectMetadataIntoPNG(pngBuffer, key, value) {
             const pngWithoutIend = pngBuffer.slice(0, offset);
 
             // iTXt: keyword\0 flag method lang\0 transkey\0 text (spec PNG 11.3.4.4)
-            const encoder = new TextEncoder();
             const keywordBytes = encoder.encode(key);
-            const valueBytes = encoder.encode(value);
             const langTagBytes = encoder.encode(""); // Empty language tag
             const transKeyBytes = encoder.encode(""); // Empty translated keyword
             
@@ -102,43 +169,44 @@ export function injectMetadataIntoPNG(pngBuffer, key, value) {
     return pngBuffer;
 }
 
-// Lee el chunk iTXt que escribe injectMetadataIntoPNG, para recargar un flyer viejo.
+// Lee el chunk iTXt que escribe injectMetadataIntoPNG.
 export function readMetadataFromPNG(pngBuffer, key) {
-    const dataView = new DataView(pngBuffer);
-    if (dataView.getUint32(0) !== 0x89504E47 || dataView.getUint32(4) !== 0x0D0A1A0A) {
+    return readITextChunks(pngBuffer, key)[0] || null;
+}
+
+export function readMetadataValuesFromPNG(pngBuffer, key) {
+    return readITextChunks(pngBuffer, key);
+}
+
+export function readCtesFlyerDocumentFromPNG(pngBuffer) {
+    const documents = readMetadataValuesFromPNG(pngBuffer, CTES_FLYER_KEY);
+    if (documents.length !== 1) return null;
+
+    try {
+        const parsed = JSON.parse(documents[0]);
+        if (!parsed || typeof parsed !== 'object') return null;
+        if (parsed.specVersion !== '1.0' || parsed.kind !== 'flyer' || !parsed.event || typeof parsed.event !== 'object') {
+            return null;
+        }
+        return parsed;
+    } catch {
         return null;
     }
+}
 
-    const decoder = new TextDecoder('utf-8');
-    let offset = 8;
-    while (offset + 8 <= pngBuffer.byteLength) {
-        const length = dataView.getUint32(offset);
-        const type = String.fromCharCode(
-            dataView.getUint8(offset + 4),
-            dataView.getUint8(offset + 5),
-            dataView.getUint8(offset + 6),
-            dataView.getUint8(offset + 7)
-        );
+export function injectCtesFlyerDocumentIntoPNG(pngBuffer, flyerDocument) {
+    return injectMetadataIntoPNG(pngBuffer, CTES_FLYER_KEY, JSON.stringify(flyerDocument));
+}
 
-        if (type === 'iTXt') {
-            const chunkBytes = new Uint8Array(pngBuffer, offset + 8, length);
-            let pos = chunkBytes.indexOf(0);
-            if (pos === -1) { offset += 12 + length; continue; }
-            const keyword = decoder.decode(chunkBytes.subarray(0, pos));
-            pos += 1; // null separator
-
-            if (keyword === key) {
-                pos += 2; // compression flag + method
-                const langEnd = chunkBytes.indexOf(0, pos);
-                pos = langEnd + 1;
-                const transEnd = chunkBytes.indexOf(0, pos);
-                pos = transEnd + 1;
-                return decoder.decode(chunkBytes.subarray(pos));
-            }
-        }
-
-        if (type === 'IEND') break;
-        offset += 12 + length;
+export function normalizeFlyerDocument(document) {
+    if (!document || typeof document !== 'object') return null;
+    if (document.specVersion === '1.0' && document.kind === 'flyer' && document.event && typeof document.event === 'object') {
+        return JSON.parse(JSON.stringify(document));
     }
     return null;
+}
+
+export function cloneFlyerDocument(document) {
+    if (!document || typeof document !== 'object') return null;
+    return JSON.parse(JSON.stringify(document));
 }

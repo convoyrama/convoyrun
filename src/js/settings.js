@@ -24,6 +24,14 @@ function t(key, fallback) {
     return state.currentLangData[key] || fallback;
 }
 
+async function saveConfigWithWarning(config) {
+    const result = await swarmSetConfig(config);
+    if (result?.persisted === false) {
+        alert(t('settings_persistence_error', 'No se pudo guardar en disco. El cambio quedará solo en esta sesión.'));
+    }
+    return result;
+}
+
 function renderDefaultLanguages(langs) {
     const container = $('#settings-default-languages');
     if (!container) return;
@@ -135,7 +143,7 @@ function renderTrusted(trusted, knownNicks) {
         btn.onclick = async () => {
             const config = await swarmGetConfig();
             const next = (config.trustedPeers || []).filter(p => p !== peerId);
-            await swarmSetConfig({ ...config, trustedPeers: next });
+            await saveConfigWithWarning({ ...config, trustedPeers: next });
             await loadSettingsData();
         };
         item.appendChild(btn);
@@ -397,7 +405,7 @@ function initSettings() {
         const nick = $('#settings-nickname').value.trim();
         const config = await swarmGetConfig();
         config.nickname = nick || null;
-        await swarmSetConfig(config);
+        await saveConfigWithWarning(config);
         $('#settings-save-nick').textContent = '✓';
         setTimeout(() => { $('#settings-save-nick').textContent = t('settings_nickname_save', 'Save'); }, 1500);
     });
@@ -427,7 +435,7 @@ function initSettings() {
         const langs = getDefaultLanguages();
         const config = await swarmGetConfig();
         config.defaultLanguages = langs;
-        await swarmSetConfig(config);
+        await saveConfigWithWarning(config);
         $('#settings-save-languages').textContent = '✓';
         setTimeout(() => { $('#settings-save-languages').textContent = t('settings_nickname_save', 'Save'); }, 1500);
     });
@@ -496,7 +504,7 @@ function initSettings() {
         const config = await swarmGetConfig();
         const current = config.trustedPeers || [];
         if (!current.includes(peerId)) {
-            await swarmSetConfig({ ...config, trustedPeers: [...current, peerId] });
+            await saveConfigWithWarning({ ...config, trustedPeers: [...current, peerId] });
         }
         input.value = '';
         await loadSettingsData();
@@ -561,4 +569,3 @@ if (document.readyState === 'loading') {
 } else {
     initSettings();
 }
-

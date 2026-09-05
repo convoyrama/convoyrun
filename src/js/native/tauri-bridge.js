@@ -7,6 +7,7 @@ const SWARM_CACHE_KEY = 'convoyrun-swarm-cache';
 const SWARM_VOTES_KEY = 'convoyrun-swarm-votes';
 const SWARM_MY_VOTES_KEY = 'convoyrun-swarm-my-votes';
 const SWARM_CONFIG_KEY = 'convoyrun-swarm-config';
+const SWARM_CONFIG_FALLBACK_KEY = 'convoyrun-swarm-config-fallback';
 const SWARM_DELETED_KEY = 'convoyrun-swarm-deleted';
 
 function localRead(key, fallback) {
@@ -188,28 +189,42 @@ export async function swarmVote(convoyId, vote) {
 }
 
 export async function swarmGetConfig() {
-    try {
-        const c = await tauri().core.invoke('get_config');
-        if (c) return c;
-    } catch { /* sin backend */ }
+    const fallback = localRead(SWARM_CONFIG_FALLBACK_KEY, null);
+    if (tauri()?.core?.invoke) {
+        const config = await tauri().core.invoke('get_config');
+        if (fallback && typeof fallback === 'object') {
+            return Object.assign({}, config, fallback);
+        }
+        return config;
+    }
     return Object.assign({ nickname: '', trustedPeers: [], filters: {} }, localRead(SWARM_CONFIG_KEY, {}));
 }
 
 export async function swarmSetConfig(config) {
-    try {
-        await tauri().core.invoke('set_config', { config });
-        return { backend: true };
-    } catch {
-        localWrite(SWARM_CONFIG_KEY, config);
-        return { backend: false };
+    if (tauri()?.core?.invoke) {
+        try {
+            await tauri().core.invoke('set_config', { config });
+            try { localStorage.removeItem(SWARM_CONFIG_FALLBACK_KEY); } catch { /* ignore */ }
+            return { backend: true, persisted: true };
+        } catch (err) {
+            console.warn('[BRIDGE] set_config backend failed, saving local fallback:', err);
+            localWrite(SWARM_CONFIG_FALLBACK_KEY, config);
+            return {
+                backend: true,
+                persisted: false,
+                error: err?.message || String(err),
+            };
+        }
     }
+    localWrite(SWARM_CONFIG_KEY, config);
+    return { backend: false, persisted: true };
 }
 
 export async function swarmDelete(convoyId) {
     try {
-        await tauri().core.invoke('delete_convoy', { convoyId });
+        await tauri().core.invoke('delete_tombstone', { convoyId });
     } catch (err) {
-        console.warn('[BRIDGE] delete_convoy backend failed (cleaning locally):', err);
+        console.warn('[BRIDGE] delete_tombstone backend failed (cleaning locally):', err);
     }
     // Siempre limpiar del cache local, aunque el backend falle
     const cache = localRead(SWARM_CACHE_KEY, []);
@@ -430,4 +445,3 @@ export async function getDiscoveryState() {
     } catch { /* sin backend */ }
     return { online: false, neighborCount: 0, dhtStatus: 'inactive' };
 }
-

@@ -5,11 +5,15 @@
 // (sin backend iroh) sirve la caché local.
 import * as state from './core/state.js';
 import { showCopyMessage, setVisible, renderMarkdown } from './core/utils.js';
-import { getGameTime, getDetailedDayNightIcon } from './core/time.js';
 import {
     computeScore, computeVoteCounts, authorReputation, reputationBadge,
     validateConvoy, nowUnix,
 } from './core/convoy.js';
+import {
+    EVENT_TYPE_COLORS,
+    VOTE_SYMBOL_DOWN,
+    VOTE_SYMBOL_UP,
+} from './core/visual-tokens.js';
 import { displayName } from './core/display-name.js';
 import {
     swarmInit, swarmList, swarmGetVotes, swarmGetMyVotes, swarmVote,
@@ -123,9 +127,9 @@ function applyFilters(list) {
     const allowedLangs = config.defaultLanguages || [];
     if (allowedLangs.length > 0) {
         out = out.filter(c => {
-            const cLangs = c.event.languages || [];
-            if (cLangs.length === 0) return true; // eventos sin idioma siempre visibles
-            return cLangs.some(l => allowedLangs.includes(l));
+            const cLang = c.event.language || '';
+            if (!cLang) return true; // eventos sin idioma siempre visibles
+            return allowedLangs.includes(cLang);
         });
     }
     out = out.filter(c => !isOffensive(c));
@@ -134,7 +138,7 @@ function applyFilters(list) {
 
 const OFFENSIVE_PATTERNS = /\b(spam|scam|hack|cheat|free.?coins|click.?here|buy.?followers|estafa|robo|hackeo|monedas.?gratis|golpistas|hack\.\w+\.\w+)\b/i;
 function isOffensive(c) {
-    const text = `${c.event.name || ''} ${c.event.description || ''}`;
+    const text = `${c.event.title || ''} ${c.event.description || ''}`;
     return OFFENSIVE_PATTERNS.test(text);
 }
 
@@ -172,12 +176,12 @@ function creatorZoneLabel(c) {
 }
 
 function formatForDiscord(c) {
-    const name = c.event.name || 'Evento';
-    const link = c.event.link || 'https://convoyrama.github.io';
-    const server = c.event.server || 'Sin especificar';
-    const startCity = c.event.route?.startCity || c.event.startPlace || '';
+    const name = c.event.title || 'Evento';
+    const link = c.event.links?.[0]?.url || 'https://convoyrama.github.io';
+    const server = c.event.network?.server || 'Sin especificar';
+    const startCity = c.event.route?.origins?.[0]?.city || '';
     const startLocation = c.event.route?.startLocation || '';
-    const destCity = c.event.route?.destCity || c.event.destination || '';
+    const destCity = c.event.route?.destination?.city || '';
     const destLocation = c.event.route?.destLocation || '';
     const partida = startCity ? (startLocation ? `${startCity} — ${startLocation}` : startCity) : 'Sin especificar';
     const destino = destCity ? (destLocation ? `${destCity} — ${destLocation}` : destCity) : 'Sin especificar';
@@ -187,30 +191,16 @@ function formatForDiscord(c) {
     const departureOffset = 15;
     const departureTs = meetingTs + departureOffset * 60;
     const arrivalTs = departureTs + 50 * 60;
-
-    const meetingGameTime = getGameTime(DateTime.fromSeconds(meetingTs).toUTC());
-    const meetingEmoji = getDetailedDayNightIcon(meetingGameTime.hours);
-    const departureGameTime = getGameTime(DateTime.fromSeconds(departureTs).toUTC());
-    const departureEmoji = getDetailedDayNightIcon(departureGameTime.hours);
-    const arrivalGameTime = getGameTime(DateTime.fromSeconds(arrivalTs).toUTC());
-    const arrivalEmoji = getDetailedDayNightIcon(arrivalGameTime.hours);
-
-    const itKey = state.currentLangData.ingame_time_title || 'Hora ingame';
-    const mKey = state.currentLangData.meeting_label || 'Reunión';
-    const sKey = state.currentLangData.departure_label || 'Salida';
-    const aKey = state.currentLangData.arrival_label || 'Llegada aprox';
     const dtKey = state.currentLangData.discord_arrival_time || 'Llegada Aprox.:';
 
-    const ingameTimeLine = `**${itKey}:** ${mKey}: ${meetingEmoji} ${sKey}: ${departureEmoji} ${aKey}: ${arrivalEmoji}`;
-
-    return `[**${name}**](${link})\nServidor: ${server}\nPartida: ${partida}\nDestino: ${destino}\n\n**Reunión:** <t:${meetingTs}:F> (<t:${meetingTs}:R>)\n**Salida:** <t:${departureTs}:t> (<t:${departureTs}:R>)\n**${dtKey}** <t:${arrivalTs}:t> (<t:${arrivalTs}:R>)\n${ingameTimeLine}\n\nDescripción: ${description}`;
+    return `[**${name}**](${link})\nServidor: ${server}\nPartida: ${partida}\nDestino: ${destino}\n\n**Reunión:** <t:${meetingTs}:F> (<t:${meetingTs}:R>)\n**Salida:** <t:${departureTs}:t> (<t:${departureTs}:R>)\n**${dtKey}** <t:${arrivalTs}:t> (<t:${arrivalTs}:R>)\n\nDescripción: ${description}`;
 }
 
 function buildVoteBtn(c, dir) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'swarm-vote-btn' + (myVotes[c.id] === dir ? ' active' : '');
-    b.textContent = dir === 1 ? '▲' : '▼';
+    b.textContent = dir === 1 ? VOTE_SYMBOL_UP : VOTE_SYMBOL_DOWN;
     b.title = label(dir === 1 ? 'swarm_vote_up_title' : 'swarm_vote_down_title', dir === 1 ? 'Votar a favor' : 'Votar en contra');
     b.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -263,15 +253,14 @@ function buildEvent(c) {
     const badges = el('div', 'swarm-badges');
     badges.appendChild(el('span', 'swarm-badge swarm-badge-game', c.event.game));
     badges.appendChild(el('span', `swarm-badge swarm-badge-mode swarm-mode-${c.event.mode}`, modeLabel(c.event.mode)));
-    if (c.event.languages && c.event.languages.length) {
-        const langText = c.event.languages.map(l => l.toUpperCase()).join(' ');
-        badges.appendChild(el('span', 'swarm-badge swarm-badge-lang', langText));
+    if (c.event.language) {
+        badges.appendChild(el('span', 'swarm-badge swarm-badge-lang', c.event.language.toUpperCase()));
     }
     row.appendChild(badges);
 
     row.appendChild(el('span', 'swarm-row-time', DateTime.fromSeconds(c.schedule.meetingTimestamp).toFormat('HH:mm')));
 
-    row.appendChild(el('span', 'swarm-row-name', c.event.name));
+    row.appendChild(el('span', 'swarm-row-name', c.event.title));
 
     // Canal a la derecha del nombre
     if (c.channel) {
@@ -289,7 +278,7 @@ function buildEvent(c) {
     const votesBox = el('div', 'swarm-votes');
     votesBox.appendChild(buildVoteBtn(c, 1));
     const vc = computeVoteCounts(votes[c.id]);
-    votesBox.appendChild(el('span', 'swarm-score', `▲ ${vc.up} ▼ ${vc.down}`));
+    votesBox.appendChild(el('span', 'swarm-score', `${VOTE_SYMBOL_UP} ${vc.up} ${VOTE_SYMBOL_DOWN} ${vc.down}`));
     votesBox.appendChild(buildVoteBtn(c, -1));
     row.appendChild(votesBox);
 
@@ -305,12 +294,12 @@ function buildEvent(c) {
         if (isSafeUrl) {
             const img = el('img', 'swarm-flyer-thumb');
             img.src = flyerUrl;
-            img.alt = c.event.name;
+            img.alt = c.event.title;
             img.style.cursor = 'pointer';
             img.title = label('swarm_flyer_zoom', 'Click para ver en grande');
             img.addEventListener('click', (e) => {
                 e.stopPropagation();
-                showFlyerLightbox(flyerUrl, c.event.name);
+                showFlyerLightbox(flyerUrl, c.event.title);
             });
             details.appendChild(img);
         }
@@ -318,7 +307,7 @@ function buildEvent(c) {
 
     const info = el('div', 'swarm-row-info');
 
-    info.appendChild(el('div', 'swarm-detail-name', c.event.name));
+    info.appendChild(el('div', 'swarm-detail-name', c.event.title));
 
     // Tipo de evento
     const eventTypeKey = `event_type_${eventType}`;
@@ -405,10 +394,10 @@ function buildEvent(c) {
     info.appendChild(author);
 
     const line = [];
-    if (c.event.server) line.push(c.event.server);
-    const startCity = c.event.route?.startCity || c.event.startPlace || '';
+    if (c.event.network?.server) line.push(c.event.network.server);
+    const startCity = c.event.route?.origins?.[0]?.city || '';
     const startLocation = c.event.route?.startLocation || '';
-    const destCity = c.event.route?.destCity || c.event.destination || '';
+    const destCity = c.event.route?.destination?.city || '';
     const destLocation = c.event.route?.destLocation || '';
     const startFull = startCity ? (startLocation ? `${startCity} — ${startLocation}` : startCity) : '';
     const destFull = destCity ? (destLocation ? `${destCity} — ${destLocation}` : destCity) : '';
@@ -425,13 +414,11 @@ function buildEvent(c) {
         info.appendChild(descEl);
     }
 
-    if (c.event.languages && c.event.languages.length) {
+    if (c.event.language) {
         const langLabel = el('div', 'swarm-detail-kicker', label('swarm_wizard_languages', 'Idiomas'));
         info.appendChild(langLabel);
         const langList = el('div', 'swarm-detail-languages');
-        for (const l of c.event.languages) {
-            langList.appendChild(el('span', 'swarm-badge swarm-badge-lang', l.toUpperCase()));
-        }
+        langList.appendChild(el('span', 'swarm-badge swarm-badge-lang', c.event.language.toUpperCase()));
         info.appendChild(langList);
     }
 
