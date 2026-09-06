@@ -5,7 +5,7 @@
 export const SCHEMA_EVENT = 'convoyrun/event/v1';
 
 export const EVENT_TYPES = ['convoy', 'truck_show', 'exploration', 'competition', 'other'];
-export const GAME_IDS = ['ATS', 'ETS2', 'other'];
+export const GAME_IDS = ['ats', 'ets2', 'other'];
 export const MODE_IDS = ['simulation', 'realistic', 'arcade', 'race', 'other'];
 
 // Política de retención: un evento sobrevive hasta el 3er día
@@ -17,8 +17,14 @@ export function isValidEventType(type) {
     return EVENT_TYPES.includes(type);
 }
 
+export function normalizeGame(game) {
+    const value = String(game || '').trim().toLowerCase();
+    if (value === 'ats' || value === 'ets2' || value === 'other') return value;
+    return '';
+}
+
 export function isValidGame(game) {
-    return GAME_IDS.includes(game);
+    return !!normalizeGame(game);
 }
 
 export function isValidMode(mode) {
@@ -32,7 +38,8 @@ export function createConvoy({
     description = '', channel = '',
     nickname = '', peerId = null, id = null, publishedAt = null, flyer = null,
 }) {
-    if (!title || !isValidGame(game) || !isValidMode(mode) || !Number.isFinite(meetingTimestamp) || !ianaTimeZone) {
+    const normalizedGame = normalizeGame(game);
+    if (!title || !normalizedGame || !isValidMode(mode) || !Number.isFinite(meetingTimestamp) || !ianaTimeZone) {
         throw new Error('Evento incompleto: title, game, mode, meetingTimestamp y ianaTimeZone son obligatorios.');
     }
     const meetingAt = new Date(meetingTimestamp * 1000).toISOString();
@@ -60,7 +67,7 @@ export function createConvoy({
         language,
         translations: {},
         eventType: type,
-        game,
+        game: normalizedGame,
         network: {
             server: server || '',
             name: server || '',

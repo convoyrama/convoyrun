@@ -6,7 +6,7 @@
 import * as state from './core/state.js';
 import { showCopyMessage, renderMarkdown } from './core/utils.js';
 import { readCtesFlyerDocumentFromPNG } from './core/png-metadata.js';
-import { createConvoy, isWithinPublishWindow } from './core/convoy.js';
+import { createConvoy, isWithinPublishWindow, normalizeGame } from './core/convoy.js';
 import { swarmPublish, swarmGetConfig, swarmSetConfig, swarmValidateChannel, swarmListChannels, uploadToCatbox } from './native/tauri-bridge.js';
 import { AVAILABLE_LANGUAGES } from './core/config.js';
 
@@ -277,10 +277,7 @@ export function initSwarmPublish(onPublished) {
                         typeEl.value = event.eventType;
                     }
                     if (event.game && gameEl) {
-                        const gameKey = String(event.game).toLowerCase();
-                        if (gameKey === 'ats') gameEl.value = 'ATS';
-                        else if (gameKey === 'ets2') gameEl.value = 'ETS2';
-                        else gameEl.value = 'other';
+                        gameEl.value = normalizeGame(event.game) || 'other';
                     }
                     if (event.description) {
                         descEl.value = event.description;
@@ -357,7 +354,7 @@ export function initSwarmPublish(onPublished) {
     const FLYER_STORAGE_KEY = 'convoyrun-flyer-draft';
     const flyerFields = () => ({
         name: nameEl?.value || '',
-        game: gameEl?.value || 'ATS',
+        game: normalizeGame(gameEl?.value) || 'other',
         mode: modeEl?.value || 'simulation',
         type: typeEl?.value || 'convoy',
         server: serverEl?.value || '',
@@ -382,7 +379,7 @@ export function initSwarmPublish(onPublished) {
             if (!raw) return false;
             const d = JSON.parse(raw);
             if (d.name && nameEl) nameEl.value = d.name;
-            if (d.game && gameEl) gameEl.value = d.game;
+            if (d.game && gameEl) gameEl.value = normalizeGame(d.game) || 'other';
             if (d.mode && modeEl) modeEl.value = d.mode;
             if (d.type && typeEl) typeEl.value = d.type;
             if (d.server && serverEl) serverEl.value = d.server;
@@ -436,7 +433,7 @@ export function initSwarmPublish(onPublished) {
 
     function resetWizard() {
         nameEl.value = '';
-        gameEl.value = 'ATS';
+        gameEl.value = 'ats';
         modeEl.value = 'simulation';
         if (typeEl) typeEl.value = 'convoy';
         serverEl.value = '';
@@ -484,7 +481,7 @@ export function initSwarmPublish(onPublished) {
         const convoy = createConvoy({
             title: name,
             type: typeEl ? typeEl.value : 'convoy',
-            game: gameEl.value,
+            game: normalizeGame(gameEl.value) || 'other',
             mode: modeEl.value,
             meetingTimestamp: meeting.toUnixInteger(),
             ianaTimeZone: DateTime.local().zoneName || 'UTC',

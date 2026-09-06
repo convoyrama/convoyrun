@@ -7,7 +7,7 @@ import * as state from './core/state.js';
 import { showCopyMessage, setVisible, renderMarkdown } from './core/utils.js';
 import {
     computeScore, computeVoteCounts, authorReputation, reputationBadge,
-    validateConvoy, nowUnix,
+    validateConvoy, nowUnix, normalizeGame,
 } from './core/convoy.js';
 import {
     EVENT_TYPE_COLORS,
@@ -25,7 +25,7 @@ import {
 const { DateTime } = luxon;
 
 const FILTER_LABELS = {
-    'filter-game':   { all: 'swarm_filter_all', ATS: 'swarm_game_ats', ETS2: 'swarm_game_ets2', other: 'swarm_filter_other' },
+    'filter-game':   { all: 'swarm_filter_all', ats: 'swarm_game_ats', ets2: 'swarm_game_ets2', other: 'swarm_filter_other' },
     'filter-mode':   { all: 'swarm_filter_all', race: 'swarm_mode_race', simulation: 'swarm_mode_simulation', realistic: 'swarm_mode_realistic', arcade: 'swarm_mode_arcade', other: 'swarm_filter_other' },
     'filter-type':   { all: 'swarm_filter_all', convoy: 'event_type_convoy', truck_show: 'event_type_truck_show', exploration: 'event_type_exploration', competition: 'event_type_competition', other: 'event_type_other' },
     'filter-author': { all: 'swarm_filter_all', trusted: 'swarm_filter_trusted' },
@@ -86,6 +86,11 @@ function modeLabel(mode) {
     return label({ simulation: 'swarm_mode_simulation', realistic: 'swarm_mode_realistic', arcade: 'swarm_mode_arcade', race: 'swarm_mode_race' }[mode], mode);
 }
 
+function gameLabel(game) {
+    const normalized = normalizeGame(game);
+    return label({ ats: 'swarm_game_ats', ets2: 'swarm_game_ets2', other: 'swarm_filter_other' }[normalized], game || normalized);
+}
+
 function populateFilterLabels() {
     for (const [selId, map] of Object.entries(FILTER_LABELS)) {
         const sel = document.getElementById(selId);
@@ -117,7 +122,7 @@ function applyFilters(list) {
     const cutoff24h = Math.floor(Date.now() / 1000) - 24 * 3600;
     out = out.filter(c => c.schedule.meetingTimestamp > cutoff24h);
     if (blockedAuthorsSet.size > 0) out = out.filter(c => !blockedAuthorsSet.has(c.peerId));
-    if (f.game !== 'all') out = out.filter(c => c.event.game === f.game);
+    if (f.game !== 'all') out = out.filter(c => normalizeGame(c.event.game) === normalizeGame(f.game));
     if (f.mode !== 'all') out = out.filter(c => c.event.mode === f.mode);
     if (f.type !== 'all') out = out.filter(c => (c.event.eventType || 'convoy') === f.type);
     if (f.trust === 'trusted') out = out.filter(c => (config.trustedPeers || []).includes(c.peerId));
@@ -243,7 +248,7 @@ function buildEvent(c) {
     row.appendChild(el('span', 'swarm-row-caret', '▶'));
 
     const badges = el('div', 'swarm-badges');
-    badges.appendChild(el('span', 'swarm-badge swarm-badge-game', c.event.game));
+    badges.appendChild(el('span', 'swarm-badge swarm-badge-game', gameLabel(c.event.game)));
     badges.appendChild(el('span', `swarm-badge swarm-badge-mode swarm-mode-${c.event.mode}`, modeLabel(c.event.mode)));
     if (c.event.language) {
         badges.appendChild(el('span', 'swarm-badge swarm-badge-lang', c.event.language.toUpperCase()));

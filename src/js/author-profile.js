@@ -1,7 +1,7 @@
 // Panel de perfil de autor: muestra eventos, reputación y acciones de moderación.
 import * as state from './core/state.js';
 import { showCopyMessage, setVisible } from './core/utils.js';
-import { reputationBadge, computeScore } from './core/convoy.js';
+import { reputationBadge, computeScore, normalizeGame } from './core/convoy.js';
 import {
     getAuthorProfile, blockAuthor, unblockAuthor,
     importBlacklist, importTrustlist, copyToClipboard,
@@ -31,6 +31,11 @@ function el(tag, className, text) {
 
 function modeLabel(mode) {
     return t({ simulation: 'swarm_mode_simulation', realistic: 'swarm_mode_realistic', arcade: 'swarm_mode_arcade', race: 'swarm_mode_race' }[mode], mode);
+}
+
+function gameLabel(game) {
+    const normalized = normalizeGame(game);
+    return t({ ats: 'swarm_game_ats', ets2: 'swarm_game_ets2', other: 'swarm_filter_other' }[normalized], game || normalized);
 }
 
 function buildOverlay() {
@@ -171,7 +176,7 @@ async function openProfile(peerId) {
             const timeStr = meeting.toFormat('EEE d MMM · HH:mm', { locale: state.currentLang || 'es' });
             row.appendChild(el('span', 'ap-convoy-time', timeStr));
             row.appendChild(el('span', 'ap-convoy-name', c.title));
-            row.appendChild(el('span', 'ap-convoy-game', `${c.game} · ${modeLabel(c.mode)}`));
+            row.appendChild(el('span', 'ap-convoy-game', `${gameLabel(c.game)} · ${modeLabel(c.mode)}`));
             const vUp = c.voteUp || 0;
             const vDown = c.voteDown || 0;
             row.appendChild(el('span', 'ap-convoy-score', `\u25B2 ${vUp} \u25BC ${vDown}`));
