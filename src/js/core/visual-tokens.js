@@ -10,3 +10,9 @@ export const VOTE_SYMBOL_UP = '▲';
 export const VOTE_SYMBOL_DOWN = '▼';
 export const VOTE_ACTIVE_COLOR = '#00aaff';
 export const VOTE_INACTIVE_COLOR = '#8a8a8a';
+
+export const CONNECTION_STATE_COLORS = Object.freeze({
+    online: '#4ade80',
+    searching: '#facc15',
+    offline: '#666666',
+});

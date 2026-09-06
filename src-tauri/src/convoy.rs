@@ -41,7 +41,7 @@ fn is_one(value: &u64) -> bool {
 #[cfg(test)]
 mod ctes_fixture_tests {
     use super::{
-        canonical_json, ConvoyRecord, ConvoyStore, EventData, EventType, Game, Mode, ProfileRecord,
+        canonical_json, EventDocument, ConvoyStore, EventData, EventType, Game, Mode, ProfileRecord,
         Schedule, VoteRecord,
     };
     use base64::Engine as _;
@@ -156,14 +156,14 @@ mod ctes_fixture_tests {
         }
     }
 
-    fn convoy_record(revision: u64, deleted: bool, signature: &str) -> ConvoyRecord {
+    fn convoy_record(revision: u64, deleted: bool, signature: &str) -> EventDocument {
         let schedule = Schedule {
             meeting_timestamp: 1_700_000_100,
             start_timestamp: Some(1_700_000_100),
             end_timestamp: None,
             iana_time_zone: "UTC".to_string(),
         };
-        ConvoyRecord {
+        EventDocument {
             schema: super::SCHEMA_EVENT.to_string(),
             spec_version: super::CTES_VERSION.to_string(),
             kind: "event".to_string(),
@@ -467,10 +467,10 @@ pub struct EventData {
     pub server: String,
 }
 
-/// Registro de evento CTES (publicado por un autor).
+/// Documento CTES de evento (publicado por un autor).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ConvoyRecord {
+pub struct EventDocument {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub schema: String,
     #[serde(rename = "specVersion")]
@@ -583,14 +583,14 @@ pub struct ChannelRecord {
 /// Estado local de convoys (caché)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ConvoyStore {
-    pub convoys: HashMap<String, ConvoyRecord>,
+    pub convoys: HashMap<String, EventDocument>,
     pub votes: HashMap<String, HashMap<String, VoteRecord>>, // convoy_id -> voter_peer_id -> vote
     #[serde(default)]
     pub profiles: HashMap<String, ProfileRecord>,
 }
 
-impl ConvoyRecord {
-    /// Crea un nuevo registro de convoy
+impl EventDocument {
+    /// Crea un nuevo documento de evento
     pub fn new(
         peer_id: String,
         revision: u64,
@@ -701,7 +701,7 @@ impl ConvoyRecord {
 
         // Serializar con claves ordenadas
         let value = serde_json::to_value(&copy)
-            .context("Failed to serialize ConvoyRecord for canonical JSON")?;
+            .context("Failed to serialize EventDocument for canonical JSON")?;
         let mut value = value;
         if let Some(obj) = value.as_object_mut() {
             if obj.get("revision").and_then(|v| v.as_u64()) == Some(0) {
@@ -1014,7 +1014,7 @@ impl ConvoyStore {
     }
 
     /// Agrega o actualiza un convoy
-    pub fn upsert_convoy(&mut self, convoy: ConvoyRecord) {
+    pub fn upsert_convoy(&mut self, convoy: EventDocument) {
         if let Some(existing) = self.convoys.get(&convoy.id) {
             if !convoy.wins_over(existing) {
                 return;
@@ -1062,7 +1062,7 @@ impl ConvoyStore {
     }
 
     /// Lista convoys vigentes (no expirados, no borrados)
-    pub fn list_convoys(&self, from_date: Option<i64>, to_date: Option<i64>) -> Vec<&ConvoyRecord> {
+    pub fn list_convoys(&self, from_date: Option<i64>, to_date: Option<i64>) -> Vec<&EventDocument> {
         let now = chrono::Utc::now().timestamp();
         let mut convoys: Vec<_> = self
             .convoys

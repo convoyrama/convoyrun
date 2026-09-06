@@ -9,7 +9,7 @@ import {
     publishTrustlist, importTrustlist, stopFollowingTrustlist,
     getPublicTrustlists,
     swarmListChannels, getSystemChannels, activateChannel, changeChannelPassword, deleteChannel,
-    getKnownNicks, setNickAlias, openDevtools,
+    getKnownNicks, setNickAlias, openDevtools, resetLocalData,
 } from './native/tauri-bridge.js';
 import { setVisible } from './core/utils.js';
 import { displayName, truncPeer } from './core/display-name.js';
@@ -424,6 +424,20 @@ function initSettings() {
 
     $('#settings-open-devtools')?.addEventListener('click', async () => {
         await openDevtools();
+    });
+
+    $('#settings-reset-local-data')?.addEventListener('click', async () => {
+        const confirmed = confirm(t(
+            'settings_reset_local_data_confirm_body',
+            'This removes the local nickname, blocked authors, filters, cached events, votes, profiles, and the current P2P identity from this device.'
+        ));
+        if (!confirmed) return;
+        const btn = $('#settings-reset-local-data');
+        btn.disabled = true;
+        btn.textContent = '...';
+        await resetLocalData();
+        await swarmRestart();
+        window.location.reload();
     });
 
     // Autostart checkbox

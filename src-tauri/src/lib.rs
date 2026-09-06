@@ -13,7 +13,7 @@ use tokio::sync::RwLock;
 mod p2p;
 mod convoy;
 use p2p::{NodeStatus, P2pState, GossipMessage, UserConfig};
-use convoy::{ConvoyRecord, ConvoyStore, EventData, FlyerData, Schedule, VoteRecord, ProfileRecord, ChannelRecord, ChannelStore, BlacklistRecord, BlacklistStore, TrustlistRecord, TrustlistStore, KnownNicksStore, SYSTEM_CHANNELS};
+use convoy::{EventDocument, ConvoyStore, EventData, FlyerData, Schedule, VoteRecord, ProfileRecord, ChannelRecord, ChannelStore, BlacklistRecord, BlacklistStore, TrustlistRecord, TrustlistStore, KnownNicksStore, SYSTEM_CHANNELS};
 
 /// Upload de imagen a Catbox.moe (multipart desde Rust, evita CORS del webview)
 /// Soporta PNG, JPEG, WebP, GIF
@@ -161,6 +161,65 @@ async fn save_config_cached(data_dir: &Path, config: &Arc<RwLock<UserConfig>>, n
     Ok(())
 }
 
+fn remove_file_if_exists(path: &Path) -> Result<(), String> {
+    if path.exists() {
+        std::fs::remove_file(path).map_err(|e| format!("Failed to remove {}: {}", path.display(), e))?;
+    }
+    Ok(())
+}
+
+fn remove_dir_if_exists(path: &Path) -> Result<(), String> {
+    if path.exists() {
+        std::fs::remove_dir_all(path).map_err(|e| format!("Failed to remove {}: {}", path.display(), e))?;
+    }
+    Ok(())
+}
+
+fn clear_local_disk_state(data_dir: &Path) -> Result<(), String> {
+    for file in [
+        "convoy_store.json",
+        "convoy_store.json.tmp",
+        "channel_store.json",
+        "channel_store.json.tmp",
+        "blacklist_store.json",
+        "blacklist_store.json.tmp",
+        "trustlist_store.json",
+        "trustlist_store.json.tmp",
+        "known_nicks.json",
+        "known_nicks.json.tmp",
+        "convoyrun_config.json",
+        "convoyrun_config.json.tmp",
+        "node_identity.key",
+        "node_identity.key.bak",
+    ] {
+        remove_file_if_exists(&data_dir.join(file))?;
+    }
+    remove_dir_if_exists(&data_dir.join("blobs"))?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn reset_local_data(state: State<'_, AppState>) -> Result<(), String> {
+    {
+        let mut p2p_guard = state.p2p.write().await;
+        *p2p_guard = None;
+    }
+
+    {
+        *state.convoy_store.write().await = ConvoyStore::default();
+        let mut channel_store = ChannelStore::default();
+        channel_store.ensure_system_channels();
+        *state.channel_store.write().await = channel_store;
+        *state.blacklist_store.write().await = BlacklistStore::default();
+        *state.trustlist_store.write().await = TrustlistStore::default();
+        *state.known_nicks.write().await = KnownNicksStore::default();
+        *state.config.write().await = UserConfig::default();
+    }
+
+    clear_local_disk_state(&state.data_dir)?;
+    Ok(())
+}
+
 /// Procesa mensajes de gossip recibidos de otros nodos
 async fn process_gossip_receiver(
     mut receiver: distributed_topic_tracker::GossipReceiver,
@@ -250,7 +309,7 @@ async fn process_gossip_receiver(
                     // Deduplicación: generar key única por mensaje
                     let dedup_key = match &gossip_msg {
                         GossipMessage::Convoy { data } => {
-                            serde_json::from_str::<ConvoyRecord>(data).ok().map(|r| format!("convoy:{}", r.id))
+                            serde_json::from_str::<EventDocument>(data).ok().map(|r| format!("convoy:{}", r.id))
                         }
                         GossipMessage::Vote { data } => {
                             let _ = data;
@@ -285,7 +344,7 @@ async fn process_gossip_receiver(
                     match gossip_msg {
                         GossipMessage::Convoy { data } => {
                             eprintln!("[P2P] Received Convoy gossip: {} bytes", data.len());
-                            let record = if let Ok(r) = serde_json::from_str::<ConvoyRecord>(&data) {
+                            let record = if let Ok(r) = serde_json::from_str::<EventDocument>(&data) {
                                 r
                             } else {
                                 eprintln!("[P2P] Failed to parse convoy from gossip data");
@@ -419,7 +478,7 @@ async fn process_gossip_receiver(
                                 record.delete_signature = signature.clone();
                                 record
                             } else {
-                                ConvoyRecord {
+                                EventDocument {
                                     schema: convoy::SCHEMA_EVENT.to_string(),
                                     spec_version: convoy::CTES_VERSION.to_string(),
                                     kind: "event".to_string(),
@@ -924,7 +983,7 @@ async fn get_author_profile(
     let config = load_config_cached(&state.config).await;
 
     let author_id = convoy::otes_author_id(&peer_id).map_err(|e| e.to_string())?;
-    let convoys: Vec<&ConvoyRecord> = store.convoys.values().filter(|c| c.author_id == author_id && !c.deleted).collect();
+    let convoys: Vec<&EventDocument> = store.convoys.values().filter(|c| c.author_id == author_id && !c.deleted).collect();
     let reputation: i32 = convoys.iter().map(|c| store.compute_score(&c.id)).sum();
     let nickname = store
         .profiles
@@ -972,7 +1031,7 @@ async fn publish_convoy(
     channel: Option<String>,
     channel_password: Option<String>,
     id: Option<String>,
-) -> Result<ConvoyRecord, String> {
+) -> Result<EventDocument, String> {
     let p2p_guard = state.p2p.read().await;
     let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
 
@@ -1018,7 +1077,7 @@ async fn publish_convoy(
         }
     };
 
-    let mut record = ConvoyRecord::new(
+    let mut record = EventDocument::new(
         p2p.peer_id(),
         revision,
         nickname,
@@ -1064,7 +1123,7 @@ async fn list_convoys(
     state: State<'_, AppState>,
     from_date: Option<i64>,
     to_date: Option<i64>,
-) -> Result<Vec<ConvoyRecord>, String> {
+) -> Result<Vec<EventDocument>, String> {
     let store = state.convoy_store.read().await;
     let convoys = store.list_convoys(from_date, to_date);
     Ok(convoys.into_iter().cloned().collect())
@@ -1507,6 +1566,7 @@ pub fn run() {
             p2p_status,
             export_identity,
             import_identity,
+            reset_local_data,
             get_config,
             set_config,
             block_author,

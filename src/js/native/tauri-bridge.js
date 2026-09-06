@@ -91,6 +91,24 @@ export async function swarmRestart() {
     return { mode: 'local', online: false, peerId: '' };
 }
 
+export async function resetLocalData() {
+    try {
+        localStorage.removeItem(SWARM_CACHE_KEY);
+        localStorage.removeItem(SWARM_VOTES_KEY);
+        localStorage.removeItem(SWARM_MY_VOTES_KEY);
+        localStorage.removeItem(SWARM_CONFIG_KEY);
+        localStorage.removeItem(SWARM_CONFIG_FALLBACK_KEY);
+        localStorage.removeItem(SWARM_DELETED_KEY);
+    } catch (err) {
+        console.warn('[BRIDGE] localStorage reset failed:', err);
+    }
+    try {
+        await tauri().core.invoke('reset_local_data');
+    } catch (err) {
+        console.warn('[BRIDGE] reset_local_data failed:', err);
+    }
+}
+
 export async function getAutostart() {
     try {
         return await tauri().core.invoke('plugin:autostart|is_enabled');
