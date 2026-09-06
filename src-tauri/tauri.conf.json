@@ -19,7 +19,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://catbox.moe https://litterbox.catbox.moe https://convoyrama.github.io https://github.com"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' ipc: https://catbox.moe https://litterbox.catbox.moe https://convoyrama.github.io https://github.com"
     }
   },
   "bundle": {

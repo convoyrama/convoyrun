@@ -9,7 +9,7 @@ import {
     publishTrustlist, importTrustlist, stopFollowingTrustlist,
     getPublicTrustlists,
     swarmListChannels, getSystemChannels, activateChannel, changeChannelPassword, deleteChannel,
-    getKnownNicks, setNickAlias,
+    getKnownNicks, setNickAlias, openDevtools,
 } from './native/tauri-bridge.js';
 import { setVisible } from './core/utils.js';
 import { displayName, truncPeer } from './core/display-name.js';
@@ -420,6 +420,10 @@ function initSettings() {
             btn.disabled = false;
             btn.textContent = t('settings_restart_p2p', 'Restart P2P');
         }, 1500);
+    });
+
+    $('#settings-open-devtools')?.addEventListener('click', async () => {
+        await openDevtools();
     });
 
     // Autostart checkbox

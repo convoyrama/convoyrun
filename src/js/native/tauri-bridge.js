@@ -109,6 +109,14 @@ export async function setAutostart(enabled) {
     }
 }
 
+export async function openDevtools() {
+    try {
+        await tauri().core.invoke('open_devtools');
+    } catch (err) {
+        console.warn('[BRIDGE] open_devtools failed:', err);
+    }
+}
+
 export async function swarmStatus() {
     try {
         const s = await tauri().core.invoke('p2p_status');

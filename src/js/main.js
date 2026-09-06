@@ -119,8 +119,8 @@ async function init() {
     initI18n();
     initTabs();
 
-    // Verificar nick obligatorio
-    await checkNickRequired();
+    // Mostrar el nick obligatorio sin frenar el arranque del resto de la app.
+    void checkNickRequired();
 
     dom.customDate = document.getElementById("custom-date");
     dom.customTime = document.getElementById("custom-time");
