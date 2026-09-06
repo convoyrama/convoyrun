@@ -64,6 +64,13 @@ async fn upload_to_catbox(bytes: Vec<u8>) -> Result<String, String> {
     Ok(url)
 }
 
+#[tauri::command]
+fn open_devtools(app: tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        win.open_devtools();
+    }
+}
+
 /// Detecta el tipo de imagen por magic bytes y retorna (filename, mime)
 fn detect_image_type(bytes: &[u8]) -> Result<(&'static str, &'static str), String> {
     if bytes.len() < 12 {
@@ -1485,9 +1492,16 @@ pub fn run() {
 
             Ok(())
         })
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+                let _ = win.set_focus();
+            }
+        }))
         .invoke_handler(tauri::generate_handler![
             save_file,
             optimize_png,
+            open_devtools,
             p2p_init,
             p2p_restart,
             p2p_status,
