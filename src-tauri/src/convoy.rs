@@ -38,6 +38,56 @@ pub enum EventType {
 fn is_one(value: &u64) -> bool {
     *value == 1
 }
+
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
+fn parse_rfc3339_epoch_seconds(value: &str) -> Option<i64> {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .ok()
+        .map(|dt| dt.timestamp())
+}
+
+fn normalize_loaded_event_document(mut event: EventDocument) -> EventDocument {
+    if event.deleted && event.published_at <= 0 {
+        event.published_at = parse_rfc3339_epoch_seconds(&event.created_at)
+            .unwrap_or_else(|| chrono::Utc::now().timestamp());
+    }
+    event
+}
+
+fn quarantine_corrupt_file(path: &Path, label: &str) {
+    if !path.exists() {
+        return;
+    }
+    let stamp = chrono::Utc::now().timestamp();
+    let backup_name = format!(
+        "{}.corrupt-{}-{}",
+        path.file_name().and_then(|name| name.to_str()).unwrap_or(label),
+        label,
+        stamp
+    );
+    let backup_path = path.with_file_name(backup_name);
+    let _ = std::fs::rename(path, backup_path);
+}
+
+fn replace_file(tmp_path: &Path, target_path: &Path) -> Result<()> {
+    match std::fs::rename(tmp_path, target_path) {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            if target_path.exists() {
+                let _ = std::fs::remove_file(target_path);
+                std::fs::rename(tmp_path, target_path)
+                    .context("Failed to rename temp file")?;
+                Ok(())
+            } else {
+                Err(err).context("Failed to rename temp file")
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod ctes_fixture_tests {
     use super::{
@@ -154,6 +204,37 @@ mod ctes_fixture_tests {
             assert_eq!(stored.deleted, expected_deleted);
             assert_eq!(stored.signature, expected_signature);
         }
+    }
+
+    #[test]
+    fn tombstone_roundtrip_persists_deleted_state_and_delete_signature() {
+        let mut tombstone = convoy_record(2, true, "bbb");
+        tombstone.delete_signature = "delete-sig".to_string();
+
+        let serialized = serde_json::to_string(&tombstone).unwrap();
+        assert!(serialized.contains("\"deleted\":true"));
+        assert!(serialized.contains("\"deleteSignature\":\"delete-sig\""));
+
+        let restored: EventDocument = serde_json::from_str(&serialized).unwrap();
+        assert!(restored.deleted);
+        assert_eq!(restored.delete_signature, "delete-sig");
+        assert_eq!(restored.signature, "bbb");
+    }
+
+    #[test]
+    fn convoy_rejects_author_replacement_for_same_id() {
+        let existing = convoy_record(1, false, "aaa");
+        let mut replacement = convoy_record(2, true, "bbb");
+        replacement.author_id = "ed25519:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB".to_string();
+
+        let mut store = ConvoyStore::default();
+        store.upsert_convoy(existing.clone());
+        store.upsert_convoy(replacement);
+
+        let stored = store.convoys.get("convoy-test").unwrap();
+        assert_eq!(stored.author_id, existing.author_id);
+        assert!(!stored.deleted);
+        assert_eq!(stored.revision, 1);
     }
 
     fn convoy_record(revision: u64, deleted: bool, signature: &str) -> EventDocument {
@@ -500,9 +581,9 @@ pub struct EventDocument {
     pub channel: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub flyer: Option<FlyerData>,
-    #[serde(default, skip)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub delete_signature: String,
-    #[serde(skip)]
+    #[serde(default, skip_serializing_if = "is_false")]
     pub deleted: bool,
 }
 
@@ -663,6 +744,7 @@ impl EventDocument {
         let mut copy = self.clone();
         copy.signature = String::new();
         copy.delete_signature = String::new();
+        copy.deleted = false;
         if copy.event.network.server.is_empty() {
             copy.event.network.server = copy.event.server.clone();
         }
@@ -774,6 +856,9 @@ impl EventDocument {
     }
 
     pub fn wins_over(&self, existing: &Self) -> bool {
+        if self.author_id != existing.author_id {
+            return false;
+        }
         if self.revision != existing.revision {
             return self.revision > existing.revision;
         }
@@ -994,9 +1079,23 @@ impl ConvoyStore {
         if store_path.exists() {
             let store_str = std::fs::read_to_string(&store_path)
                 .context("Failed to read convoy store")?;
-            let store: Self = serde_json::from_str(&store_str)
-                .context("Failed to parse convoy store")?;
-            Ok(store)
+            let store: Self = match serde_json::from_str(&store_str) {
+                Ok(store) => store,
+                Err(err) => {
+                    eprintln!("[P2P] Failed to parse convoy store: {}", err);
+                    quarantine_corrupt_file(&store_path, "convoy_store");
+                    return Ok(Self::default());
+                }
+            };
+            Ok(Self {
+                convoys: store
+                    .convoys
+                    .into_iter()
+                    .map(|(id, event)| (id, normalize_loaded_event_document(event)))
+                    .collect(),
+                votes: store.votes,
+                profiles: store.profiles,
+            })
         } else {
             Ok(Self::default())
         }
@@ -1008,13 +1107,13 @@ impl ConvoyStore {
         let tmp_path = data_dir.join("convoy_store.json.tmp");
         std::fs::write(&tmp_path, serde_json::to_string(self)?)
             .context("Failed to write convoy store")?;
-        std::fs::rename(&tmp_path, &store_path)
-            .context("Failed to rename convoy store")?;
+        replace_file(&tmp_path, &store_path).context("Failed to rename convoy store")?;
         Ok(())
     }
 
     /// Agrega o actualiza un convoy
     pub fn upsert_convoy(&mut self, convoy: EventDocument) {
+        let convoy = normalize_loaded_event_document(convoy);
         if let Some(existing) = self.convoys.get(&convoy.id) {
             if !convoy.wins_over(existing) {
                 return;
@@ -1085,8 +1184,13 @@ impl ConvoyStore {
         let now = chrono::Utc::now().timestamp();
         self.convoys.retain(|_, c| {
             if c.deleted {
-                // Keep deleted convoys 7 days for tombstone propagation
-                c.published_at + 7 * 86400 > now
+                // Keep deleted convoys 7 days for tombstone propagation.
+                let published_at = if c.published_at > 0 {
+                    c.published_at
+                } else {
+                    parse_rfc3339_epoch_seconds(&c.created_at).unwrap_or(c.event.schedule.meeting_timestamp)
+                };
+                published_at + 7 * 86400 > now
             } else {
                 c.is_retained(now)
             }
@@ -1108,8 +1212,14 @@ impl ChannelStore {
         if store_path.exists() {
             let store_str = std::fs::read_to_string(&store_path)
                 .context("Failed to read channel store")?;
-            let store: Self = serde_json::from_str(&store_str)
-                .context("Failed to parse channel store")?;
+            let store: Self = match serde_json::from_str(&store_str) {
+                Ok(store) => store,
+                Err(err) => {
+                    eprintln!("[P2P] Failed to parse channel store: {}", err);
+                    quarantine_corrupt_file(&store_path, "channel_store");
+                    return Ok(Self::default());
+                }
+            };
             Ok(store)
         } else {
             Ok(Self::default())
@@ -1122,8 +1232,7 @@ impl ChannelStore {
         let tmp_path = data_dir.join("channel_store.json.tmp");
         std::fs::write(&tmp_path, serde_json::to_string(self)?)
             .context("Failed to write channel store")?;
-        std::fs::rename(&tmp_path, &store_path)
-            .context("Failed to rename channel store")?;
+        replace_file(&tmp_path, &store_path).context("Failed to rename channel store")?;
         Ok(())
     }
 
@@ -1393,8 +1502,14 @@ impl BlacklistStore {
         if store_path.exists() {
             let s = std::fs::read_to_string(&store_path)
                 .context("Failed to read blacklist store")?;
-            let store: Self = serde_json::from_str(&s)
-                .context("Failed to parse blacklist store")?;
+            let store: Self = match serde_json::from_str(&s) {
+                Ok(store) => store,
+                Err(err) => {
+                    eprintln!("[P2P] Failed to parse blacklist store: {}", err);
+                    quarantine_corrupt_file(&store_path, "blacklist_store");
+                    return Ok(Self::default());
+                }
+            };
             Ok(store)
         } else {
             Ok(Self::default())
@@ -1406,8 +1521,7 @@ impl BlacklistStore {
         let tmp_path = data_dir.join("blacklist_store.json.tmp");
         std::fs::write(&tmp_path, serde_json::to_string(self)?)
             .context("Failed to write blacklist store")?;
-        std::fs::rename(&tmp_path, &store_path)
-            .context("Failed to rename blacklist store")?;
+        replace_file(&tmp_path, &store_path).context("Failed to rename blacklist store")?;
         Ok(())
     }
 
@@ -1491,8 +1605,14 @@ impl TrustlistStore {
         if store_path.exists() {
             let s = std::fs::read_to_string(&store_path)
                 .context("Failed to read trustlist store")?;
-            let store: Self = serde_json::from_str(&s)
-                .context("Failed to parse trustlist store")?;
+            let store: Self = match serde_json::from_str(&s) {
+                Ok(store) => store,
+                Err(err) => {
+                    eprintln!("[P2P] Failed to parse trustlist store: {}", err);
+                    quarantine_corrupt_file(&store_path, "trustlist_store");
+                    return Ok(Self::default());
+                }
+            };
             Ok(store)
         } else {
             Ok(Self::default())
@@ -1504,8 +1624,7 @@ impl TrustlistStore {
         let tmp_path = data_dir.join("trustlist_store.json.tmp");
         std::fs::write(&tmp_path, serde_json::to_string(self)?)
             .context("Failed to write trustlist store")?;
-        std::fs::rename(&tmp_path, &store_path)
-            .context("Failed to rename trustlist store")?;
+        replace_file(&tmp_path, &store_path).context("Failed to rename trustlist store")?;
         Ok(())
     }
 
@@ -1541,14 +1660,15 @@ impl KnownNicksStore {
     }
 
     /// Guarda el store a disco (atómico: temp + rename)
-    pub fn save(&self, data_dir: &Path) {
+    pub fn save(&self, data_dir: &Path) -> Result<()> {
         let path = data_dir.join("known_nicks.json");
         let tmp_path = data_dir.join("known_nicks.json.tmp");
         if let Ok(json) = serde_json::to_string_pretty(self) {
-            if std::fs::write(&tmp_path, json).is_ok() {
-                let _ = std::fs::rename(&tmp_path, &path);
-            }
+            std::fs::write(&tmp_path, json)
+                .context("Failed to write known nicks temp file")?;
+            replace_file(&tmp_path, &path).context("Failed to rename known nicks")?;
         }
+        Ok(())
     }
 
     /// Obtiene el nombre a mostrar para un peer_id (prioridad: alias > nick > peer_id truncado)
@@ -1587,11 +1707,14 @@ impl KnownNicksStore {
 /// Decodifica un peer_id (hex o base64) a 32 bytes.
 /// iroh usa formato hex (64 chars), pero algunos formatos usan base64.
 pub fn decode_peer_id_bytes(peer_id: &str) -> Result<[u8; 32]> {
+    fn decode_base64_peer_id(peer_id: &str) -> Result<Vec<u8>> {
+        base64::Engine::decode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, peer_id)
+            .or_else(|_| base64::Engine::decode(&base64::engine::general_purpose::STANDARD, peer_id))
+            .context("Failed to decode base64 peer_id")
+    }
+
     if let Some(encoded) = peer_id.strip_prefix("ed25519:") {
-        let bytes = base64::Engine::decode(
-            &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-            encoded,
-        ).context("Failed to decode CTES author_id")?;
+        let bytes = decode_base64_peer_id(encoded).context("Failed to decode CTES author_id")?;
         return bytes.try_into().map_err(|_| anyhow::anyhow!("Invalid CTES author_id length"));
     }
     // Hex format: 64 hex chars = 32 bytes (iroh default)
@@ -1605,10 +1728,7 @@ pub fn decode_peer_id_bytes(peer_id: &str) -> Result<[u8; 32]> {
         return Ok(key_array);
     }
     // Base64 format: fallback
-    let bytes = base64::Engine::decode(
-        &base64::engine::general_purpose::STANDARD,
-        peer_id,
-    ).context("Failed to decode base64 peer_id")?;
+    let bytes = decode_base64_peer_id(peer_id)?;
     if bytes.len() != 32 {
         anyhow::bail!("Invalid peer_id length: expected 32, got {}", bytes.len());
     }

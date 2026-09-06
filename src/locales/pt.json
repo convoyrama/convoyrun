@@ -402,6 +402,7 @@
     "settings_published": "Publicado",
     "settings_channel_create_error": "Não foi possível criar o canal. Pode já existir.",
     "swarm_filter_language": "Idioma",
+    "swarm_wizard_language": "Idioma do evento",
     "swarm_wizard_languages": "Idiomas do evento",
     "swarm_lang_es": "Espanhol",
     "swarm_lang_en": "Inglês",

@@ -122,31 +122,23 @@ struct AppState {
 }
 
 /// Helper: flush convoy store a disco (llamar con lock ya adquirido)
-fn flush_convoy_store(store: &ConvoyStore, data_dir: &Path) {
-    if let Err(e) = store.save(data_dir) {
-        eprintln!("[P2P] Failed to save convoy store: {}", e);
-    }
+fn flush_convoy_store(store: &ConvoyStore, data_dir: &Path) -> Result<(), String> {
+    store.save(data_dir).map_err(|e| e.to_string())
 }
 
 /// Helper: flush channel store a disco
-fn flush_channel_store(store: &ChannelStore, data_dir: &Path) {
-    if let Err(e) = store.save(data_dir) {
-        eprintln!("[P2P] Failed to save channel store: {}", e);
-    }
+fn flush_channel_store(store: &ChannelStore, data_dir: &Path) -> Result<(), String> {
+    store.save(data_dir).map_err(|e| e.to_string())
 }
 
 /// Helper: flush blacklist store a disco
-fn flush_blacklist_store(store: &BlacklistStore, data_dir: &Path) {
-    if let Err(e) = store.save(data_dir) {
-        eprintln!("[P2P] Failed to save blacklist store: {}", e);
-    }
+fn flush_blacklist_store(store: &BlacklistStore, data_dir: &Path) -> Result<(), String> {
+    store.save(data_dir).map_err(|e| e.to_string())
 }
 
 /// Helper: flush trustlist store a disco
-fn flush_trustlist_store(store: &TrustlistStore, data_dir: &Path) {
-    if let Err(e) = store.save(data_dir) {
-        eprintln!("[P2P] Failed to save trustlist store: {}", e);
-    }
+fn flush_trustlist_store(store: &TrustlistStore, data_dir: &Path) -> Result<(), String> {
+    store.save(data_dir).map_err(|e| e.to_string())
 }
 
 /// Helper: load config from shared cache (avoid disk I/O on every command)
@@ -306,41 +298,6 @@ async fn process_gossip_receiver(
                     continue;
                 }
                 if let Some(gossip_msg) = p2p::parse_gossip_message(std::str::from_utf8(&message.content).unwrap_or("")) {
-                    // Deduplicación: generar key única por mensaje
-                    let dedup_key = match &gossip_msg {
-                        GossipMessage::Convoy { data } => {
-                            serde_json::from_str::<EventDocument>(data).ok().map(|r| format!("convoy:{}", r.id))
-                        }
-                        GossipMessage::Vote { data } => {
-                            let _ = data;
-                            None
-                        }
-                        GossipMessage::Profile { .. } => None,
-                        GossipMessage::Tombstone { convoy_id, peer_id, revision, .. } => {
-                            Some(format!("delete:{}:{}:{}", convoy_id, peer_id, revision))
-                        }
-                        GossipMessage::Channel { data } => {
-                            serde_json::from_str::<ChannelRecord>(data).ok().map(|r| format!("channel:{}", r.name))
-                        }
-                        GossipMessage::Blacklist { data } => {
-                            serde_json::from_str::<BlacklistRecord>(data).ok().map(|r| format!("blacklist:{}:{}", r.author_peer_id, r.updated_at))
-                        }
-                        GossipMessage::Trustlist { data } => {
-                            serde_json::from_str::<TrustlistRecord>(data).ok().map(|r| format!("trustlist:{}:{}", r.author_peer_id, r.updated_at))
-                        }
-                    };
-                    if let Some(ref key) = dedup_key {
-                        if seen.contains(key) {
-                            continue;
-                        }
-                        seen.insert(key.clone());
-                        // Remover la mitad más antigua cuando se llena (no clear total)
-                        if seen.len() > MAX_SEEN {
-                            let to_remove: Vec<_> = seen.iter().take(MAX_SEEN / 2).cloned().collect();
-                            for k in to_remove { seen.remove(&k); }
-                        }
-                    }
-
                     match gossip_msg {
                         GossipMessage::Convoy { data } => {
                             eprintln!("[P2P] Received Convoy gossip: {} bytes", data.len());
@@ -368,6 +325,15 @@ async fn process_gossip_receiver(
                                 match record.verify() {
                                     Ok(true) => {
                                         eprintln!("[P2P] Convoy {} verified OK from peer {}", record.id, record.peer_id);
+                                        let dedup_key = format!("convoy:{}", record.id);
+                                        if seen.contains(&dedup_key) {
+                                            continue;
+                                        }
+                                        seen.insert(dedup_key);
+                                        if seen.len() > MAX_SEEN {
+                                            let to_remove: Vec<_> = seen.iter().take(MAX_SEEN / 2).cloned().collect();
+                                            for k in to_remove { seen.remove(&k); }
+                                        }
                                         let mut store = convoy_store.write().await;
                                         // Preserve the signed profile nickname when available.
                                         if !record.nickname.is_empty() {
@@ -379,11 +345,15 @@ async fn process_gossip_receiver(
                                             if !preferred_nick.is_empty() {
                                                 let mut nicks = known_nicks.write().await;
                                                 nicks.update_nick(record.author_id.clone(), preferred_nick);
-                                                nicks.save(&data_dir);
+                                                if let Err(e) = nicks.save(&data_dir) {
+                                                    eprintln!("[P2P] Failed to save known nicks: {}", e);
+                                                }
                                             }
                                         }
                                         store.upsert_convoy(record);
-                                        flush_convoy_store(&store, &data_dir);
+                                        if let Err(e) = flush_convoy_store(&store, &data_dir) {
+                                            eprintln!("[P2P] Failed to save convoy store: {}", e);
+                                        }
                                         let _ = app_handle.emit("convoy-new", serde_json::Value::Null);
                                     }
                                     Ok(false) => {
@@ -418,7 +388,9 @@ async fn process_gossip_receiver(
                                 }
                                 let mut store = convoy_store.write().await;
                                 if store.upsert_vote(record) {
-                                    flush_convoy_store(&store, &data_dir);
+                                    if let Err(e) = flush_convoy_store(&store, &data_dir) {
+                                        eprintln!("[P2P] Failed to save convoy store: {}", e);
+                                    }
                                     let _ = app_handle.emit("vote-new", serde_json::Value::Null);
                                 }
                             }
@@ -435,14 +407,18 @@ async fn process_gossip_receiver(
                             let nickname = record.data.nickname.clone();
                             let mut store = convoy_store.write().await;
                             if store.upsert_profile(record) {
-                                flush_convoy_store(&store, &data_dir);
+                                if let Err(e) = flush_convoy_store(&store, &data_dir) {
+                                    eprintln!("[P2P] Failed to save convoy store: {}", e);
+                                }
                                 drop(store);
                                 let mut nicks = known_nicks.write().await;
                                 nicks.update_nick(author_id.clone(), nickname.clone());
                                 if let Ok(bytes) = convoy::decode_peer_id_bytes(&author_id) {
                                     nicks.update_nick(hex::encode(bytes), nickname);
                                 }
-                                nicks.save(&data_dir);
+                                    if let Err(e) = nicks.save(&data_dir) {
+                                        eprintln!("[P2P] Failed to save known nicks: {}", e);
+                                    }
                                 let _ = app_handle.emit("profile-new", author_id);
                             }
                         }
@@ -469,6 +445,15 @@ async fn process_gossip_receiver(
                                     eprintln!("[P2P] Received delete with invalid signature, ignoring");
                                     continue;
                                 }
+                            }
+                            let dedup_key = format!("delete:{}:{}:{}", convoy_id, peer_id, revision);
+                            if seen.contains(&dedup_key) {
+                                continue;
+                            }
+                            seen.insert(dedup_key);
+                            if seen.len() > MAX_SEEN {
+                                let to_remove: Vec<_> = seen.iter().take(MAX_SEEN / 2).cloned().collect();
+                                for k in to_remove { seen.remove(&k); }
                             }
                             let mut store = convoy_store.write().await;
                             let tombstone = if let Some(convoy) = store.convoys.get(&convoy_id) {
@@ -528,7 +513,9 @@ async fn process_gossip_receiver(
                                 .is_none_or(|existing| tombstone.wins_over(existing))
                             {
                                 store.upsert_convoy(tombstone);
-                                flush_convoy_store(&store, &data_dir);
+                                if let Err(e) = flush_convoy_store(&store, &data_dir) {
+                                    eprintln!("[P2P] Failed to save convoy store: {}", e);
+                                }
                                 eprintln!("[P2P] Convoy tombstoned: {} @ r{}", convoy_id, revision);
                                 let _ = app_handle.emit("convoy-new", serde_json::Value::Null);
                             }
@@ -539,7 +526,9 @@ async fn process_gossip_receiver(
                                 // Solo actualizar canales ya conocidos (no crear nuevos desde gossip)
                                 if store.channels.contains_key(&channel.name) {
                                     store.channels.insert(channel.name.clone(), channel);
-                                    flush_channel_store(&store, &data_dir);
+                                    if let Err(e) = flush_channel_store(&store, &data_dir) {
+                                        eprintln!("[P2P] Failed to save channel store: {}", e);
+                                    }
                                 }
                             }
                         }
@@ -558,7 +547,9 @@ async fn process_gossip_receiver(
                                 }
                                 let mut store = blacklist_store.write().await;
                                 store.upsert(record);
-                                flush_blacklist_store(&store, &data_dir);
+                                if let Err(e) = flush_blacklist_store(&store, &data_dir) {
+                                    eprintln!("[P2P] Failed to save blacklist store: {}", e);
+                                }
                             }
                         }
                         GossipMessage::Trustlist { data } => {
@@ -576,7 +567,9 @@ async fn process_gossip_receiver(
                                 }
                                 let mut store = trustlist_store.write().await;
                                 store.upsert(record);
-                                flush_trustlist_store(&store, &data_dir);
+                                if let Err(e) = flush_trustlist_store(&store, &data_dir) {
+                                    eprintln!("[P2P] Failed to save trustlist store: {}", e);
+                                }
                             }
                         }
                     }
@@ -677,6 +670,7 @@ async fn p2p_init(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<N
         }
         Err(e) => {
             eprintln!("[P2P] Failed to join topic: {}", e);
+            return Err(format!("Failed to join gossip topic: {}", e));
         }
     }
 
@@ -691,7 +685,7 @@ async fn p2p_init(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<N
             let mut profile = ProfileRecord::new(author_id, nickname.to_string(), current);
             profile.sign(&p2p.secret_key).map_err(|e| e.to_string())?;
             store.upsert_profile(profile.clone());
-            flush_convoy_store(&store, &state.data_dir);
+            flush_convoy_store(&store, &state.data_dir)?;
             Some(profile)
         };
         drop(store);
@@ -812,7 +806,7 @@ async fn set_config(
     let mut profile = ProfileRecord::new(author_id, nickname.to_string(), previous);
     profile.sign(&p2p.secret_key).map_err(|e| e.to_string())?;
     store.upsert_profile(profile.clone());
-    flush_convoy_store(&store, &state.data_dir);
+    flush_convoy_store(&store, &state.data_dir)?;
     drop(store);
     if let Some(sender) = &p2p.gossip_sender {
         let json = serde_json::to_string(&profile).map_err(|e| e.to_string())?;
@@ -1098,7 +1092,7 @@ async fn publish_convoy(
     {
         let mut store = state.convoy_store.write().await;
         store.upsert_convoy(record.clone());
-        flush_convoy_store(&store, &state.data_dir);
+        flush_convoy_store(&store, &state.data_dir)?;
     }
 
     // Actualizar timestamp de última publicación
@@ -1186,7 +1180,7 @@ async fn get_known_nicks(state: State<'_, AppState>) -> Result<KnownNicksStore, 
 async fn set_nick_alias(state: State<'_, AppState>, peer_id: String, alias: String) -> Result<(), String> {
     let mut store = state.known_nicks.write().await;
     store.set_alias(peer_id, alias);
-    store.save(&state.data_dir);
+    store.save(&state.data_dir).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -1222,7 +1216,7 @@ async fn activate_channel(
 
     let channel_name = store.activate_channel(&key, password, display_name, &MASTER_PUBLIC_KEY)?;
 
-    flush_channel_store(&store, &state.data_dir);
+    flush_channel_store(&store, &state.data_dir)?;
 
     Ok(channel_name)
 }
@@ -1240,7 +1234,7 @@ async fn change_channel_password(
 
     store.change_password(&channel, &p2p.peer_id(), new_password)?;
 
-    flush_channel_store(&store, &state.data_dir);
+    flush_channel_store(&store, &state.data_dir)?;
 
     Ok(())
 }
@@ -1257,7 +1251,7 @@ async fn delete_channel(
 
     store.delete_channel(&name, &p2p.peer_id())?;
 
-    flush_channel_store(&store, &state.data_dir);
+    flush_channel_store(&store, &state.data_dir)?;
 
     Ok(())
 }
@@ -1301,7 +1295,7 @@ async fn vote_convoy(
     vote_record.sign(&p2p.secret_key).map_err(|e| format!("Failed to sign vote: {}", e))?;
 
     store.upsert_vote(vote_record.clone());
-    flush_convoy_store(&store, &state.data_dir);
+    flush_convoy_store(&store, &state.data_dir)?;
 
     if let Some(sender) = &p2p.gossip_sender {
         let vote_json = serde_json::to_string(&vote_record).map_err(|e| format!("Failed to serialize: {}", e))?;
@@ -1367,7 +1361,7 @@ async fn delete_tombstone(
 
     tombstone.delete_signature = delete_sig.clone();
     store.upsert_convoy(tombstone.clone());
-    flush_convoy_store(&store, &state.data_dir);
+    flush_convoy_store(&store, &state.data_dir)?;
 
     if let Some(sender) = &p2p.gossip_sender {
         if let Err(e) = P2pState::publish_delete_gossip(
@@ -1411,13 +1405,17 @@ pub fn run() {
             let convoy_store = Arc::new(RwLock::new({
                 let mut s = ConvoyStore::load(&data_dir).unwrap_or_default();
                 s.purge_expired();
-                flush_convoy_store(&s, &data_dir);
+                if let Err(e) = flush_convoy_store(&s, &data_dir) {
+                    eprintln!("[P2P] Failed to save convoy store: {}", e);
+                }
                 s
             }));
             let channel_store = Arc::new(RwLock::new({
                 let mut store = ChannelStore::load(&data_dir).unwrap_or_default();
                 store.ensure_system_channels();
-                flush_channel_store(&store, &data_dir);
+                if let Err(e) = flush_channel_store(&store, &data_dir) {
+                    eprintln!("[P2P] Failed to save channel store: {}", e);
+                }
                 store
             }));
             let blacklist_store = Arc::new(RwLock::new(BlacklistStore::load(&data_dir).unwrap_or_default()));
@@ -1443,7 +1441,9 @@ pub fn run() {
                     tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
                     let mut store = purge_store.write().await;
                     store.purge_expired();
-                    flush_convoy_store(&store, &purge_dir);
+                    if let Err(e) = flush_convoy_store(&store, &purge_dir) {
+                        eprintln!("[P2P] Failed to save convoy store: {}", e);
+                    }
                 }
             });
 
@@ -1456,7 +1456,9 @@ pub fn run() {
                         tokio::time::sleep(std::time::Duration::from_secs(6 * 3600)).await;
                         let mut store = bl_store.write().await;
                         store.purge_expired();
-                        flush_blacklist_store(&store, &bl_dir);
+                        if let Err(e) = flush_blacklist_store(&store, &bl_dir) {
+                            eprintln!("[P2P] Failed to save blacklist store: {}", e);
+                        }
                     }
                 });
             }
@@ -1470,7 +1472,9 @@ pub fn run() {
                         tokio::time::sleep(std::time::Duration::from_secs(6 * 3600)).await;
                         let mut store = tl_store.write().await;
                         store.purge_expired();
-                        flush_trustlist_store(&store, &tl_dir);
+                        if let Err(e) = flush_trustlist_store(&store, &tl_dir) {
+                            eprintln!("[P2P] Failed to save trustlist store: {}", e);
+                        }
                     }
                 });
             }
@@ -1484,7 +1488,9 @@ pub fn run() {
                         tokio::time::sleep(std::time::Duration::from_secs(12 * 3600)).await;
                         let mut store = ch_store.write().await;
                         store.purge_expired();
-                        flush_channel_store(&store, &ch_dir);
+                        if let Err(e) = flush_channel_store(&store, &ch_dir) {
+                            eprintln!("[P2P] Failed to save channel store: {}", e);
+                        }
                     }
                 });
             }

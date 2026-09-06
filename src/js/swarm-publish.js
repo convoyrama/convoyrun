@@ -109,13 +109,17 @@ export function initSwarmPublish(onPublished) {
     function populateLanguages(defaultLangs) {
         if (!languagesGroup) return;
         languagesGroup.innerHTML = '';
+        const selectedLanguage = Array.isArray(defaultLangs) && defaultLangs.length > 0
+            ? defaultLangs[0]
+            : 'es';
         for (const lang of AVAILABLE_LANGUAGES) {
             const lbl = document.createElement('label');
             lbl.className = 'swarm-lang-option';
             const cb = document.createElement('input');
-            cb.type = 'checkbox';
+            cb.type = 'radio';
+            cb.name = 'swarm-language';
             cb.value = lang.code;
-            cb.checked = defaultLangs.includes(lang.code);
+            cb.checked = lang.code === selectedLanguage;
             lbl.appendChild(cb);
             lbl.appendChild(document.createTextNode(' ' + label(lang.key, lang.code.toUpperCase())));
             languagesGroup.appendChild(lbl);
@@ -124,7 +128,7 @@ export function initSwarmPublish(onPublished) {
 
     function getSelectedLanguages() {
         if (!languagesGroup) return ['en'];
-        const selected = Array.from(languagesGroup.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        const selected = Array.from(languagesGroup.querySelectorAll('input[type="radio"]:checked')).map(cb => cb.value);
         return selected.length > 0 ? selected : ['en'];
     }
 
@@ -405,8 +409,8 @@ export function initSwarmPublish(onPublished) {
     async function openWizard() {
         const cfg = await swarmGetConfig();
         const hasDraft = restoreFlyerDraft();
+        populateLanguages(cfg.defaultLanguages || ['es']);
         if (!hasDraft) {
-            populateLanguages(cfg.defaultLanguages || ['es']);
             const now = DateTime.local();
             if (!dateEl.value) dateEl.value = now.toISODate();
             if (!timeEl.value) timeEl.value = now.plus({ hours: 2 }).toFormat('HH:mm');

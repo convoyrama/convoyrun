@@ -435,8 +435,20 @@ pub fn load_config(data_dir: &Path) -> Result<UserConfig> {
     if config_path.exists() {
         let config_str = std::fs::read_to_string(&config_path)
             .context("Failed to read config file")?;
-        let config: UserConfig = serde_json::from_str(&config_str)
-            .context("Failed to parse config file")?;
+        let config: UserConfig = match serde_json::from_str(&config_str) {
+            Ok(config) => config,
+            Err(err) => {
+                eprintln!("[P2P] Failed to parse config file: {}", err);
+                let backup_name = format!(
+                    "{}.corrupt-{}",
+                    config_path.file_name().and_then(|name| name.to_str()).unwrap_or("convoyrun_config.json"),
+                    chrono::Utc::now().timestamp()
+                );
+                let backup_path = config_path.with_file_name(backup_name);
+                let _ = std::fs::rename(&config_path, backup_path);
+                return Ok(UserConfig::default());
+            }
+        };
         Ok(config)
     } else {
         Ok(UserConfig::default())
@@ -449,6 +461,7 @@ pub fn save_config(data_dir: &Path, config: &UserConfig) -> Result<()> {
     let tmp_path = data_dir.join("convoyrun_config.json.tmp");
     std::fs::write(&tmp_path, serde_json::to_string_pretty(config)?)
         .context("Failed to write config temp file")?;
+    let _ = std::fs::remove_file(&config_path);
     std::fs::rename(&tmp_path, &config_path)
         .context("Failed to rename config temp file")?;
     Ok(())

@@ -412,7 +412,7 @@ function buildEvent(c) {
     }
 
     if (c.event.language) {
-        const langLabel = el('div', 'swarm-detail-kicker', label('swarm_wizard_languages', 'Idiomas'));
+        const langLabel = el('div', 'swarm-detail-kicker', label('swarm_wizard_language', 'Idioma'));
         info.appendChild(langLabel);
         const langList = el('div', 'swarm-detail-languages');
         langList.appendChild(el('span', 'swarm-badge swarm-badge-lang', c.event.language.toUpperCase()));
