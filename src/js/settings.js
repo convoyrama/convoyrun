@@ -8,7 +8,7 @@ import {
     getPublicBlacklists,
     publishTrustlist, importTrustlist, stopFollowingTrustlist,
     getPublicTrustlists,
-    swarmListChannels, getSystemChannels, activateChannel, changeChannelPassword, deleteChannel,
+    swarmListChannels, getSystemChannels, activateChannel, grantChannelAccess, revokeChannelAccess, renameChannel, deleteChannel,
     getKnownNicks, setNickAlias, openDevtools, resetLocalData,
 } from './native/tauri-bridge.js';
 import { setVisible } from './core/utils.js';
@@ -293,18 +293,14 @@ async function renderChannels(myPeerId) {
 
         const isSystem = systemChannels.includes(ch.name);
         const isOwner = ch.creatorPeerId === myPeerId && !isSystem;
+        const collaboratorCount = Math.max((ch.authorizedPeerIds || []).length - 1, 0);
+        const displayLabel = ch.displayName || ch.name;
 
-        // Badge + nombre
         const infoSpan = document.createElement('span');
-        if (isSystem) {
-            infoSpan.textContent = '🌐 ';
-        } else if (ch.passwordHash) {
-            infoSpan.textContent = '🔒 ';
-        } else {
-            infoSpan.textContent = '🔓 ';
-        }
+        infoSpan.className = 'settings-channel-info';
+        infoSpan.textContent = isSystem ? '🌐 ' : (isOwner ? '🔑 ' : '🔒 ');
         const nameStrong = document.createElement('strong');
-        nameStrong.textContent = `#${ch.displayName || ch.name}`;
+        nameStrong.textContent = `#${displayLabel}`;
         infoSpan.appendChild(nameStrong);
 
         // Badge
@@ -321,25 +317,71 @@ async function renderChannels(myPeerId) {
             badge.classList.add('badge-private');
         }
         infoSpan.appendChild(badge);
+        if (!isSystem) {
+            const count = document.createElement('span');
+            count.className = 'settings-channel-count';
+            count.textContent = `${collaboratorCount} ${t('settings_channel_collaborators', 'collaborators')}`;
+            infoSpan.appendChild(count);
+        }
         item.appendChild(infoSpan);
 
-        // Owner: botones de cambiar contraseña y eliminar
         if (isOwner) {
-            const changePwdBtn = document.createElement('button');
-            changePwdBtn.className = 'settings-action-btn';
-            changePwdBtn.textContent = '🔑';
-            changePwdBtn.title = t('settings_channel_change_password', 'Change password');
-            changePwdBtn.onclick = async () => {
-                const newPwd = prompt(t('settings_channel_new_password_prompt', 'Enter new password:'));
-                if (!newPwd) return;
+            const renameBtn = document.createElement('button');
+            renameBtn.className = 'settings-action-btn';
+            renameBtn.textContent = '✎';
+            renameBtn.title = t('settings_channel_rename', 'Rename channel');
+            renameBtn.onclick = async () => {
+                const nextName = prompt(t('settings_channel_rename_prompt', 'Display name:'), ch.displayName || ch.name);
+                if (nextName === null) return;
+                const trimmed = nextName.trim();
+                if (!trimmed) return;
                 try {
-                    await changeChannelPassword(ch.name, newPwd);
-                    alert(t('channel_password_changed', 'Password changed.'));
+                    await renameChannel(ch.name, trimmed);
+                    await renderChannels(myPeerId);
                 } catch (err) {
                     alert(err.message);
                 }
             };
-            item.appendChild(changePwdBtn);
+            item.appendChild(renameBtn);
+
+            const addGrantBtn = document.createElement('button');
+            addGrantBtn.className = 'settings-action-btn';
+            addGrantBtn.textContent = '+';
+            addGrantBtn.title = t('settings_channel_add_grant', 'Add collaborator');
+            addGrantBtn.onclick = async () => {
+                const peerId = prompt(t('settings_channel_add_grant_prompt', 'Collaborator peer ID:'));
+                if (!peerId) return;
+                try {
+                    await grantChannelAccess(ch.name, peerId.trim());
+                    await renderChannels(myPeerId);
+                } catch (err) {
+                    alert(err.message);
+                }
+            };
+            item.appendChild(addGrantBtn);
+
+            const grantsBtn = document.createElement('button');
+            grantsBtn.className = 'settings-action-btn';
+            grantsBtn.textContent = '👥';
+            grantsBtn.title = t('settings_channel_manage_grants', 'Manage collaborators');
+            grantsBtn.onclick = async () => {
+                const current = (ch.authorizedPeerIds || []).filter(pid => pid !== ch.creatorPeerId);
+                const summary = current.length
+                    ? current.map(pid => `- ${pid}`).join('\n')
+                    : t('settings_channel_no_grants', 'No collaborators yet.');
+                const action = prompt(
+                    `${t('settings_channel_manage_grants_prompt', 'Current collaborators:')}\n${summary}\n\n` +
+                    `${t('settings_channel_manage_grants_action', 'Type a peer ID to remove, or leave empty to cancel:')}`
+                );
+                if (action === null || !action.trim()) return;
+                try {
+                    await revokeChannelAccess(ch.name, action.trim());
+                    await renderChannels(myPeerId);
+                } catch (err) {
+                    alert(err.message);
+                }
+            };
+            item.appendChild(grantsBtn);
 
             const delBtn = document.createElement('button');
             delBtn.className = 'settings-remove-btn';
@@ -529,20 +571,17 @@ function initSettings() {
     });
 
     $('#settings-activate-channel-btn')?.addEventListener('click', async () => {
-        const keyInput = $('#settings-channel-key-input');
-        const pwdInput = $('#settings-channel-password-input');
+        const tokenInput = $('#settings-channel-token-input');
         const displayNameInput = $('#settings-channel-display-name-input');
-        const key = keyInput.value.trim();
-        const password = pwdInput.value.trim();
+        const token = tokenInput.value.trim();
         const displayName = displayNameInput.value.trim();
-        if (!key || !password) {
-            alert(t('settings_channel_activate_missing', 'Enter both the key and a password.'));
+        if (!token) {
+            alert(t('settings_channel_activate_missing', 'Enter the entitlement token.'));
             return;
         }
         try {
-            await activateChannel(key, password, displayName);
-            keyInput.value = '';
-            pwdInput.value = '';
+            await activateChannel(token, displayName || null);
+            tokenInput.value = '';
             displayNameInput.value = '';
             const status = await swarmStatus();
             await renderChannels(status.peerId || '');

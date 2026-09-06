@@ -143,21 +143,19 @@ export async function swarmStatus() {
     return { mode: 'local', online: false };
 }
 
-export async function swarmPublish(convoy, channel, channelPassword) {
+export async function swarmPublish(convoy, channel) {
     try {
         console.log('[BRIDGE] publish_convoy IPC call:', {
             hasEvent: !!convoy.event,
             hasSchedule: !!convoy.schedule,
             hasFlyer: !!convoy.flyer,
             channel,
-            hasPassword: !!channelPassword,
         });
         const result = await tauri().core.invoke('publish_convoy', {
             event: convoy.event,
             schedule: convoy.schedule,
             flyer: convoy.flyer || null,
             channel: channel || null,
-            channelPassword: channelPassword || null,
             id: convoy.id || null,
         });
         return { backend: true, result };
@@ -276,17 +274,35 @@ export async function getSystemChannels() {
     }
 }
 
-export async function activateChannel(key, password, displayName) {
+export async function activateChannel(entitlementToken, displayName = null) {
     try {
-        return await tauri().core.invoke('activate_channel', { key, password, displayName });
+        return await tauri().core.invoke('activate_channel', { entitlementToken, displayName });
     } catch (err) {
         throw new Error(err.message || err);
     }
 }
 
-export async function changeChannelPassword(channel, newPassword) {
+export async function grantChannelAccess(channel, granteePeerId) {
     try {
-        await tauri().core.invoke('change_channel_password', { channel, newPassword });
+        await tauri().core.invoke('grant_channel_access', { channel, granteePeerId });
+        return true;
+    } catch (err) {
+        throw new Error(err.message || err);
+    }
+}
+
+export async function revokeChannelAccess(channel, granteePeerId) {
+    try {
+        await tauri().core.invoke('revoke_channel_access', { channel, granteePeerId });
+        return true;
+    } catch (err) {
+        throw new Error(err.message || err);
+    }
+}
+
+export async function renameChannel(channel, displayName) {
+    try {
+        await tauri().core.invoke('rename_channel', { channel, displayName });
         return true;
     } catch (err) {
         throw new Error(err.message || err);
@@ -299,15 +315,6 @@ export async function deleteChannel(name) {
         return true;
     } catch (err) {
         throw new Error(err.message || err);
-    }
-}
-
-export async function swarmValidateChannel(channel, password) {
-    try {
-        const ok = await tauri().core.invoke('validate_channel_password', { channel, password: password || null });
-        return ok;
-    } catch {
-        return true;
     }
 }
 

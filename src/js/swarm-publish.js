@@ -7,7 +7,7 @@ import * as state from './core/state.js';
 import { showCopyMessage, renderMarkdown } from './core/utils.js';
 import { readCtesFlyerDocumentFromPNG } from './core/png-metadata.js';
 import { createConvoy, isWithinPublishWindow, normalizeGame } from './core/convoy.js';
-import { swarmPublish, swarmGetConfig, swarmSetConfig, swarmValidateChannel, swarmListChannels, uploadToCatbox } from './native/tauri-bridge.js';
+import { swarmPublish, swarmGetConfig, swarmSetConfig, swarmListChannels, uploadToCatbox } from './native/tauri-bridge.js';
 import { AVAILABLE_LANGUAGES } from './core/config.js';
 
 const { DateTime } = luxon;
@@ -46,8 +46,6 @@ export function initSwarmPublish(onPublished) {
     const flyerPreview = document.getElementById('swarm-w-flyer-preview');
     const flyerStatus = document.getElementById('swarm-w-flyer-status');
     const channelEl = document.getElementById('swarm-w-channel');
-    const channelPasswordEl = document.getElementById('swarm-w-channel-password');
-    const channelPasswordGroup = document.getElementById('swarm-w-password-group');
     const languagesGroup = document.getElementById('swarm-w-languages');
     const statusEl = document.getElementById('swarm-w-status');
     const descPreview = document.getElementById('swarm-description-preview');
@@ -159,17 +157,17 @@ export function initSwarmPublish(onPublished) {
         const currentValue = channelEl.value || 'general';
         channelEl.innerHTML = '';
 
-        // Canales del sistema primero (sin contraseña)
-        const systemChannels = _cachedChannels.filter(c => c.is_system);
+        // Canales del sistema primero
+        const systemChannels = _cachedChannels.filter(c => c.isSystem);
         for (const ch of systemChannels) {
             const opt = document.createElement('option');
             opt.value = ch.name;
-            opt.textContent = `#${ch.display_name || ch.name}`;
+            opt.textContent = `#${ch.displayName || ch.name}`;
             channelEl.appendChild(opt);
         }
 
-        // Canales privados (requieren contraseña si no sos owner)
-        const privateChannels = _cachedChannels.filter(c => !c.is_system);
+        // Canales privados
+        const privateChannels = _cachedChannels.filter(c => !c.isSystem);
         if (privateChannels.length > 0) {
             const separator = document.createElement('option');
             separator.disabled = true;
@@ -179,52 +177,14 @@ export function initSwarmPublish(onPublished) {
             for (const ch of privateChannels) {
                 const opt = document.createElement('option');
                 opt.value = ch.name;
-                const badge = ch.is_owner ? '🔑' : '🔒';
-                opt.textContent = `${badge} #${ch.display_name || ch.name}`;
+                const badge = ch.isOwner ? '🔑' : '🔒';
+                opt.textContent = `${badge} #${ch.displayName || ch.name}`;
                 channelEl.appendChild(opt);
             }
         }
 
         // Restaurar selección previa si existe
         channelEl.value = currentValue;
-        checkChannelPassword();
-    }
-
-    async function checkChannelPassword() {
-        const ch = channelEl.value.trim();
-        if (!ch) return;
-
-        // Usamos el cache de canales (evita doble llamada IPC)
-        const channel = _cachedChannels.find(c => c.name === ch);
-
-        if (!channel) {
-            // Canal no encontrado (no debería pasar con select)
-            channelPasswordGroup.hidden = true;
-            return;
-        }
-
-        // Canales del sistema no requieren contraseña
-        if (channel.is_system) {
-            channelPasswordGroup.hidden = true;
-            return;
-        }
-
-        // Si es owner, no necesita contraseña
-        if (channel.is_owner) {
-            channelPasswordGroup.hidden = true;
-            return;
-        }
-
-        // Canal privado con contraseña
-        if (channel.has_password) {
-            channelPasswordGroup.hidden = false;
-        } else {
-            channelPasswordGroup.hidden = true;
-        }
-    }
-
-    if (channelEl) {
-        channelEl.addEventListener('change', checkChannelPassword);
     }
 
     function updateZoneLabel() {
@@ -530,8 +490,7 @@ export function initSwarmPublish(onPublished) {
         submitBtn.classList.add('loading');
 
         try {
-            const channelPassword = channelPasswordEl ? channelPasswordEl.value : '';
-            const result = await swarmPublish(convoy, channelName, channelPassword);
+            const result = await swarmPublish(convoy, channelName);
 
             closeWizard();
             try { localStorage.removeItem(FLYER_STORAGE_KEY); } catch {}
@@ -557,8 +516,8 @@ export function initSwarmPublish(onPublished) {
                 showStatus(state.currentLangData.swarm_wizard_error_nickname || 'Definí un nickname en Settings antes de publicar.', true);
             } else if (msg.includes('P2P not initialized') || msg.includes('not initialized')) {
                 showStatus(state.currentLangData.swarm_wizard_error_p2p || 'P2P no inicializado. Verificá tu conexión a internet.', true);
-            } else if (msg.includes('Wrong channel password') || msg.includes('wrong password')) {
-                showStatus(state.currentLangData.swarm_wizard_error_channel_password || 'Contraseña de canal incorrecta.', true);
+            } else if (msg.includes('Channel access denied')) {
+                showStatus(state.currentLangData.swarm_wizard_error_channel_access || 'No tenés permiso para publicar en ese canal.', true);
             } else if (msg.includes('Channel does not exist') || msg.includes('does not exist')) {
                 showStatus(state.currentLangData.swarm_wizard_error_channel_not_found || 'El canal no existe. Elegí otro canal.', true);
             } else if (msg.includes('32 caracteres') || msg.includes('32 characters')) {

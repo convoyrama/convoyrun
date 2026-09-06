@@ -653,16 +653,22 @@
             <div class="settings-panel" id="settings-panel-channels">
                 <div class="settings-section">
                     <h4 data-i18n="settings_channel_activate_title">Activate Private Channel</h4>
-                    <p class="settings-hint" data-i18n="settings_channel_activate_hint">Enter your channel key, define a password and a display name.</p>
+                    <p class="settings-hint" data-i18n="settings_channel_activate_hint">Paste your entitlement token, then confirm the display name you want to show in the app.</p>
                     <div class="settings-input-row">
-                        <input type="text" id="settings-channel-key-input" data-i18n-placeholder="settings_channel_key_ph" placeholder="Channel key (XXXX-XXXX-XXXX-XXXX)">
-                    </div>
-                    <div class="settings-input-row">
-                        <input type="password" id="settings-channel-password-input" data-i18n-placeholder="settings_channel_password_ph" placeholder="Define a password">
+                        <input type="text" id="settings-channel-token-input" data-i18n-placeholder="settings_channel_token_ph" placeholder="Entitlement token (crent.v1...)">
                     </div>
                     <div class="settings-input-row">
                         <input type="text" id="settings-channel-display-name-input" data-i18n-placeholder="settings_channel_display_name_ph" placeholder="Display name (e.g. VTC My VTC 🚛)">
                         <button type="button" id="settings-activate-channel-btn" class="settings-small-btn" data-i18n="settings_activate_channel_btn" aria-label="Activate channel">Activate</button>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h4 data-i18n="settings_channel_grants_title">Collaborator grants</h4>
+                    <p class="settings-hint" data-i18n="settings_channel_grants_hint">Owners can add or remove peer IDs that may publish to the channel.</p>
+                    <div class="settings-list">
+                        <div class="settings-list-item" data-i18n="settings_channel_grants_owner">The owner entitlement activates the channel.</div>
+                        <div class="settings-list-item" data-i18n="settings_channel_grants_add">Add a collaborator by peer ID.</div>
+                        <div class="settings-list-item" data-i18n="settings_channel_grants_remove">Revoke access at any time.</div>
                     </div>
                 </div>
                 <div class="settings-section">
@@ -794,10 +800,6 @@
                     <select id="swarm-w-channel">
                         <option value="general" selected>#general</option>
                     </select>
-                </label>
-                <label class="swarm-field swarm-field-full" id="swarm-w-password-group" hidden>
-                    <span data-i18n="swarm_channel_password">Contraseña del canal</span>
-                    <input type="password" id="swarm-w-channel-password" maxlength="64" aria-label="Channel password">
                 </label>
                 <label class="swarm-field swarm-field-full">
                     <span data-i18n="swarm_wizard_language">Idioma del evento</span>

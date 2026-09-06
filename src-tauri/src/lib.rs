@@ -100,15 +100,6 @@ fn detect_image_type(bytes: &[u8]) -> Result<(&'static str, &'static str), Strin
     Err("INVALID_IMAGE: formato no soportado (use PNG, JPG, WebP o GIF)".to_string())
 }
 
-/// Master public key para verificar keys de canales Patreon
-/// Esta es la clave PÚBLICA ed25519 (32 bytes) derivada de la master private key.
-const MASTER_PUBLIC_KEY: [u8; 32] = [
-    0xbe, 0x33, 0x70, 0xf6, 0x64, 0x18, 0x3a, 0xd7,
-    0x71, 0xe0, 0x4d, 0xc8, 0xdd, 0xe8, 0x9f, 0x4b,
-    0xed, 0x3e, 0x51, 0x16, 0xc8, 0x6c, 0xba, 0xc1,
-    0x32, 0xed, 0x40, 0xa5, 0x40, 0x02, 0x26, 0xd0,
-];
-
 /// Estado global de la app — stores en memoria con Arc<RwLock> para evitar TOCTOU
 struct AppState {
     p2p: RwLock<Option<Arc<P2pState>>>,
@@ -1023,7 +1014,6 @@ async fn publish_convoy(
     schedule: Schedule,
     flyer: Option<FlyerData>,
     channel: Option<String>,
-    channel_password: Option<String>,
     id: Option<String>,
 ) -> Result<EventDocument, String> {
     let p2p_guard = state.p2p.read().await;
@@ -1051,10 +1041,11 @@ async fn publish_convoy(
 
     let channel_name = channel.unwrap_or_default().trim().to_lowercase();
     if !channel_name.is_empty() {
-        let ch_store = state.channel_store.write().await;
+        let ch_store = state.channel_store.read().await;
+        let peer_id = p2p.peer_id();
 
-        if !ch_store.can_publish(&channel_name, channel_password.as_deref()) {
-            return Err("Wrong channel password".to_string());
+        if !ch_store.can_peer_publish(&channel_name, &peer_id) {
+            return Err("Channel access denied".to_string());
         }
 
         if ch_store.get_channel(&channel_name).is_none() {
@@ -1144,9 +1135,10 @@ async fn get_all_votes(
 struct ChannelInfo {
     name: String,
     display_name: String,
+    creator_peer_id: String,
     is_system: bool,
     is_owner: bool,
-    has_password: bool,
+    authorized_peer_ids: Vec<String>,
 }
 
 #[tauri::command]
@@ -1159,9 +1151,10 @@ async fn list_channels(state: State<'_, AppState>) -> Result<Vec<ChannelInfo>, S
         ChannelInfo {
             name: ch.name.clone(),
             display_name: if ch.display_name.is_empty() { ch.name.clone() } else { ch.display_name.clone() },
+            creator_peer_id: ch.creator_peer_id.clone(),
             is_system: ch.is_system(),
             is_owner: ch.is_owner(&my_peer_id),
-            has_password: ch.password_hash.is_some(),
+            authorized_peer_ids: ch.authorized_peer_ids.clone(),
         }
     }).collect();
 
@@ -1196,25 +1189,16 @@ async fn get_system_channels() -> Vec<String> {
 }
 
 #[tauri::command]
-async fn validate_channel_password(
-    state: State<'_, AppState>,
-    channel: String,
-    password: Option<String>,
-) -> Result<bool, String> {
-    let store = state.channel_store.read().await;
-    Ok(store.can_publish(&channel, password.as_deref()))
-}
-
-#[tauri::command]
 async fn activate_channel(
     state: State<'_, AppState>,
-    key: String,
-    password: String,
-    display_name: String,
+    entitlement_token: String,
+    display_name: Option<String>,
 ) -> Result<String, String> {
+    let p2p_guard = state.p2p.read().await;
+    let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
     let mut store = state.channel_store.write().await;
 
-    let channel_name = store.activate_channel(&key, password, display_name, &MASTER_PUBLIC_KEY)?;
+    let channel_name = store.activate_channel(&entitlement_token, &p2p.peer_id(), display_name)?;
 
     flush_channel_store(&store, &state.data_dir)?;
 
@@ -1222,17 +1206,53 @@ async fn activate_channel(
 }
 
 #[tauri::command]
-async fn change_channel_password(
+async fn grant_channel_access(
     state: State<'_, AppState>,
     channel: String,
-    new_password: String,
+    grantee_peer_id: String,
 ) -> Result<(), String> {
     let p2p_guard = state.p2p.read().await;
     let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
 
     let mut store = state.channel_store.write().await;
 
-    store.change_password(&channel, &p2p.peer_id(), new_password)?;
+    store.grant_channel_access(&channel, &p2p.peer_id(), grantee_peer_id)?;
+
+    flush_channel_store(&store, &state.data_dir)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn revoke_channel_access(
+    state: State<'_, AppState>,
+    channel: String,
+    grantee_peer_id: String,
+) -> Result<(), String> {
+    let p2p_guard = state.p2p.read().await;
+    let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
+
+    let mut store = state.channel_store.write().await;
+
+    store.revoke_channel_access(&channel, &p2p.peer_id(), &grantee_peer_id)?;
+
+    flush_channel_store(&store, &state.data_dir)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn rename_channel(
+    state: State<'_, AppState>,
+    channel: String,
+    display_name: String,
+) -> Result<(), String> {
+    let p2p_guard = state.p2p.read().await;
+    let p2p = p2p_guard.as_ref().ok_or("P2P not initialized")?;
+
+    let mut store = state.channel_store.write().await;
+
+    store.rename_channel(&channel, &p2p.peer_id(), display_name)?;
 
     flush_channel_store(&store, &state.data_dir)?;
 
@@ -1594,9 +1614,10 @@ pub fn run() {
             get_all_votes,
             list_channels,
             get_system_channels,
-            validate_channel_password,
             activate_channel,
-            change_channel_password,
+            grant_channel_access,
+            revoke_channel_access,
+            rename_channel,
             delete_channel,
             delete_tombstone,
             upload_to_catbox,
