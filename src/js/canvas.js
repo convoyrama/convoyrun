@@ -36,6 +36,10 @@ function scheduleRedraw() {
 // targetCanvas/scale: performDownload() renderiza más grande en un canvas aparte.
 export function drawCanvas(targetCanvas = dom.mapCanvas, scale = 1) {
     const canvas = targetCanvas;
+    if (!canvas || typeof canvas.getContext !== "function") {
+        console.warn("[CANVAS] drawCanvas skipped: invalid canvas target", canvas);
+        return;
+    }
     const ctx = canvas.getContext("2d");
     const isV = state.getIsVertical();
     const logicalWidth = isV ? 720 : 1280, logicalHeight = isV ? 1280 : 720;

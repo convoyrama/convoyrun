@@ -27,6 +27,63 @@ function localWrite(key, value) {
     }
 }
 
+function normalizeConvoyRecord(raw) {
+    if (!raw || typeof raw !== 'object') return raw;
+    const event = raw.event || raw.data || {};
+    const scheduleSource = raw.schedule || event.schedule || raw.data?.schedule || {};
+    const meetingAt = scheduleSource.meetingAt || scheduleSource.meeting_at || raw.meetingAt || raw.meeting_at || null;
+    const meetingTimestamp = Number.isFinite(scheduleSource.meetingTimestamp)
+        ? scheduleSource.meetingTimestamp
+        : Number.isFinite(raw.meetingTimestamp)
+            ? raw.meetingTimestamp
+            : (meetingAt ? Math.floor(Date.parse(meetingAt) / 1000) : NaN);
+    const schedule = {
+        ...scheduleSource,
+        meetingTimestamp,
+        ianaTimeZone: scheduleSource.ianaTimeZone || scheduleSource.timeZone || raw.ianaTimeZone || raw.timeZone || '',
+    };
+    const peerId = raw.peerId || raw.peer_id || raw.authorId || raw.author_id || event.peerId || '';
+    const nickname = raw.nickname || raw.nick || raw.data?.nickname || '';
+    const publishedAt = Number.isFinite(raw.publishedAt)
+        ? raw.publishedAt
+        : Number.isFinite(raw.published_at)
+            ? raw.published_at
+            : Math.floor(Date.parse(raw.createdAt || raw.created_at || meetingAt || new Date().toISOString()) / 1000);
+    const channel = raw.channel || raw.data?.channel || '';
+    const mode = raw.mode || event.mode || raw.data?.mode || 'simulation';
+    const server = event.server || event.network?.server || raw.server || '';
+    const link = event.link || event.links?.[0]?.url || raw.link || '';
+    const eventWithAliases = {
+        ...event,
+        mode,
+        server,
+        link,
+        schedule,
+    };
+    return {
+        ...raw,
+        event: eventWithAliases,
+        schedule,
+        peerId,
+        nickname,
+        publishedAt,
+        channel,
+    };
+}
+
+function upsertLocalConvoyCache(convoy) {
+    try {
+        if (!convoy?.id) return;
+        const cache = localRead(SWARM_CACHE_KEY, []);
+        const deleted = new Set(localRead(SWARM_DELETED_KEY, []));
+        const next = cache.filter(c => c?.id !== convoy.id && !deleted.has(c?.id));
+        next.push(convoy);
+        localWrite(SWARM_CACHE_KEY, next);
+    } catch (err) {
+        console.warn('[BRIDGE] local convoy cache update failed:', err);
+    }
+}
+
 // Limpiar eventos local-user residuales del cache al cargar
 try {
     const _cache = localRead(SWARM_CACHE_KEY, []);
@@ -158,7 +215,9 @@ export async function swarmPublish(convoy, channel) {
             channel: channel || null,
             id: convoy.id || null,
         });
-        return { backend: true, result };
+        const normalized = normalizeConvoyRecord(result);
+        upsertLocalConvoyCache(normalized);
+        return { backend: true, result: normalized };
     } catch (err) {
         console.warn('[BRIDGE] Backend publish_convoy failed:', err);
         throw err;
@@ -169,12 +228,14 @@ export async function swarmList() {
     const local = localRead(SWARM_CACHE_KEY, []);
     const deleted = localRead(SWARM_DELETED_KEY, []);
     const deletedSet = new Set(deleted);
-    const localFiltered = local.filter(c => !deletedSet.has(c.id) && c.peerId !== 'local-user');
+    const localFiltered = local
+        .filter(c => !deletedSet.has(c.id) && c.peerId !== 'local-user')
+        .map(normalizeConvoyRecord);
     try {
         const rows = await tauri().core.invoke('list_convoys');
         if (Array.isArray(rows)) {
             const byId = new Map();
-            rows.filter(c => !deletedSet.has(c.id)).forEach(c => byId.set(c.id, c));
+            rows.filter(c => !deletedSet.has(c.id)).map(normalizeConvoyRecord).forEach(c => byId.set(c.id, c));
             localFiltered.forEach(c => { if (!byId.has(c.id)) byId.set(c.id, c); });
             return Array.from(byId.values());
         }
